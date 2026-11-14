@@ -533,6 +533,16 @@ button:disabled { cursor: not-allowed; opacity: .4; }
 .track-cover.playable:hover::after { background: var(--accent); color: var(--accent-ink); }
 .track-cover.playable:active::after { transform: translate(-50%, -50%) scale(.94); }
 .track-cover.playable.playing::after { content: '⏸'; padding-left: 0; }
+.track-cover.playable.loading::after { content: '…'; padding-left: 0; }
+
+/* Заглушка волны в restore-карточке до загрузки файла (шимер поверх токенов). */
+.waveform-track { margin-top: 8px; }
+.waveform-ph {
+  height: 36px; border-radius: 8px;
+  background: linear-gradient(110deg, var(--surface-2) 8%, var(--hover) 18%, var(--surface-2) 33%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
 
 /* Единое меню «⋯» карточки трека; на мобайле — bottom-sheet у нижнего края. */
 .menu-btn { min-width: 44px; justify-content: center; font-size: 16px; letter-spacing: 2px; }
@@ -547,7 +557,6 @@ button:disabled { cursor: not-allowed; opacity: .4; }
 }
 
 .waveform { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; position: relative; }
-.waveform-status { color: var(--muted); font-size: 12px; }
 .waveform-canvas { width: 100%; height: 36px; display: block; cursor: pointer; }
 /* Слайдер — клавиатурный a11y-фолбэк поверх волны: визуально скрыт,
    раскрывается при фокусе с клавиатуры. */

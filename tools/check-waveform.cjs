@@ -1,5 +1,6 @@
-/* Real PCM waveform checks in Chromium using a synthetic WAV, not a live music server.
- * Auto-attach (no opt-in button), canvas click = seek, progress highlight, budgets and fallbacks. */
+/* Волна карточки трека из серверных пиков (решение владельца 14.11): рисуется сразу,
+ * клик = seek, прогресс подсвечен, pending-seek до появления аудио, тихий отказ.
+ * Клиентского декода больше нет — ни одного AudioContext во всей сюите. */
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const fs = require('node:fs');
@@ -8,30 +9,44 @@ const { launch } = require('./browser-env.cjs');
   const browser = await launch();
   try {
     const page = await browser.newPage();
-    await page.setContent('<!doctype html><style>:root{--accent:#d97757;--faint:rgba(235,235,245,.35)}</style><div id="a"></div><div id="b"></div><div id="c"></div>');
+    await page.setContent('<!doctype html><style>:root{--accent:#d97757;--faint:rgba(235,235,245,.35)}</style><div id="a"></div><div id="b"></div>');
     await page.addScriptTag({ path: path.resolve(__dirname, '../studio/waveform.js') });
+    // Настоящий играбельный WAV (2 с) — для аудио-перемотки по волне.
+    const sampleRate = 16000, samples = sampleRate * 2;
+    const bytes = new ArrayBuffer(44 + samples * 2), v = new DataView(bytes);
+    const str = (offset, text) => [...text].forEach((c, i) => v.setUint8(offset + i, c.charCodeAt(0)));
+    str(0, 'RIFF'); v.setUint32(4, 36 + samples * 2, true); str(8, 'WAVE'); str(12, 'fmt ');
+    v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, sampleRate, true); v.setUint32(28, sampleRate * 2, true); v.setUint32(32, 2, true); v.setUint16(34, 16, true);
+    str(36, 'data'); v.setUint32(40, samples * 2, true);
+    for (let i = 0; i < samples; i++) {
+      const amplitude = i < samples / 2 ? 0.03 : 0.8;
+      v.setInt16(44 + i * 2, Math.round(amplitude * Math.sin(2 * Math.PI * 440 * i / sampleRate) * 32767), true);
+    }
+    const wavB64 = Buffer.from(bytes).toString('base64');
+    await page.evaluate(async encoded => {
+      const binary = atob(encoded), raw = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) raw[i] = binary.charCodeAt(i);
+      window.sampleBlob = new Blob([raw], { type: 'audio/wav' });
+      // Пики: тихая первая половина, громкая вторая — волна обязана это показать.
+      const peaks = Array.from({ length: 160 }, (_, i) => (i < 80 ? 0.03 : 0.8));
+      window.wave = BriixWaveform.attachFromPeaks(peaks, document.getElementById('a'), {});
+    }, wavB64);
+    // Волна построена мгновенно из пиков — аудио ещё не существует вовсе.
+    await page.waitForSelector('#a canvas');
+    assert.equal(await page.locator('#a audio').count(), 0, 'wave exists before any audio element');
+    // Привязываем настоящее аудио и проверяем клик-seek и подсветку прогресса.
     await page.evaluate(() => {
-      const sampleRate = 16000, samples = sampleRate * 2, bytes = new ArrayBuffer(44 + samples * 2), v = new DataView(bytes);
-      const str = (offset, text) => [...text].forEach((c, i) => v.setUint8(offset + i, c.charCodeAt(0)));
-      str(0, 'RIFF'); v.setUint32(4, 36 + samples * 2, true); str(8, 'WAVE'); str(12, 'fmt ');
-      v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
-      v.setUint32(24, sampleRate, true); v.setUint32(28, sampleRate * 2, true); v.setUint32(32, 2, true); v.setUint16(34, 16, true);
-      str(36, 'data'); v.setUint32(40, samples * 2, true);
-      for (let i = 0; i < samples; i++) {
-        const amplitude = i < samples / 2 ? 0.03 : 0.8;
-        v.setInt16(44 + i * 2, Math.round(amplitude * Math.sin(2 * Math.PI * 440 * i / sampleRate) * 32767), true);
-      }
-      const blob = new Blob([bytes], { type: 'audio/wav' });
-      window.sampleBlob = blob;
-      for (const id of ['a', 'b', 'c']) {
-        const container = document.getElementById(id), audio = document.createElement('audio');
-        audio.controls = true; audio.controlsList = 'nodownload'; audio.src = URL.createObjectURL(blob); container.append(audio);
-        const input = id === 'a' ? blob : id === 'b' ? new Blob([new Uint8Array(8 * 1024 * 1024 + 1)]) : new Blob(['not an audio file']);
-        BriixWaveform.attach(audio, input, container);
-      }
+      const NativeAudio = window.AudioContext;
+      window.AudioContext = class extends NativeAudio {
+        constructor(...args) { super(...args); window.__ctxLeaks = (window.__ctxLeaks || 0) + 1; }
+      };
+      const audio = document.createElement('audio');
+      audio.controls = true; audio.controlsList = 'nodownload'; audio.src = URL.createObjectURL(sampleBlob);
+      document.getElementById('a').append(audio);
+      window.wave.setAudio(audio);
     });
-    // Авто-attach: канвас появляется сам, без кнопки «Показать форму звука».
-    await page.waitForSelector('#a canvas', { timeout: 15000 });
+    await page.waitForFunction(() => Number.isFinite(document.querySelector('#a audio')?.duration) && document.querySelector('#a audio').duration > 0);
     const peaks = await page.evaluate(() => {
       const canvas = document.querySelector('#a canvas'), ctx = canvas.getContext('2d');
       const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
@@ -41,15 +56,13 @@ const { launch } = require('./browser-env.cjs');
       }
       return { quiet, loud };
     });
-    assert.ok(peaks.loud > peaks.quiet * 5, 'real loud section produces larger waveform than quiet section');
-    // Клик по волне = seek до середины (2-секундный файл).
+    assert.ok(peaks.loud > peaks.quiet * 5, 'loud peaks produce larger bars than quiet peaks');
     await page.evaluate(() => {
       const canvas = document.querySelector('#a canvas');
       const rect = canvas.getBoundingClientRect();
       canvas.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: rect.left + rect.width * 0.5, clientY: rect.top + 10 }));
     });
     await page.waitForFunction(() => Math.abs(document.querySelector('#a audio').currentTime - 1) < 0.1, {}, { timeout: 5000 });
-    // Скрытый range-слайдер — клавиатурный a11y-фолбэк: по-прежнему управляет аудио.
     const sliderInfo = await page.evaluate(() => {
       const slider = document.querySelector('#a .waveform-seek');
       slider.value = '750'; slider.dispatchEvent(new Event('input', { bubbles: true }));
@@ -57,7 +70,7 @@ const { launch } = require('./browser-env.cjs');
     });
     assert.ok(Math.abs(sliderInfo.currentTime - 1.5) < 0.1, 'hidden a11y slider still seeks native audio');
     assert.match(sliderInfo.label, /Позиция/);
-    // Прогресс по волне подсвечен: после seek до 75% есть и акцентные, и приглушённые бары.
+    // Прогресс подсвечен: на волне есть и акцентные, и приглушённые бары.
     await page.waitForFunction(() => {
       const canvas = document.querySelector('#a canvas'), ctx = canvas.getContext('2d');
       const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
@@ -65,52 +78,35 @@ const { launch } = require('./browser-env.cjs');
       for (let i = 3; i < pixels.length; i += 4) if (pixels[i]) seen.add(pixels[i - 3] + ',' + pixels[i - 2] + ',' + pixels[i - 1]);
       return seen.size >= 2;
     }, {}, { timeout: 5000 });
-    // Лимиты и fallback: слишком большой файл и не-аудио.
-    await page.waitForFunction(() => document.querySelector('#b .waveform-status')?.textContent.includes('Обычный плеер доступен'), {}, { timeout: 5000 });
-    assert.equal(await page.locator('#b audio').evaluate(a => a.controls), true);
-    await page.waitForFunction(() => document.querySelector('#c .waveform-status')?.textContent.includes('Не удалось'), {}, { timeout: 10000 });
-    assert.equal(await page.locator('#c audio').evaluate(a => a.controls), true);
-    // Декод последовательный, контексты закрываются (авто-attach у двух плееров).
+    // Pending-seek: волна без аудио — клик вызывает onSeekPending и применяется при setAudio.
     await page.evaluate(() => {
-      const NativeAudio = window.AudioContext;
-      window.waveContexts = { active: 0, max: 0, closed: 0 };
-      window.AudioContext = class extends NativeAudio {
-        constructor(options) { super(options); waveContexts.active++; waveContexts.max = Math.max(waveContexts.max, waveContexts.active); }
-        async close() { await super.close(); waveContexts.active--; waveContexts.closed++; }
-      };
-      for (const id of ['d', 'e']) {
-        const container = document.createElement('div'); container.id = id; document.body.append(container);
-        const audio = document.createElement('audio'); audio.controls = true; audio.src = URL.createObjectURL(sampleBlob); container.append(audio);
-        BriixWaveform.attach(audio, sampleBlob, container);
-      }
+      window.pending = [];
+      window.wave2 = BriixWaveform.attachFromPeaks(Array.from({ length: 160 }, () => 0.5), document.getElementById('b'), {
+        onSeekPending: ratio => window.pending.push(ratio)
+      });
+      const canvas = document.querySelector('#b canvas');
+      const rect = canvas.getBoundingClientRect();
+      canvas.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: rect.left + rect.width * 0.75, clientY: rect.top + 10 }));
+      const audio = document.createElement('audio');
+      audio.src = URL.createObjectURL(sampleBlob);
+      document.getElementById('b').append(audio);
+      window.wave2.setAudio(audio);
     });
-    await page.waitForSelector('#d canvas'); await page.waitForSelector('#e canvas');
-    await page.waitForFunction(() => waveContexts.closed === 2);
-    assert.deepEqual(await page.evaluate(() => waveContexts), { active: 0, max: 1, closed: 2 }, 'decode is serial and contexts close');
-    // Удаление контейнера посреди декодирования закрывает контекст.
-    await page.evaluate(() => {
-      window.originalDecode = AudioContext.prototype.decodeAudioData;
-      AudioContext.prototype.decodeAudioData = function (bytes) {
-        return new Promise((resolve, reject) => setTimeout(() => originalDecode.call(this, bytes).then(resolve, reject), 1000));
-      };
-      const container = document.createElement('div'); container.id = 'removed'; document.body.append(container);
-      const audio = document.createElement('audio'); audio.controls = true; audio.src = URL.createObjectURL(sampleBlob); container.append(audio);
-      BriixWaveform.attach(audio, sampleBlob, container);
-    });
-    await page.waitForFunction(() => waveContexts.active === 1);
-    await page.evaluate(() => document.querySelector('#removed').remove());
-    await page.waitForFunction(() => waveContexts.closed === 3, {}, { timeout: 700 });
-    await page.evaluate(() => { AudioContext.prototype.decodeAudioData = originalDecode; });
+    await page.waitForFunction(() => Math.abs(document.querySelector('#b audio').currentTime - 1.5) < 0.15, {}, { timeout: 5000 });
+    assert.deepEqual(await page.evaluate(() => window.pending), [0.75], 'seek before audio is reported once and applied on setAudio');
+    // Ни одного AudioContext: декода не существует, PCM-память не тратится вовсе.
+    assert.equal(await page.evaluate(() => window.__ctxLeaks || 0), 0, 'no AudioContext is ever created — peaks render without decode');
     const m4a = fs.readFileSync(path.resolve(__dirname, '../assets/media/showcase/jingle.m4a')).toString('base64');
     await page.evaluate(encoded => {
-      const binary = atob(encoded), bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-      const blob = new Blob([bytes], { type: 'audio/mp4' }), container = document.createElement('div');
+      // Тот же peaks-путь работает с любым аудио (формат файла волне безразличен).
+      const binary = atob(encoded), raw = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) raw[i] = binary.charCodeAt(i);
+      const blob = new Blob([raw], { type: 'audio/mp4' }), container = document.createElement('div');
       container.id = 'm4a'; document.body.append(container);
       const audio = document.createElement('audio'); audio.controls = true; audio.src = URL.createObjectURL(blob); container.append(audio);
-      BriixWaveform.attach(audio, blob, container);
+      BriixWaveform.attachFromPeaks(Array.from({ length: 160 }, (_, i) => Math.abs(Math.sin(i / 7))), container, {}).setAudio(audio);
     }, m4a);
-    await page.waitForSelector('#m4a canvas', { timeout: 15000 });
-    console.log('PASS auto-attach real PCM waveform (WAV and repository M4A), canvas click seek, a11y slider, progress highlight, budgets and decode-error fallbacks', JSON.stringify(peaks));
+    await page.waitForSelector('#m4a canvas');
+    console.log('PASS peaks waveform: instant draw from peaks before any audio, click seek, a11y slider, progress highlight, pending seek applied on setAudio, zero AudioContext', JSON.stringify(peaks));
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

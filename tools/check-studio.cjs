@@ -167,6 +167,14 @@ function bffServer(port) {
         return;
       }
 
+      const peaksM = req.url.match(/^\/files\/([^/]+)-peaks\.json$/);
+      if (peaksM && req.method === 'GET') {
+        if (peaksM[1].includes('nopeaks')) { res.writeHead(404, { 'Content-Type': 'application/json', ...cors }); res.end(JSON.stringify({ error: { code: 'not_found' } })); return; }
+        const peaks = Array.from({ length: 160 }, (_, i) => 0.2 + 0.6 * Math.abs(Math.sin(i / 9)));
+        res.writeHead(200, { 'Content-Type': 'application/json', ...cors });
+        res.end(JSON.stringify(peaks));
+        return;
+      }
       if (req.url.startsWith('/files/') && (req.url.includes('.m4a') || req.url.includes('.png') || req.url.includes('.wav'))) {
         if (req.url.includes('-cover.png')) {
           state.coverRequests++;
@@ -779,10 +787,15 @@ function bffServer(port) {
     await BriixSessionStore.save(profile, profile.revision, backend);
   });
   await p.reload();
-  await p.waitForFunction(() => document.querySelectorAll('#feed .media-load').length === 100);
+  await p.waitForFunction(() => document.querySelectorAll('#feed .track-cover').length === 100);
+  // Обложка = PLAY и в restore-карточке: до загрузки файла запросов аудио нет.
+  const coversBefore = await p.evaluate(() => [...document.querySelectorAll('#feed .track-cover')].every(f => f.classList.contains('playable')));
+  assert.equal(coversBefore, true, 'restored covers are PLAY buttons right away');
+  // Волна из peaks.json строится сразу при карточке, до загрузки аудио.
+  await p.waitForFunction(() => document.querySelectorAll('#feed .waveform-canvas').length === 100, {}, { timeout: 15000 });
   await p.waitForTimeout(500);
   assert.equal(state.audioRequests, 0, 'restored history does not fetch 100 audio files');
-  await p.evaluate(() => [...document.querySelectorAll('#feed .media-load')].slice(0, 2).forEach(button => button.click()));
+  await p.evaluate(() => [...document.querySelectorAll('#feed .track-cover')].slice(0, 2).forEach(f => f.click()));
   await p.waitForFunction(() => document.querySelectorAll('#feed audio').length === 2);
   assert.equal(state.audioRequests, 1, 'same in-flight audio request is deduplicated');
   assert.equal(await p.locator('#feed audio').first().getAttribute('controlslist'), 'nodownload');
@@ -834,10 +847,10 @@ function bffServer(port) {
     await BriixSessionStore.save(profile, profile.revision, backend);
   });
   await p.reload();
-  await p.locator('#feed .media-load').waitFor();
+  await p.locator('#feed .track-cover').waitFor();
   await p.waitForTimeout(250);
   assert.equal(state.photoRequests, 2, 'two image transfers occupy the slots');
-  await p.evaluate(() => document.querySelector('#feed .media-load').click());
+  await p.evaluate(() => document.querySelector('#feed .track-cover').click());
   await p.locator('#feed audio').waitFor({ state: 'attached', timeout: 10000 });
   const audioIdx = state.fileOrder.findIndex(u => u.includes('priority.m4a'));
   assert.ok(audioIdx >= 0 && audioIdx <= 2, 'user audio takes priority over queued images (position ' + audioIdx + ')');
@@ -933,7 +946,7 @@ function bffServer(port) {
   await p.waitForSelector('#feed .session-feed:not([hidden]) audio');
   assert.ok(await p.locator('#feed .session-feed:not([hidden])').innerText().then(t => t.includes('Идея первой сессии')));
   await p.reload();
-  await p.locator('#feed .session-feed:not([hidden]) .media-load').click();
+  await p.locator('#feed .session-feed:not([hidden]) .track-cover').click();
   await p.waitForSelector('#feed .session-feed:not([hidden]) audio', { timeout: 15000 });
   await p.locator('#prompt').fill('Продолжение первой');
   await p.locator('#send').click();
@@ -1230,9 +1243,14 @@ function bffServer(port) {
     await BriixSessionStore.save(profile, profile.revision, backend);
   }, WAV.toString('base64'));
   await p.reload();
-  await p.locator('#feed .media-load').click();
+  // Restore-путь: волна из peaks.json и PLAY-обложка есть СРАЗУ, аудио не грузится без клика.
+  await p.waitForSelector('#feed .waveform-canvas', { timeout: 10000 });
+  assert.equal(await p.locator('#feed .track-cover.playable').count(), 1, 'cover is a PLAY button before any load');
+  assert.equal(await p.locator('#feed .media-load').count(), 0, 'no Listen button: the cover replaced it');
+  assert.equal(state.audioRequests, 0, 'restore does not fetch audio until the cover is clicked');
+  assert.equal(await p.locator('#feed audio').count(), 0, 'no audio element before the cover click');
+  await p.locator('#feed .track-cover.playable').click();
   await p.waitForSelector('#feed audio', { timeout: 15000 });
-  await p.waitForSelector('#feed .waveform-canvas', { timeout: 15000 }); // авто-attach, без opt-in кнопки
   // Обложка = PLAY (настоящий играбельный WAV в mock). tryPlay мог автозапустить
   // трек при загрузке — гасим и проверяем оба направления переключения.
   await p.evaluate(() => document.querySelector('#feed audio').pause());
@@ -1285,7 +1303,7 @@ function bffServer(port) {
     await BriixSessionStore.save(profile, profile.revision, backend);
   }, WAV.toString('base64'));
   await p.reload();
-  await p.locator('#feed .media-load').first().click();
+  await p.locator('#feed .track-cover.playable').click();
   await p.waitForSelector('#feed audio', { timeout: 15000 });
   await p.locator('#feed .menu-btn').click();
   const sheet = await p.locator('.track-menu:not([hidden])').boundingBox();
