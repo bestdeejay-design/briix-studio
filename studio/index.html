@@ -11,7 +11,7 @@ if (location.hostname === 'briix.ru' || location.hostname === 'www.briix.ru') {
   location.replace('https://demo.briix.ru/studio/' + location.hash);
 }
 </script>
-<link rel="stylesheet" href="studio.css?v=20261114-producer-1">
+<link rel="stylesheet" href="studio.css?v=20261114-agent-b-1">
 </head>
 <body>
 
@@ -150,6 +150,7 @@ if (location.hostname === 'briix.ru' || location.hostname === 'www.briix.ru') {
         </div>
         <span class="spacer"></span>
         <button id="tuneToggle" class="tool chip toggle music-only" hidden aria-pressed="false">Тонко настроить</button>
+        <button id="genTrack" class="tool chip gen-track music-only" hidden disabled title="Явная генерация трека из текущих полей — без диалога">Сгенерировать трек</button>
         <button id="send" class="send" aria-label="Отправить" disabled>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>
         </button>
@@ -192,10 +193,10 @@ if (location.hostname === 'briix.ru' || location.hostname === 'www.briix.ru') {
 </main>
 <script src="./wait-phrases.js?v=20261114"></script>
 <script src="./wait-ui.js?v=20261114"></script>
-<script src="session-store.js?v=20261114-97-p1"></script>
-<script src="waveform.js?v=20261114-97-p1b"></script>
-<script src="producer-brain.js?v=20261114-assembly-1"></script>
-<script src="music-brain.js?v=20261114-assembly-1"></script>
-<script src="studio.js?v=20261114-assembly-1"></script>
+<script src="session-store.js?v=20261114-agent-b-1"></script>
+<script src="waveform.js?v=20261114-agent-b-1"></script>
+<script src="producer-brain.js?v=20261114-agent-b-1"></script>
+<script src="music-brain.js?v=20261114-agent-b-1"></script>
+<script src="studio.js?v=20261114-agent-b-1"></script>
 </body>
 </html>

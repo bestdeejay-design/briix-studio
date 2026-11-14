@@ -16,7 +16,7 @@
   const PLACEHOLDERS = {
     chat: 'Что создаём?',
     photo: 'Что рисуем? Опишите изображение…',
-    music: 'Опиши трек…'
+    music: 'Опиши трек или спроси наставника…'
   };
 
   const ASSISTANTS = {
@@ -219,6 +219,7 @@
     assistantChip: $('assistantChip'), assistantName: $('assistantName'), assistantMenu: $('assistantMenu'),
     modelChip: $('modelChip'), modelName: $('modelName'), modelMenu: $('modelMenu'),
     vocalSeg: $('vocalSeg'), tuneToggle: $('tuneToggle'), prepareMusic: $('prepareMusic'),
+    genTrack: $('genTrack'),
     send: $('send'), feed: $('feed'), status: $('status'), metaLeft: $('metaLeft'),
     composer: $('composer'), keyCard: $('keyCard'), keyInput: $('keyInput'), keySave: $('keySave'),
     newChat: $('newChat'), improvePhoto: $('improvePhoto'), undoPhoto: $('undoPhoto'),
@@ -237,6 +238,11 @@
   try { const savedInstr = localStorage.getItem('briix-studio-instrumental'); if (savedInstr !== null) instrumental = savedInstr === '1'; } catch {}
   let advanced = false;
   let chatActive = false;
+  let musicChatActive = false;
+  // Источник лирики и название трека для transparency-блока и params.title:
+  // выставляются путём, который знает происхождение (наставник/пользователь/автолирика).
+  let pendingLyricsSource = null;
+  let pendingTrackTitle = null;
   const improving = new Set();
   let sessionProfile = null, sessionBackend = null, activeSession = null;
   let storageBlocked = true, storageDirty = false, pendingSaves = 0, saveQueue = Promise.resolve();
@@ -309,6 +315,8 @@
       if (!d || typeof d !== 'object') continue;
       if (d.t === 'producer_draft') {
         renderProducerDraft(d, session);
+      } else if (d.t === 'music_draft') {
+        renderMusicDraftCard(d, session);
       } else if (d.t === 'media') {
         const body = card('assistant', d.who, '', session);
         body.textContent = '';
@@ -317,7 +325,7 @@
         if (d.track) addMakeTrackAction(body.closest('.card'), d.track);
         if (d.kind === 'music') {
           if (d.input) addMusicDetails(body, d.input);
-          addMusicActions(body.closest('.card'), { job: d.job, prompt: d.input?.prompt || '', title: d.input?.prompt || '' }, d.input);
+          addTrackMenu(body.closest('.card'), { job: d.job, input: d.input || {}, file: d.file, blob: null });
         }
         const owner = sessionProfile.nick;
         const load = async () => {
@@ -333,8 +341,12 @@
               audio.preload = 'metadata'; audio.src = feedObjectURL(blob); slot.append(audio);
               BriixWaveform.attach(audio, blob, slot);
               tryPlay(audio, slot);
+              if (d.kind === 'music') {
+                makeCoverPlayable(body.closest('.card'), audio); // обложка = PLAY
+              } else {
+                addDownloadAction(body.closest('.card'), blob, 'briix-photo', '⬇ Скачать');
+              }
             }
-            addDownloadAction(body.closest('.card'), blob, d.kind === 'photo' ? 'briix-photo' : 'briix-track', d.kind === 'music' ? '⬇ Скачать ' + extOf(blob).toUpperCase() : '⬇ Скачать');
           } catch (error) {
             if (!slot.isConnected || currentUser() !== owner) return;
             slot.textContent = 'Файл недоступен. ' + (error.message || '') + ' ';
@@ -453,7 +465,15 @@
 
   attachMenu(els.assistantChip, els.assistantMenu, () => ASSISTANTS[mode].map(a => ({
     label: a.name, selected: a.id === assistantId[mode],
-    onPick: () => { assistantId[mode] = a.id; renderChrome(); }
+    onPick: () => {
+      assistantId[mode] = a.id;
+      // Смена роли в music mode очищает контекст диалога (один наставник на сессию).
+      if (mode === 'music' && activeSession && activeSession.musicChat && activeSession.musicChat.assistant !== a.id) {
+        activeSession.musicChat = { assistant: a.id, history: [] };
+        persistSessions();
+      }
+      renderChrome();
+    }
   })));
   attachMenu(els.modelChip, els.modelMenu, () => Object.keys(MUSIC_MODELS).map(q => ({
     label: MODEL_LABELS[q], sub: MUSIC_MODELS[q], selected: q === quality,
@@ -556,13 +576,149 @@
     card('notice', 'Отдельное изображение', 'Отредактируйте запрос и отправьте его. Картинка появится отдельно и не заменит обложку трека или скачиваемого файла.');
   }
 
-  function addMusicActions(container, entry, input) {
-    const row = document.createElement('div'); row.className = 'actions';
-    const repeat = document.createElement('button'); repeat.type = 'button'; repeat.className = 'action';
-    repeat.textContent = 'Повторить с правками'; repeat.addEventListener('click', () => repeatMusic(entry, input));
-    const cover = document.createElement('button'); cover.type = 'button'; cover.className = 'action';
-    cover.textContent = 'Создать картинку обложки'; cover.addEventListener('click', () => createCoverDraft(entry));
-    row.append(repeat, cover); container.append(row);
+  // ---- карточка трека: обложка = PLAY, единое меню «⋯», transparency ----------
+  // Обложка запускает/останавливает воспроизведение; состояние playing видно на ней.
+  function makeCoverPlayable(cardEl, audio) {
+    const frame = cardEl?.querySelector('.track-cover');
+    if (!frame || frame.dataset.playBound) return;
+    frame.dataset.playBound = '1';
+    frame.classList.add('playable');
+    frame.setAttribute('role', 'button');
+    frame.setAttribute('aria-label', 'Слушать трек');
+    frame.tabIndex = 0;
+    const toggle = () => { if (audio.paused) audio.play().catch(() => {}); else audio.pause(); };
+    frame.addEventListener('click', toggle);
+    frame.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+    audio.addEventListener('play', () => { frame.classList.add('playing'); frame.setAttribute('aria-label', 'Пауза'); });
+    audio.addEventListener('pause', () => { frame.classList.remove('playing'); frame.setAttribute('aria-label', 'Слушать трек'); });
+  }
+
+  // Имя файла трека: «Название - Исполнитель.ext» с сохранением юникода (кириллица
+  // разрешена), спецсимволы файловой системы вырезаются, пустой результат — fallback.
+  function safeFileName(title, artist, ext) {
+    const clean = s => String(s || '')
+      .replace(/[/\\:*?"<>|#%&{}$!'@+=`\u0301]/g, ' ')
+      .replace(/\.{2,}/g, ' ')
+      .replace(/\s+/g, ' ')
+      .replace(/^[.\s]+|[.\s]+$/g, '');
+    const safe = clean(clean(title) + ' - ' + clean(artist));
+    return (safe || 'briix-track-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')) + '.' + ext;
+  }
+
+  async function copyText(value, label) {
+    if (!value) return;
+    try { await navigator.clipboard.writeText(value); setStatus('Скопировано: ' + label); }
+    catch { setStatus('Не удалось скопировать: ' + label); }
+  }
+
+  function libEntry(job) { return libLoad().find(x => x.job === job); }
+
+  // Единое меню «⋯» карточки трека: 7 действий вместо россыпи кнопок.
+  // Мобильный — bottom-sheet (CSS), десктоп — dropdown у кнопки.
+  function attachTrackMenu(button, menu, buildItems) {
+    button.addEventListener('click', e => {
+      e.stopPropagation();
+      const willOpen = menu.hidden;
+      closeMenus();
+      if (!willOpen) return;
+      menu.innerHTML = '';
+      for (const item of buildItems()) {
+        const itemButton = document.createElement('button');
+        itemButton.type = 'button';
+        itemButton.setAttribute('role', 'menuitem');
+        itemButton.tabIndex = -1;
+        itemButton.textContent = item.label;
+        if (item.danger) itemButton.classList.add('danger');
+        itemButton.addEventListener('click', () => { closeMenus(); item.onPick(); button.focus(); });
+        menu.append(itemButton);
+      }
+      menu.hidden = false;
+      button.setAttribute('aria-expanded', 'true');
+      menu.querySelector('button')?.focus();
+    });
+  }
+
+  function trackMenuItems(cardEl, ctx) {
+    const input = ctx.input || {};
+    const download = async () => {
+      try {
+        const blob = ctx.blob || await fileBlob(ctx.file || input.file);
+        const link = document.createElement('a');
+        link.href = feedObjectURL(blob);
+        link.download = safeFileName(input.title, input.artist || currentUser(), extOf(blob));
+        document.body.append(link); link.click(); link.remove();
+      } catch (error) { errorCard(error); }
+    };
+    const favorite = () => {
+      const entry = libEntry(ctx.job);
+      return {
+        label: entry?.fav ? 'Убрать из избранного' : 'В избранное',
+        onPick: async () => {
+          const next = !(entry?.fav);
+          const list = libLoad();
+          const item = list.find(x => x.job === ctx.job);
+          if (item) {
+            if (item.server) { // серверная запись — флаг на шине (infra#77)
+              try {
+                await request('/jobs/' + encodeURIComponent(ctx.job) + '/favorite', {
+                  method: 'POST', headers: headers(), body: JSON.stringify({ favorite: next })
+                });
+              } catch (error) { errorCard(error); return; }
+            }
+            item.fav = next; libSave(list);
+          } else if (next) {
+            libAdd({ job: ctx.job, sessionId: activeSession?.id, kind: 'music', prompt: input.prompt || '',
+              lyrics: input.lyrics || '', title: input.title || '', file: ctx.file || '', cover: '', created: Date.now(), fav: true });
+          }
+          jobsInFlight.clear();
+          if (!els.lib.hidden) renderLibrary();
+        }
+      };
+    };
+    const remove = {
+      label: 'Удалить', danger: true,
+      onPick: async () => {
+        if (!confirm('Удалить трек из библиотеки? Файл на стенде останется.')) return;
+        const item = libEntry(ctx.job);
+        if (item?.server) {
+          try { await request('/jobs/' + encodeURIComponent(ctx.job), { method: 'DELETE', headers: headers() }); }
+          catch (error) { errorCard(error); return; }
+        }
+        libSave(libLoad().filter(x => x.job !== ctx.job));
+        if (blobCache.has(ctx.job)) { URL.revokeObjectURL(blobCache.get(ctx.job)); blobCache.delete(ctx.job); }
+        jobsInFlight.clear();
+        if (!els.lib.hidden) renderLibrary();
+        cardEl.remove();
+      }
+    };
+    return [
+      { label: 'Копировать промпт', onPick: () => copyText(input.promptSent || input.prompt || '', 'промпт') },
+      { label: 'Копировать лирику', onPick: () => copyText(input.lyrics || '', 'лирика') },
+      { label: 'Скачать', onPick: download },
+      { label: 'Повторить с правками', onPick: () => repeatMusic({ job: ctx.job }, input) },
+      { label: 'Создать обложку', onPick: () => createCoverDraft({ title: input.title || input.prompt || '', prompt: input.prompt || '' }) },
+      favorite(),
+      remove
+    ];
+  }
+
+  function addTrackMenu(cardEl, ctx) {
+    const row = cardEl.querySelector(':scope > .actions') || (() => {
+      const created = document.createElement('div'); created.className = 'actions'; cardEl.append(created); return created;
+    })();
+    const anchor = document.createElement('div'); anchor.className = 'menu-anchor track-menu-anchor';
+    const button = document.createElement('button');
+    button.type = 'button'; button.className = 'action menu-btn';
+    button.textContent = '⋯';
+    button.setAttribute('aria-haspopup', 'menu');
+    button.setAttribute('aria-expanded', 'false');
+    button.setAttribute('aria-label', 'Ещё действия');
+    const menu = document.createElement('div');
+    menu.className = 'menu track-menu'; menu.hidden = true;
+    menu.setAttribute('role', 'menu');
+    anchor.append(button, menu);
+    row.append(anchor);
+    attachTrackMenu(button, menu, () => trackMenuItems(cardEl, ctx));
   }
 
   // «Сделать из этого трек»: чат → музыка с подставленным брифом.
@@ -582,13 +738,17 @@
     container.append(row);
   }
 
+  // Transparency-блок: что уехало в модель (#109) + происхождение лирики и имя/исполнитель.
   function addMusicDetails(container, input) {
     const details = document.createElement('details'); details.className = 'track-details';
-    const summary = document.createElement('summary'); summary.textContent = 'Промпт и текст песни';
+    const summary = document.createElement('summary'); summary.textContent = 'Что уехало в модель';
     const text = document.createElement('div');
-    let trackInfo = 'Промпт в модель: ' + (input.promptSent || input.prompt || '—'); // прозрачность: что уехало в модель (#109)
+    let trackInfo = 'Промпт в модель: ' + (input.promptSent || input.prompt || '—');
     if (input.promptSent && input.prompt) trackInfo += '\n\nИсходная идея: ' + input.prompt;
+    if (input.title) trackInfo += '\n\nНазвание: ' + input.title;
+    if (input.artist) trackInfo += '\nИсполнитель: ' + input.artist;
     trackInfo += '\n\nТекст песни: ' + (input.lyrics || (input.instrumental ? 'Инструментал' : '—'));
+    trackInfo += '\n\nИсточник лирики: ' + (input.lyricsSource || (input.instrumental ? 'инструментал' : 'не записан (старая карточка)'));
     text.textContent = trackInfo;
     details.append(summary, text); container.append(details);
   }
@@ -653,10 +813,12 @@
   }
 
   function updateEnabled() {
-    // Один ход чата за раз: генерации медиа по-прежнему не блокируют чат.
+    // Один ход диалога за раз (чат и разговорный музыкальный режим): генерации медиа не блокируют.
     const hasInput = Boolean(promptValue() || (mode === 'music' && advanced && els.lyrics.value.trim()));
-    els.send.disabled = storageBlocked || !hasInput || (mode === 'chat' && chatActive);
-    $('chatPending').hidden = !(mode === 'chat' && chatActive);
+    const dialogBusy = (mode === 'chat' && chatActive) || (mode === 'music' && !advanced && musicChatActive);
+    els.send.disabled = storageBlocked || !hasInput || dialogBusy;
+    $('chatPending').hidden = !dialogBusy;
+    els.genTrack.disabled = storageBlocked || mode !== 'music' || !hasInput;
     els.improveLyrics.disabled = improving.has('lyrics') || !els.lyrics.value.trim();
     els.improvePrompt.disabled = improving.has('prompt') || !els.musicPrompt.value.trim();
     els.improvePhoto.disabled = improving.has('photo') || mode !== 'photo' || !els.prompt.value.trim();
@@ -699,7 +861,11 @@
     if ((!text && !(mode === 'music' && advanced && els.lyrics.value.trim())) || (mode === 'chat' && chatActive)) return;
     if (mode === 'chat') return createChat(text);
     if (mode === 'photo') return createPhoto(text);
-    return createMusic(text);
+    // Решение владельца 15.11: в Simple-режиме send = разговор с наставником
+    // (вариант B «Студия-агент»), генерация — явные кнопки. «Тонко настроить»
+    // (Custom-путь) работает как раньше: send = createMusic.
+    if (advanced) return createMusic(text);
+    return createMusicChat(text);
   }
 
   async function createChat(text) {
@@ -752,6 +918,216 @@
         errorCard(error, session);
       }
     } finally { chatActive = false; body.classList.remove('streaming'); setBusy(false); updateEnabled(); }
+  }
+
+  // ---- разговорный музыкальный режим (вариант B «Студия-агент») -----------------
+  // send в Simple-режиме = диалог с выбранным наставником (Продюсер/Лирик/Автор
+  // песни — их system-промпты реально используются). Каждый ответ содержит
+  // draft-блок (промпт/лирика) с явным принятием и отдельной кнопкой генерации;
+  // self-refine цикл работает, потому что контекст диалога сохраняется.
+  const MUSIC_DRAFT_OPEN = '[briix-draft]';
+  const MUSIC_DRAFT_CLOSE = '[/briix-draft]';
+  const musicDraftInstruction = '\n\nКаждый твой ответ заканчивается блоком черновика строго в таком формате:\n'
+    + MUSIC_DRAFT_OPEN + '\n{"title":"название песни","prompt":"описание звучания","lyrics":"текст песни"}\n' + MUSIC_DRAFT_CLOSE + '\n'
+    + 'Поле prompt пиши ТОЛЬКО по-английски одной строкой (жанр, темп, вокал, инструменты, продакшн; не выдумывай темп, если он не задан). '
+    + 'Поле lyrics — текст песни с латинскими тегами частей [Verse], [Chorus], [Bridge] (для инструментала — пустая строка). '
+    + 'Не используй markdown и не дублируй содержимое черновика в тексте ответа.';
+
+  function musicSessionContext() {
+    return 'Текущее состояние студии (опирайся на него, если релевантно):\n'
+      + 'Промпт: ' + (els.musicPrompt.value.trim() || '—') + '\n'
+      + 'Лирика: ' + (els.lyrics.value.trim() || '—') + '\n'
+      + 'Режим: ' + (instrumental ? 'инструментал' : 'песня') + ', качество: ' + MODEL_LABELS[quality] + '.';
+  }
+
+  function parseMusicDraft(full, isInstrumental) {
+    let text = full, draft = null;
+    const open = full.indexOf(MUSIC_DRAFT_OPEN), close = full.lastIndexOf(MUSIC_DRAFT_CLOSE);
+    if (open >= 0 && close > open) {
+      text = (full.slice(0, open) + ' ' + full.slice(close + MUSIC_DRAFT_CLOSE.length)).replace(/\s+/g, ' ').trim();
+      try {
+        const value = JSON.parse(full.slice(open + MUSIC_DRAFT_OPEN.length, close).trim());
+        if (value && !Array.isArray(value) && typeof value.prompt === 'string') {
+          draft = { title: String(value.title || ''), prompt: BriixProducer.sanitize(value.prompt),
+            lyrics: BriixProducer.latinizeTags(BriixProducer.sanitize(value.lyrics || '')) };
+        }
+      } catch { draft = null; }
+    }
+    if (!draft) {
+      // Фолбэк: слабая модель вернула «почти JSON» целиком — пробуем парсер продюсера.
+      try {
+        const result = BriixProducer.parse(full, { instrumental: isInstrumental, existingLyrics: '' });
+        draft = { title: result.title, prompt: result.prompt, lyrics: result.lyrics };
+        text = '';
+      } catch { draft = null; }
+    }
+    if (draft && !draft.prompt && !draft.lyrics) draft = null;
+    return { text, draft };
+  }
+
+  async function createMusicChat(text) {
+    const session = activeSession;
+    if (musicChatActive) return;
+    musicChatActive = true;
+    const assistant = currentAssistant();
+    // Один наставник на диалог: смена роли обнуляет историю (делается и в чипе).
+    if (!session.musicChat || session.musicChat.assistant !== assistant.id) {
+      session.musicChat = { assistant: assistant.id, history: [] };
+    }
+    const history = session.musicChat.history;
+    const snapshot = { instrumental, quality };
+    card('user', 'Вы', text, session);
+    feedPush({ t: 'user', who: 'Вы', text }, session);
+    els.prompt.value = '';
+    updateEnabled();
+    const who = assistant.name;
+    const body = card('assistant', who, '', session);
+    const handle = makeCancelHandle(); // ✕ в карточке гасит только этот стрим
+    const textSpan = document.createElement('span');
+    const wait = waitLine('chat');
+    const stopRow = document.createElement('div');
+    stopRow.className = 'wait-row';
+    stopRow.append(wait);
+    appendStop(stopRow, handle);
+    body.append(textSpan, stopRow);
+    body.classList.add('streaming');
+    setBusy(true, who + ' печатает…');
+    try {
+      const messages = [
+        { role: 'system', content: assistant.system + musicDraftInstruction + '\n\n' + musicSessionContext() },
+        ...history.filter(m => m && ['user', 'assistant'].includes(m.role) && typeof m.content === 'string').slice(-40),
+        { role: 'user', content: text }
+      ];
+      let first = true;
+      const full = await chatStream({ messages, signal: handle.controller.signal, onChunk: piece => {
+        if (first) { wait.remove(); first = false; }
+        textSpan.textContent += piece;
+        scrollFeed();
+      } });
+      stopRow.remove();
+      body.classList.remove('streaming');
+      const parsed = parseMusicDraft(full, snapshot.instrumental);
+      body.textContent = parsed.text || '';
+      const entry = { t: 'music_draft', who, text: parsed.text, draft: parsed.draft,
+        assistant: who, instrumental: snapshot.instrumental, applied: false, createdAt: Date.now() };
+      if (parsed.draft) renderMusicDraftContent(body, entry, session);
+      history.push({ role: 'user', content: text }, { role: 'assistant', content: full });
+      session.updatedAt = Date.now();
+      feedPush(entry, session);
+    } catch (error) {
+      stopRow.remove();
+      if (error.name === 'AbortError') {
+        if (body.textContent.trim()) {
+          const note = document.createElement('div');
+          note.className = 'stopped-note';
+          note.textContent = '⏹ остановлено';
+          body.append(note);
+        } else body.closest('.card').remove();
+      } else {
+        if (!body.textContent.trim()) body.closest('.card').remove();
+        if (session === activeSession && mode === 'music' && !advanced && !els.prompt.value.trim()) els.prompt.value = text;
+        errorCard(error, session);
+      }
+    } finally { musicChatActive = false; setBusy(false); updateEnabled(); }
+  }
+
+  // Draft-блок наставника: компактные поля + «Принять в поля» (с бэкапом/откатом,
+  // паттерн renderProducerDraft) + «Сгенерировать трек» (явная генерация).
+  function renderMusicDraftContent(body, entry, session) {
+    body.classList.add('producer-draft', 'music-draft');
+    const note = document.createElement('p'); note.className = 'producer-note';
+    note.textContent = 'Черновик наставника. Проверьте смысл, язык и ограничения — помощник может ошибаться.';
+    body.append(note);
+    const makeField = (label, name, limit, multiline) => {
+      const wrapper = document.createElement('label'); wrapper.className = 'producer-field';
+      const text = document.createElement('span'); text.textContent = label;
+      const input = document.createElement(multiline ? 'textarea' : 'input');
+      if (!multiline) input.type = 'text';
+      input.value = entry.draft[name] || ''; input.maxLength = limit;
+      input.dataset.draftField = name;
+      input.addEventListener('input', () => {
+        entry.draft[name] = input.value; session.updatedAt = Date.now();
+        if (producerSaveTimer) clearTimeout(producerSaveTimer);
+        producerSaveTimer = setTimeout(() => { producerSaveTimer = null; persistSessions(); }, 400);
+      });
+      wrapper.append(text, input); body.append(wrapper); return input;
+    };
+    const titleField = makeField('Название (для заметок и имени трека)', 'title', BriixProducer.MAX_TITLE, false);
+    const promptField = makeField('Описание звучания', 'prompt', BriixProducer.MAX_PROMPT, true);
+    const lyricsField = entry.instrumental ? null : makeField('Лирика', 'lyrics', BriixProducer.MAX_LYRICS, true);
+    const state = document.createElement('p'); state.className = 'producer-note'; state.setAttribute('role', 'status');
+    state.textContent = entry.applied ? 'Поля заполнены из черновика.' : 'Пока ничего не изменено в полях генерации.';
+    body.append(state);
+    const actions = document.createElement('div'); actions.className = 'producer-actions';
+    const apply = document.createElement('button'); apply.type = 'button'; apply.className = 'action'; apply.textContent = 'Принять в поля';
+    const revert = document.createElement('button'); revert.type = 'button'; revert.className = 'action'; revert.textContent = 'Вернуть поля';
+    revert.hidden = !entry.beforeApply;
+    const generate = document.createElement('button'); generate.type = 'button'; generate.className = 'action'; generate.textContent = 'Сгенерировать трек';
+    let running = false;
+    const runOnce = action => async () => {
+      if (running) return;
+      running = true; apply.disabled = true; revert.disabled = true; generate.disabled = true;
+      try { await action(); } finally { running = false; apply.disabled = false; revert.disabled = false; generate.disabled = false; }
+    };
+    const backupFields = () => {
+      entry.beforeApply = { style: els.musicPrompt.value, lyrics: els.lyrics.value, advanced };
+      (entry.backups ||= []).push(entry.beforeApply);
+      return entry.beforeApply;
+    };
+    const writeFields = () => {
+      els.musicPrompt.value = promptField.value;
+      if (lyricsField) els.lyrics.value = lyricsField.value;
+      saveDraft(session);
+    };
+    apply.addEventListener('click', runOnce(async () => {
+      if (storageBlocked || activeSession !== session || mode !== 'music') { state.textContent = 'Откройте эту сессию и режим «Музыка», чтобы принять черновик.'; return; }
+      if (instrumental !== entry.instrumental) { state.textContent = 'Режим трека изменился. Верните исходный режим, чтобы принять черновик.'; return; }
+      if (!promptField.value.trim() && !(lyricsField && lyricsField.value.trim())) { state.textContent = 'Черновик пуст.'; return; }
+      if ((els.musicPrompt.value.trim() && els.musicPrompt.value !== promptField.value) ||
+          (els.lyrics.value.trim() && lyricsField && els.lyrics.value !== lyricsField.value)) {
+        if (!confirm('Заменить текущий стиль и лирику черновиком наставника? Текущие значения сохранятся для возврата.')) return;
+      }
+      backupFields();
+      // Persist backup before touching the form.
+      if (!(await persistSessions())) { state.textContent = 'Не удалось сохранить резервную копию; поля не изменены.'; return; }
+      entry.applied = true;
+      writeFields();
+      pendingTrackTitle = titleField.value.trim() || null;
+      await persistSessions();
+      revert.hidden = false;
+      state.textContent = 'Поля заполнены (показать: «Тонко настроить»). Генерация запускается отдельно.';
+    }));
+    revert.addEventListener('click', runOnce(async () => {
+      if (storageBlocked || activeSession !== session || mode !== 'music' || !entry.beforeApply) { state.textContent = 'Откройте эту сессию и режим «Музыка».'; return; }
+      if (!confirm('Вернуть поля до принятия? Текущие изменения полей будут заменены.')) return;
+      entry.beforeRevert = { style: els.musicPrompt.value, lyrics: els.lyrics.value, advanced };
+      (entry.backups ||= []).push(entry.beforeRevert);
+      if (!(await persistSessions())) { state.textContent = 'Не удалось сохранить текущие поля.'; return; }
+      els.musicPrompt.value = entry.beforeApply.style; els.lyrics.value = entry.beforeApply.lyrics;
+      advanced = entry.beforeApply.advanced; entry.applied = false; renderChrome(); saveDraft(session); await persistSessions();
+      state.textContent = 'Поля восстановлены. Черновик остался в этой карточке.';
+    }));
+    generate.addEventListener('click', runOnce(async () => {
+      if (storageBlocked || activeSession !== session || mode !== 'music' || !needKey()) return;
+      if (instrumental !== entry.instrumental) { state.textContent = 'Режим трека изменился. Верните исходный режим, чтобы сгенерировать черновик.'; return; }
+      if (!promptField.value.trim() && !(lyricsField && lyricsField.value.trim())) { state.textContent = 'Черновик пуст.'; return; }
+      if (!entry.applied) { backupFields(); if (!(await persistSessions())) { state.textContent = 'Не удалось сохранить резервную копию; генерация не запущена.'; return; } }
+      entry.applied = true;
+      writeFields();
+      advanced = true; renderChrome();
+      pendingLyricsSource = 'наставник: ' + entry.who;
+      pendingTrackTitle = titleField.value.trim() || null;
+      await persistSessions();
+      revert.hidden = false;
+      await createMusic(els.musicPrompt.value); // promptReady-путь: английский промпт черновика уходит как есть
+    }));
+    actions.append(apply, revert, generate); body.append(actions);
+  }
+
+  function renderMusicDraftCard(entry, session) {
+    const body = card('assistant', entry.who + ' · черновик', '', session);
+    body.textContent = entry.text || '';
+    renderMusicDraftContent(body, entry, session);
   }
 
   async function createPhoto(text) {
@@ -854,6 +1230,9 @@
     // Зафиксировать настройки до автолирики: пользователь может менять их во время ожидания.
     const snapshot = { advanced, quality, instrumental, parentJobId: pendingMusicSource?.sessionId === session.id ? pendingMusicSource.jobId : null };
     if (snapshot.parentJobId) pendingMusicSource = null;
+    // Источник лирики/название выставлены путём запуска (наставник/поля/автолирика).
+    const draftSource = pendingLyricsSource; pendingLyricsSource = null;
+    const draftTitle = pendingTrackTitle; pendingTrackTitle = null;
     // Сборка (#109): исходная идея пользователя сохраняется неизменной (в карточку
     // и журнал идёт она), а в модель уходит чистая сборка без markdown и болтовни.
     const rawIdea = snapshot.advanced ? els.musicPrompt.value.trim() : description;
@@ -965,13 +1344,21 @@
         const structure = BriixProducer.structureWarnings(lyrics); // ручная лирика: предупредить, не навязывать
         if (structure.length) card('notice', 'Структура лирики', structure.join(' '), session);
       }
-      const params = { model: MUSIC_MODELS[snapshot.quality] };
+      // Песня — продукт: у неё есть имя и исполнитель. Название — из черновика
+      // наставника или первой осмысленной строки лирики, fallback по дате.
+      // Сервер (параллельная INFRA-задача) пишет params.title/artist в теги M4A
+      // и Content-Disposition — контрактное ожидание, см. server-contract/README.md.
+      const titleSource = (lyrics || style || '').split('\n').map(s => s.trim()).find(s => s.length > 2) || '';
+      const trackTitle = BriixProducer.sanitize(draftTitle || titleSource).slice(0, BriixProducer.MAX_TITLE) || ('BRIIX track ' + new Date().toISOString().slice(0, 10));
+      const params = { model: MUSIC_MODELS[snapshot.quality], title: trackTitle, artist: currentUser() };
       if (snapshot.instrumental) params.instrumental = true;
       if (lyrics) params.lyrics = lyrics;
       // В карточку/сессию — исходная идея без изменений (правило #109),
       // promptSent — ровно то, что ушло в модель; повтор подставляет исходную идею.
       const requestBase = rawIdea || lyrics;
-      const input = { prompt: requestBase, promptSent: finalPrompt !== requestBase ? finalPrompt : undefined, lyrics, model: MUSIC_MODELS[snapshot.quality], instrumental: snapshot.instrumental, parentJobId: snapshot.parentJobId };
+      const input = { prompt: requestBase, promptSent: finalPrompt !== requestBase ? finalPrompt : undefined, lyrics, model: MUSIC_MODELS[snapshot.quality], instrumental: snapshot.instrumental, parentJobId: snapshot.parentJobId,
+        title: trackTitle, artist: currentUser(),
+        lyricsSource: draftSource || (snapshot.advanced ? 'написал пользователь' : (vocal && !lyrics ? 'автолирика (автор песен)' : 'написал пользователь')) };
       const id = await submitJob({ type: 'music', prompt: finalPrompt, params });
       recordSessionJob(session, id, 'music', input);
       const result = await pollJob(id, { shouldStop: () => handle.cancelled, onStatus: d => {
@@ -991,15 +1378,14 @@
       audio.preload = 'metadata';
       wrap.append(audio);
       BriixWaveform.attach(audio, blob, wrap);
+      makeCoverPlayable(wrap.closest('.card'), audio); // обложка = PLAY
       addMusicDetails(wrap, input);
-      addMusicActions(wrap.closest('.card'), { job: id, prompt: input.prompt, title: input.prompt }, input);
-      addDownloadAction(wrap.closest('.card'), blob, 'briix-track', '⬇ Скачать ' + extOf(blob).toUpperCase());
+      addTrackMenu(wrap.closest('.card'), { job: id, input, file: result.result_url, blob });
       feedPush({ t: 'media', who: 'Трек готов (' + MODEL_LABELS[snapshot.quality] + ')', kind: 'music', file: result.result_url, job: id, cover: result.cover_url || '', input }, session);
-      const titleSource = (lyrics || style || '').split('\n').map(s => s.trim()).find(s => s.length > 2) || '';
       libAdd({
         job: id, sessionId: session.id, kind: 'music', prompt: requestBase || '',
         lyrics: lyrics || '', instrumental: snapshot.instrumental, inputComplete: true, parentJobId: snapshot.parentJobId,
-        title: titleSource.slice(0, 60),
+        title: trackTitle,
         model: MUSIC_MODELS[snapshot.quality], file: result.result_url, cover: result.cover_url || '', created: Date.now(), fav: false
       });
     } catch (error) {
@@ -1726,7 +2112,11 @@
         }
         const link = document.createElement('a');
         link.href = url;
-        link.download = 'briix-' + entry.kind + '-' + new Date(entry.created).toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.' + extOf({ type: blobTypes.get(entry.job) || '' });
+        // Имя файла: «Название - Исполнитель» для треков (кириллица сохраняется),
+        // fallback — прежняя схема briix-<kind>-<date>.
+        link.download = entry.kind === 'music' && (entry.title || entry.prompt)
+          ? safeFileName(entry.title || entry.prompt, currentUser(), extOf({ type: blobTypes.get(entry.job) || '' }))
+          : 'briix-' + entry.kind + '-' + new Date(entry.created).toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.' + extOf({ type: blobTypes.get(entry.job) || '' });
         document.body.append(link); link.click(); link.remove();
       } catch { showLibError(div, 'Не удалось скачать файл. Проверьте подключение и попробуйте снова.'); }
     });
@@ -1769,26 +2159,31 @@
       renderLibrary();
     });
     row.append(download);
-    if (entry.kind !== 'music') row.append(fav, del);
     const sourceSession = sessionProfile?.sessions.find(s => s.id === entry.sessionId || s.feed.some(item => item && item.job === entry.job) || s.jobs?.some(item => item.job === entry.job));
-    let extra = row;
-    if (entry.kind === 'music') {
-      const details = document.createElement('details'); details.className = 'lib-more';
-      const summary = document.createElement('summary'); summary.className = 'action'; summary.textContent = 'Ещё';
-      extra = document.createElement('div'); extra.className = 'actions'; details.append(summary, extra); row.append(details);
-      extra.append(fav, del);
-      const input = sourceSession?.feed.find(item => item && item.job === entry.job)?.input || sourceSession?.jobs?.find(item => item.job === entry.job)?.input;
-      const repeat = document.createElement('button'); repeat.type = 'button'; repeat.className = 'action';
-      repeat.textContent = 'Повторить с правками'; repeat.addEventListener('click', () => repeatMusic(entry, input)); extra.append(repeat);
-      const cover = document.createElement('button'); cover.type = 'button'; cover.className = 'action';
-      cover.textContent = 'Создать картинку обложки'; cover.addEventListener('click', () => createCoverDraft(entry)); extra.append(cover);
-    }
-    if (sourceSession) {
-      const open = document.createElement('button'); open.type = 'button'; open.className = 'action';
-      open.textContent = 'Открыть сессию: ' + sourceSession.title;
-      open.addEventListener('click', () => selectSession(sourceSession)); extra.append(open);
-    } else if (entry.kind === 'music') {
-      const unknown = document.createElement('span'); unknown.className = 'hint'; unknown.textContent = 'Сессия неизвестна'; extra.append(unknown);
+    if (entry.kind !== 'music') row.append(fav, del);
+    else {
+      // Единое меню «⋯» и в библиотеке: те же 7 действий, что и в карточке ленты.
+      const anchor = document.createElement('div'); anchor.className = 'menu-anchor track-menu-anchor';
+      const button = document.createElement('button');
+      button.type = 'button'; button.className = 'action menu-btn';
+      button.textContent = '⋯';
+      button.setAttribute('aria-haspopup', 'menu');
+      button.setAttribute('aria-expanded', 'false');
+      button.setAttribute('aria-label', 'Ещё действия');
+      const menu = document.createElement('div');
+      menu.className = 'menu track-menu'; menu.hidden = true;
+      menu.setAttribute('role', 'menu');
+      anchor.append(button, menu); row.append(anchor);
+      const input = sourceSession?.feed.find(item => item && item.job === entry.job)?.input || sourceSession?.jobs?.find(item => item.job === entry.job)?.input || {};
+      attachTrackMenu(button, menu, () => [
+        { label: 'Копировать промпт', onPick: () => copyText(input.promptSent || entry.prompt || '', 'промпт') },
+        { label: 'Копировать лирику', onPick: () => copyText(entry.lyrics || input.lyrics || '', 'лирика') },
+        { label: 'Повторить с правками', onPick: () => repeatMusic(entry, input) },
+        { label: 'Создать обложку', onPick: () => createCoverDraft(entry) },
+        { label: entry.fav ? 'Убрать из избранного' : 'В избранное', onPick: () => fav.click() },
+        { label: 'Удалить', danger: true, onPick: () => del.click() },
+        ...(sourceSession ? [{ label: 'Открыть сессию: ' + sourceSession.title, onPick: () => selectSession(sourceSession) }] : [])
+      ]);
     }
     main.append(who, promptEl);
     if (entry.kind === 'music') {
@@ -1922,6 +2317,13 @@
   });
 
   els.send.addEventListener('click', create);
+  // Явная генерация текущих полей без диалога (решение владельца 15.11):
+  // отдельная кнопка «Сгенерировать трек» рядом с send в музыкальном режиме.
+  els.genTrack.addEventListener('click', async () => {
+    if (storageBlocked || !activeSession || mode !== 'music' || !needKey()) return;
+    if (!promptValue() && !(advanced && els.lyrics.value.trim())) return;
+    await createMusic(promptValue());
+  });
   els.prepareMusic.addEventListener('click', prepareMusic);
   els.improveLyrics.addEventListener('click', () => improve('lyrics'));
   els.improvePrompt.addEventListener('click', () => improve('prompt'));

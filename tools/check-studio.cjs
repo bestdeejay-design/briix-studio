@@ -16,6 +16,19 @@ const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
 const M4A_PATH = path.join(ROOT, 'assets/media/showcase/ballad30.m4a');
 const M4A = fs.existsSync(M4A_PATH) ? fs.readFileSync(M4A_PATH) : Buffer.from('fake-m4a');
+// Настоящий играбельный WAV (2 с, 16 кГц, синус 440 Гц) — для проверки «обложка = PLAY».
+function makeToneWav() {
+  const sampleRate = 16000, samples = sampleRate * 2;
+  const bytes = new ArrayBuffer(44 + samples * 2), v = new DataView(bytes);
+  const str = (offset, text) => [...text].forEach((c, i) => v.setUint8(offset + i, c.charCodeAt(0)));
+  str(0, 'RIFF'); v.setUint32(4, 36 + samples * 2, true); str(8, 'WAVE'); str(12, 'fmt ');
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, sampleRate, true); v.setUint32(28, sampleRate * 2, true); v.setUint32(32, 2, true); v.setUint16(34, 16, true);
+  str(36, 'data'); v.setUint32(40, samples * 2, true);
+  for (let i = 0; i < samples; i++) v.setInt16(44 + i * 2, Math.round(Math.sin(2 * Math.PI * 440 * i / sampleRate) * 20000), true);
+  return Buffer.from(bytes);
+}
+const WAV = makeToneWav();
 const POLICY_MESSAGE = 'Запрос нарушает политику контента.';
 
 let state;
@@ -82,6 +95,12 @@ function bffServer(port) {
             return;
           }
           if (state.chatSlow) return sse(res, 'медленное слово '.repeat(80), 120);
+          // Разговорный музыкальный режим (вариант B): наставник отвечает разговорно
+          // и всегда с draft-блоком в маркер-формате клиента.
+          if (/Продюсер|Лирик|Автор песни/.test(body.messages[0]?.content || '')) {
+            const draft = JSON.stringify({ title: 'Черновик наставника', prompt: 'dream pop, 90 BPM, warm female vocals', lyrics: '[Verse]\nНовая строка про осень' });
+            return sse(res, 'Разговор пошёл. Вот черновик. [briix-draft] ' + draft + ' [/briix-draft]');
+          }
           sse(res, 'Стрим пришёл: ' + last.slice(-40));
         });
         return;
@@ -148,19 +167,20 @@ function bffServer(port) {
         return;
       }
 
-      if (req.url.startsWith('/files/') && (req.url.includes('.m4a') || req.url.includes('.png'))) {
+      if (req.url.startsWith('/files/') && (req.url.includes('.m4a') || req.url.includes('.png') || req.url.includes('.wav'))) {
         if (req.url.includes('-cover.png')) {
           state.coverRequests++;
           if (state.coverRateLimit > 0) { state.coverRateLimit--; send(429, { error: { code: 'rate_limited' } }); return; }
         }
-        const music = req.url.includes('.m4a');
+        const isWav = req.url.includes('.wav');
+        const music = isWav || req.url.includes('.m4a');
         state.fileOrder.push(req.url);
         if (music) state.audioRequests++;
         else if (!req.url.includes('-cover.png')) state.photoRequests++;
         const current = state;
         current.activeFiles++;
         current.maxActiveFiles = Math.max(current.maxActiveFiles, current.activeFiles);
-        const finish = () => { current.activeFiles--; res.writeHead(200, { 'Content-Type': music ? 'audio/mp4' : 'image/png', ...cors }); res.end(music ? M4A : PNG); };
+        const finish = () => { current.activeFiles--; res.writeHead(200, { 'Content-Type': isWav ? 'audio/wav' : music ? 'audio/mp4' : 'image/png', ...cors }); res.end(isWav ? WAV : music ? M4A : PNG); };
         if (current.fileDelay) setTimeout(finish, current.fileDelay); else finish();
         return;
       }
@@ -247,6 +267,7 @@ function bffServer(port) {
   // Поле активно — send разблокируется.
   await p.locator('#prompt').fill('dream pop track');
   assert.equal(await p.locator('#send').isDisabled(), false, 'send enabled once the prompt is filled');
+  assert.equal(await p.locator('#genTrack').isDisabled(), false, 'explicit Generate button enabled once the prompt is filled');
   await p.locator('#prompt').fill('');
   ok('loads clean, 3 modes, assistant chip menus per mode, music toolbar', {});
 
@@ -522,7 +543,8 @@ function bffServer(port) {
   await p.locator('.seg-btn[data-vocal="0"]').click(); // явно выбрать «Песня» → вокальный трек
   assert.equal(await p.locator('.seg-btn[data-vocal="0"]').getAttribute('aria-pressed'), 'true');
   await p.locator('#prompt').fill('душевная песня про город');
-  await p.locator('#send').click();
+  // Решение владельца 15.11: send в Simple-режиме = диалог; явная генерация — кнопка «Сгенерировать трек».
+  await p.locator('#genTrack').click();
   await p.waitForSelector('.card.assistant audio', { timeout: 25000 });
   const autoPost = state.jobPosts.at(-1);
   assert.equal(autoPost.params.instrumental, undefined, 'vocal job');
@@ -650,7 +672,7 @@ function bffServer(port) {
   p = await page();
   await p.locator('.mode[data-mode="music"]').click();
   await p.locator('#prompt').fill('Песня о море');
-  await p.locator('#send').click();
+  await p.locator('#genTrack').click();
   await p.waitForSelector('.card.stage .stage-stop');
   await p.locator('#modelChip').click();
   await p.locator('#modelMenu button', { hasText: 'Pro' }).click();
@@ -680,8 +702,8 @@ function bffServer(port) {
 
 
   state.favoriteFail = true;
-  await p.locator('.lib-item .lib-more summary').click();
-  await p.locator('.lib-item button', { hasText: 'В избранное' }).click();
+  await p.locator('.lib-item .menu-btn').first().click();
+  await p.locator('.track-menu:not([hidden]) button', { hasText: 'В избранное' }).first().click();
   await p.waitForSelector('.lib-error');
   assert.equal(await p.locator('.lib-item.fav').count(), 0, 'failed server mutation is not shown as success');
   state.favoriteFail = false;
@@ -894,7 +916,7 @@ function bffServer(port) {
   await p.locator('.seg-btn[data-vocal="1"]').click();
   const fullPrompt = 'Музыкальная идея ' + 'ритм '.repeat(70);
   await p.locator('#prompt').fill(fullPrompt);
-  await p.locator('#send').click();
+  await p.locator('#genTrack').click();
   await p.locator('.mode[data-mode="chat"]').click();
   await p.locator('#newChat').click();
   await p.waitForFunction(() => document.querySelectorAll('#feed .session-feed:not([hidden]) .card').length === 0);
@@ -905,8 +927,8 @@ function bffServer(port) {
   assert.equal(await p.locator('#feed .session-feed:not([hidden]) audio').count(), 0, 'late track does not leak into active session');
   await p.locator('.tab[data-tab="library"]').click();
   const linkedItem = p.locator('.lib-item', { hasText: 'Сессия: Идея первой сессии' }).first();
-  await linkedItem.locator('.lib-more summary').click();
-  await linkedItem.locator('.action', { hasText: 'Открыть сессию: Идея первой сессии' }).click();
+  await linkedItem.locator('.menu-btn').click();
+  await linkedItem.locator('.track-menu:not([hidden]) button', { hasText: 'Открыть сессию: Идея первой сессии' }).click();
   await p.waitForSelector('#feed .session-feed:not([hidden]) audio');
   assert.ok(await p.locator('#feed .session-feed:not([hidden])').innerText().then(t => t.includes('Идея первой сессии')));
   await p.reload();
@@ -940,10 +962,12 @@ function bffServer(port) {
   await p.locator('.mode[data-mode="music"]').click();
   await p.locator('.seg-btn[data-vocal="1"]').click();
   const repeatPrompt = ('длинная музыкальная идея '.repeat(15)).trim();
-  await p.locator('#prompt').fill(repeatPrompt); await p.locator('#send').click();
+  await p.locator('#prompt').fill(repeatPrompt); await p.locator('#genTrack').click();
   await p.waitForSelector('#feed audio', { timeout: 25000 });
   assert.equal(state.jobPosts.length, 1);
-  await p.getByRole('button', { name: 'Повторить с правками' }).first().click();
+  // «Повторить с правками» теперь в едином меню «⋯» карточки трека.
+  await p.locator('#feed .card.assistant .menu-btn').first().click();
+  await p.locator('.track-menu:not([hidden]) button', { hasText: 'Повторить с правками' }).first().click();
   assert.equal(state.jobPosts.length, 1, 'no generation before confirmation');
   assert.equal(await p.locator('#musicPrompt').inputValue(), repeatPrompt, 'repeat pre-fills the ORIGINAL idea for editing');
   await p.locator('#musicPrompt').fill(repeatPrompt + ' новая версия');
@@ -957,7 +981,8 @@ function bffServer(port) {
     return profile.sessions[0].feed.filter(x => x.kind === 'music').map(x => ({ job: x.job, parent: x.input.parentJobId }));
   });
   assert.equal(linked[1].parent, linked[0].job, 'repeat records source without overwriting original');
-  await p.getByRole('button', { name: 'Создать картинку обложки' }).first().click();
+  await p.locator('#feed .card.assistant .menu-btn').first().click();
+  await p.locator('.track-menu:not([hidden]) button', { hasText: 'Создать обложку' }).first().click();
   assert.match(await p.locator('.card.notice').last().innerText(), /не заменит обложку/);
   await p.locator('#prompt').fill('Обложка в неоновом стиле'); await p.locator('#send').click();
   await p.waitForSelector('#feed img.media-in', { timeout: 25000 });
@@ -1074,7 +1099,7 @@ function bffServer(port) {
   assert.equal(await p.locator('[data-producer-field="lyrics"]').count(), 0);
   await p.getByRole('button', { name: 'Принять в поля студии' }).click();
   await p.waitForFunction(() => document.querySelector('#musicPrompt').value === 'ambient synth');
-  await p.locator('#send').click(); await p.waitForSelector('#feed audio', { timeout: 25000 });
+  await p.locator('#genTrack').click(); await p.waitForSelector('#feed audio', { timeout: 25000 });
   assert.equal(state.jobPosts[0].params.instrumental, true);
   assert.equal(state.jobPosts[0].params.duration, undefined);
   ok('instrumental review and explicit generation, no duration parameter');
@@ -1132,6 +1157,133 @@ function bffServer(port) {
   assert.equal(await p.locator('#prompt').inputValue(), 'Идея при лимите');
   assert.equal(state.jobPosts.length, 0);
   ok('producer 429 preserves the input and never starts a job');
+
+  // ---- Вариант B «Студия-агент»: разговорный музыкальный режим ------------------
+  // send в Simple-режиме НЕ создаёт джобу: это диалог с выбранным наставником.
+  resetBff();
+  p = await page({ viewport: { width: 390, height: 844 } });
+  await p.locator('.mode[data-mode="music"]').click();
+  await p.locator('#assistantChip').click();
+  await p.locator('#assistantMenu button', { hasText: 'Лирик' }).click();
+  await p.locator('#prompt').fill('хочу песню про осень');
+  await p.locator('#send').click();
+  await p.waitForSelector('.music-draft', { timeout: 15000 });
+  assert.equal(state.jobPosts.length, 0, 'send in music mode does NOT create a job without explicit Generate');
+  const mentorPost = state.chatPosts.at(-1);
+  assert.equal(mentorPost.stream, true, 'music dialog goes as SSE stream');
+  assert.match(mentorPost.messages[0].content, /Лирик/, 'the selected mentor system prompt is actually used (not decoration)');
+  assert.match(mentorPost.messages[0].content, /briix-draft/, 'draft format instruction is in the system message');
+  assert.match(mentorPost.messages[0].content, /Текущее состояние студии/, 'mentor sees the studio fields snapshot');
+  const draftCard = p.locator('.music-draft').first();
+  assert.ok(await draftCard.getByRole('button', { name: 'Принять в поля' }).isVisible(), 'draft has Accept button');
+  assert.ok(await draftCard.getByRole('button', { name: 'Сгенерировать трек' }).isVisible(), 'draft has explicit Generate button');
+  // Принять заполняет поля (с бэкапом), джобу не создаёт.
+  await draftCard.getByRole('button', { name: 'Принять в поля' }).click();
+  await p.waitForFunction(() => document.getElementById('musicPrompt').value === 'dream pop, 90 BPM, warm female vocals');
+  assert.equal(state.jobPosts.length, 0, 'accepting the draft does not generate');
+  // Self-refine: второй ход сохраняет историю диалога.
+  await p.locator('#prompt').fill('поправь припев');
+  await p.locator('#send').click();
+  await p.waitForFunction(() => document.querySelectorAll('.music-draft').length >= 2, {}, { timeout: 15000 });
+  assert.equal(state.jobPosts.length, 0, 'refinement turn still does not generate');
+  const refinePost = state.chatPosts.at(-1);
+  assert.ok(refinePost.messages.some(m => m.role === 'user' && m.content === 'хочу песню про осень'), 'dialog history is sent to the mentor');
+  // Явная генерация из draft-блока: promptReady-путь, промпт наставника уходит как есть.
+  await p.locator('.music-draft').last().getByRole('button', { name: 'Сгенерировать трек' }).click();
+  await p.waitForSelector('#feed audio', { timeout: 30000 });
+  assert.equal(state.jobPosts.length, 1, 'draft Generate creates exactly one job');
+  assert.equal(state.jobPosts[0].prompt, 'dream pop, 90 BPM, warm female vocals', 'promptReady path: the mentor prompt is not rewritten');
+  assert.match(state.jobPosts[0].params.lyrics, /Новая строка/);
+  assert.equal(state.jobPosts[0].params.title, 'Черновик наставника', 'params.title carries the draft title');
+  assert.equal(state.jobPosts[0].params.artist, 'tester', 'params.artist is the user nick');
+  assert.equal(state.chatPosts.filter(x => x.stream === false && x.max_tokens === 300).length, 0, 'promptReady path skips silent translation');
+  // Диалог и черновики персистятся в session-store.
+  const savedDialog = await p.evaluate(async () => {
+    const { profile } = await BriixSessionStore.open('tester');
+    const s = profile.sessions[0];
+    return { history: s.musicChat?.history?.length || 0, assistant: s.musicChat?.assistant, drafts: s.feed.filter(x => x.t === 'music_draft').length };
+  });
+  assert.ok(savedDialog.history >= 4, 'music dialog persisted in session-store');
+  assert.equal(savedDialog.assistant, 'lyricist');
+  assert.ok(savedDialog.drafts >= 2, 'draft cards persisted in the feed');
+  await p.reload();
+  await p.waitForSelector('.music-draft', { timeout: 10000 });
+  // Отдельная кнопка «Сгенерировать трек» в композере: явная генерация без диалога.
+  await p.locator('#prompt').fill('спокойный эмбиент для чтения');
+  await p.locator('#genTrack').click();
+  await p.waitForFunction(() => document.querySelectorAll('#feed audio').length >= 1, {}, { timeout: 30000 });
+  assert.equal(state.jobPosts.length, 2, 'composer Generate button creates a job without a dialog turn');
+  assert.ok(/^[\x20-\x7E]*$/.test(state.jobPosts[1].prompt), 'quick-path assembly still yields an English prompt');
+  ok('music chat: send converses without jobs, mentor system used, draft accept/generate, dialog persisted, explicit composer Generate');
+
+  // ---- Анатомия карточки трека (общая для ленты и Библиотеки) --------------------
+  resetBff();
+  p = await page();
+  await p.evaluate(async wavB64 => {
+    const binary = atob(wavB64), bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const { profile, backend } = await BriixSessionStore.open('tester');
+    profile.sessions[0].feed.push({ t: 'media', who: 'Трек готов (Flash)', kind: 'music', file: '/files/tone.wav', job: 'job-tone', cover: '',
+      input: { prompt: 'тестовая идея', promptSent: 'assembled english prompt', lyrics: '[Verse]\nСтрока', model: 'ace-step-flash', instrumental: false,
+        title: 'Тест: Трек/№1?', artist: 'tester', lyricsSource: 'наставник: Лирик' } });
+    await BriixSessionStore.save(profile, profile.revision, backend);
+  }, WAV.toString('base64'));
+  await p.reload();
+  await p.locator('#feed .media-load').click();
+  await p.waitForSelector('#feed audio', { timeout: 15000 });
+  await p.waitForSelector('#feed .waveform-canvas', { timeout: 15000 }); // авто-attach, без opt-in кнопки
+  // Обложка = PLAY (настоящий играбельный WAV в mock). tryPlay мог автозапустить
+  // трек при загрузке — гасим и проверяем оба направления переключения.
+  await p.evaluate(() => document.querySelector('#feed audio').pause());
+  await p.locator('#feed .track-cover.playable').click();
+  await p.waitForFunction(() => { const a = document.querySelector('#feed audio'); return a && !a.paused; }, {}, { timeout: 5000 });
+  assert.equal(await p.locator('#feed .track-cover.playing').count(), 1, 'playing state is visible on the cover');
+  await p.locator('#feed .track-cover.playing').click();
+  await p.waitForFunction(() => { const a = document.querySelector('#feed audio'); return a && a.paused; });
+  // Клик по волне = seek.
+  await p.evaluate(() => { document.querySelector('#feed audio').currentTime = 0; });
+  await p.evaluate(() => {
+    const c = document.querySelector('#feed .waveform-canvas');
+    const r = c.getBoundingClientRect();
+    c.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: r.left + r.width * 0.5, clientY: r.top + r.height / 2 }));
+  });
+  await p.waitForFunction(() => Math.abs(document.querySelector('#feed audio').currentTime - 1) < 0.4, {}, { timeout: 5000 });
+  // Единое меню «⋯»: ровно 7 действий.
+  await p.locator('#feed .menu-btn').click();
+  const menuTexts = await p.locator('.track-menu:not([hidden]) button').allInnerTexts();
+  for (const label of ['Копировать промпт', 'Копировать лирику', 'Скачать', 'Повторить с правками', 'Создать обложку', 'В избранное', 'Удалить']) {
+    assert.ok(menuTexts.some(t => t.includes(label)), 'menu contains: ' + label);
+  }
+  assert.equal(menuTexts.length, 7, 'exactly the seven actions in the unified menu');
+  await p.keyboard.press('Escape');
+  // Transparency: что уехало в модель + название/исполнитель + источник лирики.
+  await p.locator('#feed .track-details summary').click();
+  const transparency = await p.locator('#feed .track-details').innerText();
+  assert.match(transparency, /Что уехало в модель/);
+  assert.match(transparency, /assembled english prompt/);
+  assert.match(transparency, /Название: Тест: Трек\/№1\?/);
+  assert.match(transparency, /Исполнитель: tester/);
+  assert.match(transparency, /Источник лирики: наставник: Лирик/);
+  // Имя файла скачивания: sanitize с сохранением кириллицы, спецсимволы вырезаны.
+  const dlCardPromise = p.waitForEvent('download');
+  await p.locator('#feed .menu-btn').click();
+  await p.locator('.track-menu:not([hidden]) button', { hasText: 'Скачать' }).click();
+  assert.equal((await dlCardPromise).suggestedFilename(), 'Тест Трек №1 - tester.wav',
+    'download name: sanitized title - artist, cyrillic kept, special characters removed');
+  ok('track card: cover=play, auto waveform with click-seek, unified 7-action menu, transparency, sanitized filename');
+
+  // Мобильный 320×568: меню «⋯» — bottom-sheet и не вылезает за экран.
+  p = await page({ viewport: { width: 320, height: 568 } });
+  await p.locator('#feed .media-load').first().click();
+  await p.waitForSelector('#feed audio', { timeout: 15000 });
+  await p.locator('#feed .menu-btn').click();
+  const sheet = await p.locator('.track-menu:not([hidden])').boundingBox();
+  assert.ok(sheet, 'bottom sheet opens on mobile');
+  assert.ok(sheet.x >= 0 && sheet.y >= 0, 'bottom sheet starts inside the viewport');
+  assert.ok(sheet.x + sheet.width <= 320.5 && sheet.y + sheet.height <= 568.5, 'bottom sheet fits 320x568: ' + JSON.stringify(sheet));
+  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth) <= 0, 'no h-scroll with open sheet');
+  await p.screenshot({ path: path.join(require('node:os').tmpdir(), 'studio-320-sheet.png'), fullPage: false });
+  ok('mobile 320x568: track menu is a bottom sheet inside the viewport');
 
   assert.deepEqual(errors, [], 'no page errors anywhere');
   await browser.close();

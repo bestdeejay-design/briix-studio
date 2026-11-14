@@ -1,4 +1,5 @@
-/* Real PCM waveform checks in Chromium using a synthetic WAV, not a live music server. */
+/* Real PCM waveform checks in Chromium using a synthetic WAV, not a live music server.
+ * Auto-attach (no opt-in button), canvas click = seek, progress highlight, budgets and fallbacks. */
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const fs = require('node:fs');
@@ -7,14 +8,14 @@ const { launch } = require('./browser-env.cjs');
   const browser = await launch();
   try {
     const page = await browser.newPage();
-    await page.setContent('<!doctype html><style>:root{--accent:#d97757}</style><div id="a"></div><div id="b"></div><div id="c"></div>');
+    await page.setContent('<!doctype html><style>:root{--accent:#d97757;--faint:rgba(235,235,245,.35)}</style><div id="a"></div><div id="b"></div><div id="c"></div>');
     await page.addScriptTag({ path: path.resolve(__dirname, '../studio/waveform.js') });
     await page.evaluate(() => {
       const sampleRate = 16000, samples = sampleRate * 2, bytes = new ArrayBuffer(44 + samples * 2), v = new DataView(bytes);
       const str = (offset, text) => [...text].forEach((c, i) => v.setUint8(offset + i, c.charCodeAt(0)));
       str(0, 'RIFF'); v.setUint32(4, 36 + samples * 2, true); str(8, 'WAVE'); str(12, 'fmt ');
       v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
-      v.setUint32(24, sampleRate, true); v.setUint32(28, sampleRate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+      v.setUint32(24, sampleRate, true); v.setUint32(28, sampleRate * 2, true); v.setUint32(32, 2, true); v.setUint16(34, 16, true);
       str(36, 'data'); v.setUint32(40, samples * 2, true);
       for (let i = 0; i < samples; i++) {
         const amplitude = i < samples / 2 ? 0.03 : 0.8;
@@ -29,8 +30,7 @@ const { launch } = require('./browser-env.cjs');
         BriixWaveform.attach(audio, input, container);
       }
     });
-    await page.waitForFunction(() => [...document.querySelectorAll('audio')].every(a => Number.isFinite(a.duration) && a.duration > 0));
-    await page.locator('#a .waveform-load').click();
+    // Авто-attach: канвас появляется сам, без кнопки «Показать форму звука».
     await page.waitForSelector('#a canvas', { timeout: 15000 });
     const peaks = await page.evaluate(() => {
       const canvas = document.querySelector('#a canvas'), ctx = canvas.getContext('2d');
@@ -39,19 +39,38 @@ const { launch } = require('./browser-env.cjs');
       for (let y = 0; y < canvas.height; y++) for (let x = 0; x < canvas.width; x++) {
         if (pixels[(y * canvas.width + x) * 4 + 3]) { if (x < canvas.width / 2) quiet++; else loud++; }
       }
-      const slider = document.querySelector('#a .waveform-seek');
-      slider.value = '750'; slider.dispatchEvent(new Event('input', { bubbles: true }));
-      return { quiet, loud, currentTime: document.querySelector('#a audio').currentTime, label: slider.getAttribute('aria-label') };
+      return { quiet, loud };
     });
     assert.ok(peaks.loud > peaks.quiet * 5, 'real loud section produces larger waveform than quiet section');
-    assert.ok(Math.abs(peaks.currentTime - 1.5) < 0.1, 'slider seeks native audio');
-    assert.match(peaks.label, /Позиция/);
-    await page.locator('#b .waveform-load').click();
-    assert.match(await page.locator('#b .waveform-status').innerText(), /Обычный плеер доступен/);
+    // Клик по волне = seek до середины (2-секундный файл).
+    await page.evaluate(() => {
+      const canvas = document.querySelector('#a canvas');
+      const rect = canvas.getBoundingClientRect();
+      canvas.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: rect.left + rect.width * 0.5, clientY: rect.top + 10 }));
+    });
+    await page.waitForFunction(() => Math.abs(document.querySelector('#a audio').currentTime - 1) < 0.1, {}, { timeout: 5000 });
+    // Скрытый range-слайдер — клавиатурный a11y-фолбэк: по-прежнему управляет аудио.
+    const sliderInfo = await page.evaluate(() => {
+      const slider = document.querySelector('#a .waveform-seek');
+      slider.value = '750'; slider.dispatchEvent(new Event('input', { bubbles: true }));
+      return { currentTime: document.querySelector('#a audio').currentTime, label: slider.getAttribute('aria-label') };
+    });
+    assert.ok(Math.abs(sliderInfo.currentTime - 1.5) < 0.1, 'hidden a11y slider still seeks native audio');
+    assert.match(sliderInfo.label, /Позиция/);
+    // Прогресс по волне подсвечен: после seek до 75% есть и акцентные, и приглушённые бары.
+    await page.waitForFunction(() => {
+      const canvas = document.querySelector('#a canvas'), ctx = canvas.getContext('2d');
+      const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      const seen = new Set();
+      for (let i = 3; i < pixels.length; i += 4) if (pixels[i]) seen.add(pixels[i - 3] + ',' + pixels[i - 2] + ',' + pixels[i - 1]);
+      return seen.size >= 2;
+    }, {}, { timeout: 5000 });
+    // Лимиты и fallback: слишком большой файл и не-аудио.
+    await page.waitForFunction(() => document.querySelector('#b .waveform-status')?.textContent.includes('Обычный плеер доступен'), {}, { timeout: 5000 });
     assert.equal(await page.locator('#b audio').evaluate(a => a.controls), true);
-    await page.locator('#c .waveform-load').click();
-    await page.waitForFunction(() => document.querySelector('#c .waveform-status').textContent.includes('Не удалось'));
+    await page.waitForFunction(() => document.querySelector('#c .waveform-status')?.textContent.includes('Не удалось'), {}, { timeout: 10000 });
     assert.equal(await page.locator('#c audio').evaluate(a => a.controls), true);
+    // Декод последовательный, контексты закрываются (авто-attach у двух плееров).
     await page.evaluate(() => {
       const NativeAudio = window.AudioContext;
       window.waveContexts = { active: 0, max: 0, closed: 0 };
@@ -65,11 +84,10 @@ const { launch } = require('./browser-env.cjs');
         BriixWaveform.attach(audio, sampleBlob, container);
       }
     });
-    await page.waitForFunction(() => ['d', 'e'].every(id => Number.isFinite(document.querySelector('#' + id + ' audio').duration)));
-    await page.evaluate(() => { document.querySelector('#d .waveform-load').click(); document.querySelector('#e .waveform-load').click(); });
     await page.waitForSelector('#d canvas'); await page.waitForSelector('#e canvas');
     await page.waitForFunction(() => waveContexts.closed === 2);
     assert.deepEqual(await page.evaluate(() => waveContexts), { active: 0, max: 1, closed: 2 }, 'decode is serial and contexts close');
+    // Удаление контейнера посреди декодирования закрывает контекст.
     await page.evaluate(() => {
       window.originalDecode = AudioContext.prototype.decodeAudioData;
       AudioContext.prototype.decodeAudioData = function (bytes) {
@@ -79,8 +97,6 @@ const { launch } = require('./browser-env.cjs');
       const audio = document.createElement('audio'); audio.controls = true; audio.src = URL.createObjectURL(sampleBlob); container.append(audio);
       BriixWaveform.attach(audio, sampleBlob, container);
     });
-    await page.waitForFunction(() => Number.isFinite(document.querySelector('#removed audio').duration));
-    await page.locator('#removed .waveform-load').click();
     await page.waitForFunction(() => waveContexts.active === 1);
     await page.evaluate(() => document.querySelector('#removed').remove());
     await page.waitForFunction(() => waveContexts.closed === 3, {}, { timeout: 700 });
@@ -94,9 +110,7 @@ const { launch } = require('./browser-env.cjs');
       const audio = document.createElement('audio'); audio.controls = true; audio.src = URL.createObjectURL(blob); container.append(audio);
       BriixWaveform.attach(audio, blob, container);
     }, m4a);
-    await page.waitForFunction(() => Number.isFinite(document.querySelector('#m4a audio').duration), {}, { timeout: 10000 });
-    await page.locator('#m4a .waveform-load').click();
     await page.waitForSelector('#m4a canvas', { timeout: 15000 });
-    console.log('PASS real PCM waveform (WAV and repository M4A), seek, oversized and decode-error fallbacks', JSON.stringify(peaks));
+    console.log('PASS auto-attach real PCM waveform (WAV and repository M4A), canvas click seek, a11y slider, progress highlight, budgets and decode-error fallbacks', JSON.stringify(peaks));
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
