@@ -598,12 +598,17 @@
     frame.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
   }
 
-  // Единый рендер трек-карточки (fresh и restore): обложка, волна из серверных
+  // Единый рендер трек-карточки (лента fresh/restore и Библиотека — один компонент,
+  // класс-маркер .track-card): обложка (или внешняя мини-обложка), волна из серверных
   // пиков (сразу, до загрузки аудио), аудио-фолбэк, transparency, меню «⋯».
-  function renderTrackCard(session, { who, job, cover, input = {}, file, loadBlob }) {
-    const wrap = card('assistant', who, '', session);
-    wrap.textContent = '';
-    addTrackCover(wrap, job, cover);
+  function buildTrackCard({ job, cover, input = {}, file, loadBlob, coverFrame, menuItems }) {
+    const wrap = document.createElement('div');
+    wrap.className = 'track-card';
+    let frame = coverFrame || null;
+    if (!frame) {
+      addTrackCover(wrap, job, cover);
+      frame = wrap.querySelector('.track-cover');
+    }
     const waveSlot = document.createElement('div');
     waveSlot.className = 'waveform-track';
     const placeholder = document.createElement('div');
@@ -615,16 +620,16 @@
     audioSlot.hidden = true;
     wrap.append(audioSlot);
     addMusicDetails(wrap, input);
-    const cardEl = wrap.closest('.card');
     let cardBlob = null;
     const ctx = { job, input, file, get blob() { return cardBlob; } };
-    addTrackMenu(cardEl, ctx);
-    const frame = cardEl.querySelector('.track-cover');
+    addTrackMenu(wrap, ctx, menuItems);
     const state = { audio: null };
     // Волна из пиков строится сразу при карточке — до загрузки аудио (решение
     // владельца 14.11: сервер отдаёт /files/{id}-peaks.json, посчитанный из WAV).
     // Нет пиков (старые треки) — тихо остаётся нативный плеер, шимер убирается.
     let wave = null;
+    const loadError = document.createElement('div');
+    loadError.className = 'load-error';
     fetchPeaks(job).then(peaks => {
       if (!frame.isConnected) throw new Error('Карточка недоступна.');
       placeholder.remove();
@@ -642,6 +647,7 @@
         const blob = await loadBlob();
         if (!frame.isConnected || currentUser() !== sessionProfile?.nick) throw new BusError('cancelled', 'Карточка недоступна.');
         cardBlob = blob;
+        loadError.remove();
         const audio = document.createElement('audio');
         audio.controls = true;
         audio.controlsList = 'nodownload'; // скачивание только через меню «⋯»: имя «Название - Исполнитель»
@@ -658,13 +664,22 @@
       } catch (error) {
         pending = null; // обложка остаётся кнопкой повтора
         if (frame.isConnected && currentUser() === sessionProfile?.nick) {
-          placeholder.textContent = 'Файл недоступен. ' + (error.message || '') + ' Повтор — нажатием на обложку.';
+          loadError.textContent = 'Файл недоступен. ' + (error.message || '') + ' Повтор — нажатием на обложку.';
+          waveSlot.append(loadError);
         }
         throw error;
       }
     })();
     makeCoverPlayable(frame, state, ensureLoaded);
-    return { cardEl, waveSlot, ensureLoaded };
+    return { body: wrap, ensureLoaded };
+  }
+
+  // Ленточная обёртка единого компонента (fresh и restore).
+  function renderTrackCard(session, opts) {
+    const body = card('assistant', opts.who, '', session);
+    const t = buildTrackCard(opts);
+    body.append(t.body);
+    return { body, ensureLoaded: t.ensureLoaded };
   }
 
   // Имя файла трека: «Название - Исполнитель.ext» с сохранением юникода (кириллица
@@ -776,7 +791,7 @@
     ];
   }
 
-  function addTrackMenu(cardEl, ctx) {
+  function addTrackMenu(cardEl, ctx, itemsBuilder) {
     const row = cardEl.querySelector(':scope > .actions') || (() => {
       const created = document.createElement('div'); created.className = 'actions'; cardEl.append(created); return created;
     })();
@@ -792,7 +807,7 @@
     menu.setAttribute('role', 'menu');
     anchor.append(button, menu);
     row.append(anchor);
-    attachTrackMenu(button, menu, () => trackMenuItems(cardEl, ctx));
+    attachTrackMenu(button, menu, itemsBuilder || (() => trackMenuItems(cardEl, ctx)));
   }
 
   // «Сделать из этого трек»: чат → музыка с подставленным брифом.
@@ -1448,7 +1463,7 @@
         job: id, cover: result.cover_url, input, file: result.result_url,
         loadBlob: () => Promise.resolve(blob)
       });
-      trackCard.ensureLoaded().then(audio => tryPlay(audio, trackCard.cardEl)).catch(() => {});
+      trackCard.ensureLoaded().then(audio => tryPlay(audio, trackCard.body)).catch(() => {});
       feedPush({ t: 'media', who: 'Трек готов (' + MODEL_LABELS[snapshot.quality] + ')', kind: 'music', file: result.result_url, job: id, cover: result.cover_url || '', input }, session);
       libAdd({
         job: id, sessionId: session.id, kind: 'music', prompt: requestBase || '',
@@ -2151,17 +2166,10 @@
     main.className = 'lib-main';
     const who = document.createElement('div');
     who.className = 'who';
-    if (entry.kind === 'music') addTrackCover(div, entry.job, entry.cover, true);
     let whoText = KIND_LABELS[entry.kind] || entry.kind;
     if (entry.kind === 'music' && entry.model) whoText += ' · ' + entry.model;
     whoText += ' · ' + new Date(entry.created).toLocaleString('ru-RU');
     who.textContent = whoText;
-    const promptEl = document.createElement('div');
-    promptEl.className = 'body lib-prompt';
-    promptEl.textContent = entry.prompt || '';
-    const media = document.createElement('div');
-    media.className = 'lib-media';
-    libMedia(entry, media);
     const row = document.createElement('div');
     row.className = 'actions';
     const download = document.createElement('a');
@@ -2226,60 +2234,73 @@
       jobsInFlight.clear();
       renderLibrary();
     });
-    row.append(download);
     const sourceSession = sessionProfile?.sessions.find(s => s.id === entry.sessionId || s.feed.some(item => item && item.job === entry.job) || s.jobs?.some(item => item.job === entry.job));
-    if (entry.kind !== 'music') row.append(fav, del);
-    else {
-      // Единое меню «⋯» и в библиотеке: те же 7 действий, что и в карточке ленты.
-      const anchor = document.createElement('div'); anchor.className = 'menu-anchor track-menu-anchor';
-      const button = document.createElement('button');
-      button.type = 'button'; button.className = 'action menu-btn';
-      button.textContent = '⋯';
-      button.setAttribute('aria-haspopup', 'menu');
-      button.setAttribute('aria-expanded', 'false');
-      button.setAttribute('aria-label', 'Ещё действия');
-      const menu = document.createElement('div');
-      menu.className = 'menu track-menu'; menu.hidden = true;
-      menu.setAttribute('role', 'menu');
-      anchor.append(button, menu); row.append(anchor);
-      const input = sourceSession?.feed.find(item => item && item.job === entry.job)?.input || sourceSession?.jobs?.find(item => item.job === entry.job)?.input || {};
-      attachTrackMenu(button, menu, () => [
+    if (entry.kind !== 'music') {
+      const promptEl = document.createElement('div');
+      promptEl.className = 'body lib-prompt';
+      promptEl.textContent = entry.prompt || '';
+      const media = document.createElement('div');
+      media.className = 'lib-media';
+      libMedia(entry, media);
+      row.append(download, fav, del);
+      main.append(who, promptEl, media, row);
+      div.append(main);
+      return div;
+    }
+    // Музыкальная карточка библиотеки = тот же единый компонент, что и в ленте
+    // (.track-card): обложка-мини = PLAY, волна из пиков, lazy-загрузка по клику.
+    addTrackCover(div, entry.job, entry.cover, true);
+    const sourceInput = sourceSession?.feed.find(item => item && item.job === entry.job)?.input || sourceSession?.jobs?.find(item => item.job === entry.job)?.input || {};
+    const input = {
+      ...sourceInput,
+      prompt: sourceInput.prompt || entry.prompt || '',
+      promptSent: sourceInput.promptSent,
+      lyrics: entry.lyrics || sourceInput.lyrics || '',
+      title: sourceInput.title || entry.title || '',
+      artist: sourceInput.artist || currentUser()
+    };
+    const track = buildTrackCard({
+      job: entry.job, cover: entry.cover, input, file: entry.file,
+      coverFrame: div.querySelector('.lib-cover'),
+      loadBlob: () => fileBlob(entry.file, 0),
+      menuItems: () => [
+        { label: 'Скачать', onPick: () => download.click() },
         { label: 'Копировать промпт', onPick: () => copyText(input.promptSent || entry.prompt || '', 'промпт') },
         { label: 'Копировать лирику', onPick: () => copyText(entry.lyrics || input.lyrics || '', 'лирика') },
-        { label: 'Повторить с правками', onPick: () => repeatMusic(entry, input) },
+        ...(lyricsWrap ? [{ label: 'Показать лирику', onPick: () => {
+          const open = lyricsWrap.classList.toggle('open');
+          lyricsWrap.querySelector('.lib-lyrics-text').hidden = !open;
+        } }] : []),
+        { label: 'Повторить с правками', onPick: () => repeatMusic(entry, sourceInput) },
         { label: 'Создать обложку', onPick: () => createCoverDraft(entry) },
         { label: entry.fav ? 'Убрать из избранного' : 'В избранное', onPick: () => fav.click() },
         { label: 'Удалить', danger: true, onPick: () => del.click() },
         ...(sourceSession ? [{ label: 'Открыть сессию: ' + sourceSession.title, onPick: () => selectSession(sourceSession) }] : [])
-      ]);
-    }
-    main.append(who, promptEl);
-    if (entry.kind === 'music') {
+      ]
+    });
+    main.append(who);
+    // «Сессия: …» — только когда сессия известна локально; «Сессия неизвестна» не показываем.
+    if (sourceSession) {
       const origin = document.createElement('div'); origin.className = 'hint';
-      origin.textContent = sourceSession ? 'Сессия: ' + sourceSession.title : 'Сессия неизвестна';
+      origin.textContent = 'Сессия: ' + sourceSession.title;
       main.append(origin);
     }
-    main.append(media, row);
-    div.append(main);
-    if (entry.kind === 'music' && entry.lyrics) {
-      const lyricsWrap = document.createElement('div');
+    // Текст песни — раскрывающим блоком из меню «⋯», отдельной строки в карточке нет.
+    let lyricsWrap = null;
+    if (entry.lyrics) {
+      lyricsWrap = document.createElement('div');
       lyricsWrap.className = 'lib-lyrics';
-      const toggle = document.createElement('button');
-      toggle.type = 'button';
-      toggle.className = 'action lib-lyrics-toggle';
-      toggle.textContent = '¶ Текст песни';
-      toggle.addEventListener('click', () => {
-        const open = lyricsWrap.classList.toggle('open');
-        body.hidden = !open;
-        toggle.setAttribute('aria-expanded', String(open));
-      });
-      const body = document.createElement('div');
-      body.className = 'lib-lyrics-text';
-      body.hidden = true;
-      body.textContent = entry.lyrics;
-      lyricsWrap.append(toggle, body);
+      const lyricsBody = document.createElement('div');
+      lyricsBody.className = 'lib-lyrics-text';
+      lyricsBody.hidden = true;
+      lyricsBody.textContent = entry.lyrics;
+      lyricsWrap.append(lyricsBody);
       main.append(lyricsWrap);
     }
+    const wrap = document.createElement('div'); wrap.className = 'lib-body';
+    wrap.append(track.body);
+    main.append(wrap);
+    div.append(main);
     return div;
   }
 
@@ -2317,11 +2338,7 @@
         retry.textContent = 'Повторить'; retry.addEventListener('click', load); container.append(retry);
       }
     };
-    if (entry.kind === 'music') {
-      const button = document.createElement('button'); button.type = 'button'; button.className = 'action media-load';
-      button.textContent = '▶ Слушать'; button.addEventListener('click', load); container.append(button);
-      return;
-    }
+    if (entry.kind === 'music') return;
     container.textContent = 'Изображение готово';
     const observer = new IntersectionObserver((records, obs) => {
       if (!container.isConnected) { obs.disconnect(); return; }
@@ -2347,21 +2364,15 @@
       img.alt = 'Результат';
       img.src = url;
       container.append(img);
-    } else {
-      const audio = document.createElement('audio');
-      audio.controls = true;
-      audio.controlsList = 'nodownload'; // то же: имя файла даёт наша кнопка
-      audio.preload = 'metadata';
-      audio.src = url;
-      container.append(audio);
-      // Волна в библиотеке — из тех же серверных пиков; нет пиков — тихий нативный плеер.
-      fetchPeaks(entry.job).then(peaks => {
-        if (!container.isConnected || currentUser() !== owner) return;
-        BriixWaveform.attachFromPeaks(peaks, container, {}).setAudio(audio);
-      }).catch(() => console.warn('BRIIX waveform: пики недоступны (' + entry.job + ') — только нативный плеер.'));
-      return audio;
+      return null;
     }
-    return null;
+    const audio = document.createElement('audio');
+    audio.controls = true;
+    audio.controlsList = 'nodownload';
+    audio.preload = 'metadata';
+    audio.src = url;
+    container.append(audio);
+    return audio;
   }
 
   // ---- вкладки: Чат / Библиотека -------------------------------------------------
