@@ -21,6 +21,8 @@ jobs:
       - name: node --check (studio + tools)
         run: |
           for f in studio/*.js tools/*.cjs; do node --check "$f"; done
+      - name: check-assembly
+        run: node tools/check-assembly.cjs
       - name: check-producer
         run: node tools/check-producer.cjs
       - name: check-session-store

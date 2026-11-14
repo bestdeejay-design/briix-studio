@@ -527,6 +527,18 @@ function bffServer(port) {
   const autoPost = state.jobPosts.at(-1);
   assert.equal(autoPost.params.instrumental, undefined, 'vocal job');
   assert.ok(String(autoPost.params.lyrics || '').length > 20, 'auto-lyrics wrote the lyrics on a fresh page');
+  // Языковое правило #109: русская идея быстрого пути → ASCII английский промпт из brain-тегов.
+  assert.ok(/^[\x20-\x7E\r\n]*$/.test(autoPost.prompt), 'quick path: Russian idea -> ASCII English prompt');
+  assert.ok(autoPost.prompt.length <= 240, 'brain tag prompt <= 240 chars');
+  assert.match(autoPost.prompt, /\bvocals\b/);
+  assert.match(autoPost.prompt, /English lyrics/, 'no language stated -> English lyrics tag (absence of a hint is not Russian)');
+  assert.ok(!/Стрим|УЛУЧШЕННЫЙ/.test(autoPost.prompt), 'model chatter never leaks into params.prompt');
+  assert.equal(autoPost.params.duration, undefined);
+  assert.equal(autoPost.params.duration_seconds, undefined);
+  // Не-ASCII идея переводится через producer-чат (abortable, ограниченный maxTokens) до submitJob.
+  const translatePosts = state.chatPosts.filter(x => x.stream === false && x.max_tokens === 300);
+  assert.ok(translatePosts.length >= 1, 'non-ASCII idea went through the producer-chat translation step');
+  assert.match(translatePosts[0].messages[0].content, /Output ONLY the English prompt/i);
   // Второй джоб в advanced с ручной лирикой (для текста в библиотеке).
   await p.locator('#tuneToggle').click();
   const libLyrics = '[Verse]\nГород спит\n[Chorus]\nА я не сплю';
@@ -921,6 +933,9 @@ function bffServer(port) {
 
   // Повтор использует полный снимок и не отправляет запрос до явного подтверждения; обложка — отдельное изображение.
   resetBff();
+  // Языковое правило #109: повтор правится в поле, но в модель уходит английская
+  // сборка. Чат-заглушка отвечает готовым английским переводом (как producer-чат).
+  state.chatImproveText = 'long musical idea, rhythmic, atmospheric';
   p = await page();
   await p.locator('.mode[data-mode="music"]').click();
   await p.locator('.seg-btn[data-vocal="1"]').click();
@@ -930,12 +945,13 @@ function bffServer(port) {
   assert.equal(state.jobPosts.length, 1);
   await p.getByRole('button', { name: 'Повторить с правками' }).first().click();
   assert.equal(state.jobPosts.length, 1, 'no generation before confirmation');
-  assert.equal(await p.locator('#musicPrompt').inputValue(), repeatPrompt);
+  assert.equal(await p.locator('#musicPrompt').inputValue(), repeatPrompt, 'repeat pre-fills the ORIGINAL idea for editing');
   await p.locator('#musicPrompt').fill(repeatPrompt + ' новая версия');
   await p.locator('#send').click();
   await p.waitForFunction(() => document.querySelectorAll('#feed audio').length === 2, {}, { timeout: 25000 });
   assert.equal(state.jobPosts.length, 2);
-  assert.equal(state.jobPosts[1].prompt, repeatPrompt + ' новая версия');
+  // Отредактированная не-ASCII идея переводится, brain-теги дедуплицируются.
+  assert.equal(state.jobPosts[1].prompt, 'long musical idea, rhythmic, atmospheric, instrumental');
   const linked = await p.evaluate(async () => {
     const { profile } = await BriixSessionStore.open('tester');
     return profile.sessions[0].feed.filter(x => x.kind === 'music').map(x => ({ job: x.job, parent: x.input.parentJobId }));
