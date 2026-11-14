@@ -61,6 +61,8 @@ jobs:
           set -euo pipefail
           # rsync на стенде нет — идемпотентная перезапись через tar-конвейер
           tar -cf - -C studio . | tar -xf - -C /home/badai/briix-demo/studio/
-          tar -cf - -C studio/assets . | tar -xf - -C /home/badai/briix-demo/studio/assets/
+          # assets/ живёт в корне репо (runtime fetch /assets/...) — кладём в briix-demo/assets/data
+          mkdir -p /home/badai/briix-demo/assets/data
+          tar -cf - -C assets . | tar -xf - -C /home/badai/briix-demo/assets/data/
           ls /home/badai/briix-demo/studio/ | wc -l
           curl -s -o /dev/null -w "studio http: %{http_code}\n" http://127.0.0.1:8440/studio/
