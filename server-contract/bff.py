@@ -41,6 +41,34 @@ MUSIC_PY = Path.home() / "briix-media" / "musicgen-venv" / "bin" / "python"
 MUSIC_CLI = Path.home() / "briix-media" / "musicgen-cli.py"  # CLI-обёртка gen.py, живёт рядом с venv
 OLLAMA_TEXT = "http://127.0.0.1:11436"
 TEXT_MODEL = "qwen3:4b-instruct"
+# GLM primary text backend (решение владельца 14.11): бесплатная Flash-линейка
+# Z.ai (OpenAI-совместимый API) — primary; qwen3:4b-instruct на ollama :11436 —
+# автоматический фолбэк (connect/timeout/http>=400 от GLM). Примечание: аккаунт
+# Z.ai не имеет ресурс-пакета на glm-4.7-flash (429 код 1113) — рабочая
+# бесплатная модель glm-4.5-flash (одобрено владельцем 14.11). Ключ и модель
+# читаются из ENV_FILE (media-bff/.env, 600) или окружения юнита.
+ZAI_BASE = "https://api.z.ai/api/paas/v4"
+ZAI_MODEL = "glm-4.5-flash"
+TEXT_FALLBACK_MODEL = TEXT_MODEL
+GLM_TIMEOUT = 60  # ≤60с на непотоковый вызов; для SSE — sock_read=60
+
+
+def _load_zai_env(name):
+    v = os.environ.get(name, "")
+    if v:
+        return v
+    try:
+        for line in ENV_FILE.read_text().splitlines():
+            if line.startswith(name + "="):
+                return line.split("=", 1)[1].strip()
+    except OSError:
+        pass
+    return ""
+
+
+ZAI_API_KEY = _load_zai_env("ZAI_API_KEY")
+ZAI_BASE = _load_zai_env("ZAI_BASE") or ZAI_BASE
+ZAI_MODEL = _load_zai_env("ZAI_MODEL") or ZAI_MODEL
 # Vocal-route (решение владельца 08.11): ACE-Step в двух режимах. type=music с
 # params.model=ace-step-flash|ace-step-pro идёт в пайплайн ace-lm -> ace-synth;
 # без params.model — прежний musicgen (инструментал).
@@ -67,6 +95,18 @@ MAX_LYRICS = 8000
 # внутренним, result_url отдаёт MP3.
 FFMPEG = Path.home() / "ffmpeg" / "ffmpeg"
 FFPROBE = Path.home() / "ffmpeg" / "ffprobe"
+# infra#102: параметры трима хвостовой тишины (крутилка владельца). infra#93
+# недобивал: порог -40 дБ не видел плавный fade хвоста, оставалось до ~6 с.
+# Порог -45 дБ (вторая итерация -50), остаток тишины в хвосте <= 1.5 с,
+# обрабатывается только хвост (последние TRIM_TAIL_ZONE секунд).
+TRIM_THRESHOLD_DB = -45      # порог silencedetect первого прохода
+TRIM_THRESHOLD_DB_2 = -50    # порог итераций докрутки (со 2-го прохода)
+TRIM_MIN_SILENCE = 1.0       # окно d= у silencedetect, с
+TRIM_TAIL_TARGET = 1.5       # допустимый остаток тишины в хвосте, с
+TRIM_MAX_PASSES = 4          # максимум итеративных проходов
+TRIM_TAIL_ZONE = 20.0        # трогаем только последние N секунд трека
+TRIM_MIN_TAIL = 2.0          # хвостовая тишина короче — файл не трогаем
+TRIM_FADE = 1.0              # fade-out после трима, с
 COVER_PROMPT_SUFFIX = "album cover art, square, atmospheric, no text"
 COVER_TIMEOUT = 300
 MUX_TIMEOUT = 120
@@ -729,12 +769,22 @@ async def get_cover(request):
 # непроверенное помечено source:"estimate"/"none", а не выдуманными числами.
 MODELS_CATALOG = [
     {
+        "id": "glm-4.5-flash", "object": "model",
+        "capabilities": ["chat", "text.generate"], "status": "ready",
+        "limits": {"max_duration_seconds": GLM_TIMEOUT, "max_concurrent_jobs": 1},
+        "license_scope": "z.ai flash free tier",
+        "latency": {"source": "measured", "seconds": None, "conditions":
+                    "primary text (Z.ai cloud, OpenAI-формат); фолбэк — qwen3:4b-instruct; "
+                    "glm-4.7-flash недоступна на аккаунте (429 1113), одобрена 4.5-flash"},
+    },
+    {
         "id": "qwen3:4b-instruct", "object": "model",
         "capabilities": ["chat", "text.generate"], "status": "ready",
         "limits": {"max_duration_seconds": TEXT_TIMEOUT, "max_concurrent_jobs": 1},
         "license_scope": "demo-only",
         "latency": {"source": "measured", "seconds": None, "conditions":
-                    "CPU 8 тредов; первые токены — секунды, полный ответ зависит от длины"},
+                    "CPU 8 тредов; первые токены — секунды, полный ответ зависит от длины; "
+                    "фолбэк для glm-4.5-flash (primary)"},
     },
     {
         "id": "flux-2-klein-4b", "object": "model",
@@ -822,9 +872,128 @@ async def chat_completions(request):
         return envelope(503, "Бэкенд текста недоступен.", "backend_unavailable", request)
     await CHAT_BUDGET.acquire(TEXT_BUDGET)
     try:
+        if ZAI_API_KEY:
+            glm_resp = await _chat_glm(request, body, payload, rid, err_event)
+            if glm_resp is not None:
+                return glm_resp
+            log(f"chat {rid} glm unavailable -> fallback {TEXT_MODEL}")
         return await _chat_ollama(request, payload, rid, err_event)
     finally:
         CHAT_BUDGET.release(TEXT_BUDGET)
+
+
+async def _chat_glm(request, body, payload, rid, err_event):
+    """Primary GLM (Z.ai, OpenAI-совместимый /chat/completions).
+
+    Возвращает готовый ответ, либо None -> вызывающий уходит в фолбэк на
+    ollama qwen (_chat_ollama). Фолбэк: connect error, timeout, любой HTTP
+    не-200 (401/429/5xx/...) — но только пока поток не начал отдаваться
+    клиенту; ошибка посреди SSE-потока отдаётся как error-событие.
+    """
+    headers = {"Authorization": f"Bearer {ZAI_API_KEY}"}
+    url = f"{ZAI_BASE}/chat/completions"
+    glm_payload = {"model": ZAI_MODEL, "messages": body["messages"], "stream": payload["stream"]}
+
+    def chunk(content, finish_reason=None):
+        return {"id": "chatcmpl-" + rid, "object": "chat.completion.chunk",
+                "created": int(time.time()), "model": ZAI_MODEL,
+                "choices": [{"index": 0, "delta": {"content": content} if content else {},
+                             "finish_reason": finish_reason}]}
+
+    if not payload["stream"]:
+        try:
+            async with ClientSession() as s:
+                async with s.post(url, json=glm_payload, headers=headers,
+                                  timeout=ClientTimeout(total=GLM_TIMEOUT)) as r:
+                    if r.status != 200:
+                        log(f"glm {rid} http {r.status} -> fallback {TEXT_MODEL}")
+                        return None
+                    data = await r.json()
+        except asyncio.TimeoutError:
+            log(f"glm {rid} timeout -> fallback {TEXT_MODEL}")
+            return None
+        except Exception as e:
+            log(f"glm {rid} {type(e).__name__} -> fallback {TEXT_MODEL}")
+            return None
+        choices = data.get("choices") or [{}]
+        choice = choices[0]
+        msg = choice.get("message") or {}
+        usage = data.get("usage") or {}
+        return web.json_response({
+            "id": "chatcmpl-" + rid, "object": "chat.completion",
+            "created": int(time.time()), "model": ZAI_MODEL,
+            "choices": [{"index": 0, "message": {"role": "assistant", "content": msg.get("content", "")},
+                         "finish_reason": choice.get("finish_reason") or "stop"}],
+            "usage": {"prompt_tokens": usage.get("prompt_tokens"),
+                      "completion_tokens": usage.get("completion_tokens"),
+                      "total_tokens": usage.get("total_tokens"),
+                      "source": "provider"},
+        })
+
+    # SSE-стрим: upstream-статус проверяем ДО подготовки ответа клиенту,
+    # чтобы при сбое GLM cleanly уйти в qwen-фолбэк.
+    resp = None
+    emitted = False
+    try:
+        async with ClientSession() as s:
+            async with s.post(url, json=glm_payload, headers=headers,
+                              timeout=ClientTimeout(total=None, sock_read=GLM_TIMEOUT, connect=10)) as r:
+                if r.status != 200:
+                    log(f"glm {rid} stream http {r.status} -> fallback {TEXT_MODEL}")
+                    return None
+                resp = web.StreamResponse(status=200, headers={
+                    "Content-Type": "text/event-stream; charset=utf-8",
+                    "Cache-Control": "no-cache", "Connection": "keep-alive",
+                    "X-Request-Id": rid,
+                })
+                await resp.prepare(request)
+                origin = request.headers.get("Origin")
+                if origin in ALLOWED_ORIGINS:
+                    resp.headers["Access-Control-Allow-Origin"] = origin
+                finish = None
+                async for raw in r.content:
+                    line = raw.strip()
+                    if not line.startswith(b"data:"):
+                        continue
+                    data_str = line[len(b"data:"):].strip()
+                    if data_str == b"[DONE]":
+                        break
+                    try:
+                        piece = json.loads(data_str)
+                    except ValueError:
+                        continue
+                    gchoices = piece.get("choices") or []
+                    delta = (gchoices[0].get("delta") or {}) if gchoices else {}
+                    piece_content = delta.get("content", "")
+                    if piece_content:
+                        emitted = True
+                        await resp.write(f"data: {json.dumps(chunk(piece_content), ensure_ascii=False)}\n\n".encode())
+                    if gchoices and gchoices[0].get("finish_reason"):
+                        finish = gchoices[0].get("finish_reason")
+                await resp.write(f"data: {json.dumps(chunk('', finish or 'stop'), ensure_ascii=False)}\n\n".encode())
+        await resp.write(b"data: [DONE]\n\n")
+        await resp.write_eof()
+        return resp
+    except (asyncio.CancelledError, ConnectionResetError, RuntimeError):
+        # Остановка клиента: закрываем поток, если он был начат.
+        try:
+            if resp:
+                await resp.write_eof()
+        except (ConnectionResetError, RuntimeError):
+            pass
+        return resp if resp is not None else None
+    except Exception as e:
+        log(f"glm {rid} stream failed: {type(e).__name__} emitted={emitted}")
+        if resp is None:
+            # upstream упал до подготовки ответа — фолбэк на qwen.
+            return None
+        try:
+            await resp.write(f"data: {json.dumps(err_event(502, 'Ошибка бэкенда посреди потока.', 'upstream_error'), ensure_ascii=False)}\n\n".encode())
+            await resp.write(b"data: [DONE]\n\n")
+            await resp.write_eof()
+        except (ConnectionResetError, RuntimeError):
+            pass
+        return resp
 
 
 async def _chat_ollama(request, payload, rid, err_event):
@@ -1098,21 +1267,28 @@ def _track_title(j):
 
 
 def trim_tail_silence(jid):
-    """infra#93: трим хвостовой тишины после синтеза (замеры job-7556: до 14 с).
+    """infra#102: трим хвостовой тишины до <= TRIM_TAIL_TARGET с (infra#93
+    недобивал: порог -40 дБ пропускал плавный fade хвоста между -45 и -40 дБ,
+    оставалось до ~6.1 с тишины выше -45 дБ на 190-секундном треке).
 
-    silencedetect (noise=-40dB:d=1.5): если последний детект — тишина, уходящая
-    в конец файла, обрезаем до неё с мягким fade-out ~1.5 с. Середину трека не
-    трогаем: правится только хвостовая тишина длиной >= 2 с. После обрезки
-    fade может сделать смежный участок тише порога -40dB — поэтому проход
-    повторяется (до 3 раз), пока хвостовая тишина не станет короче ~1.5 с.
-    Без тишины в конце файл не изменяется."""
+    Итеративно (до TRIM_MAX_PASSES проходов): silencedetect c порогом
+    TRIM_THRESHOLD_DB дБ (со 2-го прохода — TRIM_THRESHOLD_DB_2 дБ, окно
+    TRIM_MIN_SILENCE с); если последний блок тишины уходит в конец файла,
+    обрезаем, оставляя ~1 с тишины, и накладываем fade-out TRIM_FADE с.
+    После обрезки fade может открыть тишину глубже — проход повторяется,
+    пока хвост не станет короче TRIM_MIN_TAIL с (<= TRIM_TAIL_TARGET).
+    Защита живого материала: правится только хвост — тишина обязана
+    начинаться в последних TRIM_TAIL_ZONE секундах и не раньше 5-й секунды
+    трека; середину не трогаем. Без значимого хвоста файл не изменяется."""
     wav = RESULTS / f"{jid}.wav"
     if not wav.exists():
         return
-    for _pass in range(3):
+    for _pass in range(TRIM_MAX_PASSES):
+        thr = TRIM_THRESHOLD_DB if _pass == 0 else TRIM_THRESHOLD_DB_2
         try:
             probe = subprocess.run(
-                [str(FFMPEG), "-i", str(wav), "-af", "silencedetect=noise=-40dB:d=1.5",
+                [str(FFMPEG), "-i", str(wav), "-af",
+                 f"silencedetect=noise={thr}dB:d={TRIM_MIN_SILENCE}",
                  "-f", "null", "-"],
                 stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=120)
             events = re.findall(r"silence_(start|end):\s*([\d.]+)",
@@ -1136,10 +1312,16 @@ def trim_tail_silence(jid):
                 tail_start = float(t)
             elif dur - float(t) > 0.3:
                 tail_start = None
-        if tail_start is None or (dur - tail_start) < 2.0 or tail_start < 5.0:
-            return  # значимого хвоста тишины нет — файл не трогаем
-        cut = min(dur, tail_start + 1.0)
-        fade_start = max(0.0, cut - 1.5)
+        if tail_start is None:
+            return
+        tail_len = dur - tail_start
+        # Защита: только хвост (последние TRIM_TAIL_ZONE секунд), не раньше 5-й
+        # секунды; короче TRIM_MIN_TAIL — значимого хвоста нет, файл не трогаем.
+        if (tail_len < TRIM_MIN_TAIL or tail_start < 5.0
+                or tail_start < dur - TRIM_TAIL_ZONE):
+            return
+        cut = min(dur, tail_start + (TRIM_TAIL_TARGET - 0.5))
+        fade_start = max(0.0, cut - TRIM_FADE)
         tmp = RESULTS / f"{jid}.trim.wav"
         cmd = [str(FFMPEG), "-y", "-loglevel", "error", "-i", str(wav),
                "-af", f"afade=t=out:st={fade_start:.2f}:d={cut - fade_start:.2f}",
@@ -1148,7 +1330,8 @@ def trim_tail_silence(jid):
             r = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=120)
             if r.returncode == 0 and tmp.exists() and tmp.stat().st_size > 0:
                 tmp.replace(wav)
-                log(f"tail trimmed {jid} pass{_pass + 1}: {dur:.1f}s -> {cut:.1f}s")
+                log(f"tail trimmed {jid} pass{_pass + 1} ({thr}dB): "
+                    f"{dur:.1f}s -> {cut:.1f}s")
             else:
                 log(f"tail trim failed {jid}: rc={r.returncode} "
                     f"{(r.stderr or b'')[-150:].decode('utf-8', 'replace')}")

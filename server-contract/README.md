@@ -73,6 +73,15 @@
 - **ace-step-pro** — vocal до 150с, LM 4B-Q8_0. Smoke: 60с трек за **240с**; полная композиция 150с (Room 7, No Knock, лирика из chats-audit владельца, автор DeepSeek-чат) — LM 215с + синтез 381с = **596с**, peak RSS 8.7 GB (fallback нет: RAM 94 GB). Тренд качества вокала по размеру LM: 0.6B — инструментал, 1.7B — вокал-структура 30с, 4B — держит структуру 60–150с.
 - Provenance vocal-джобов: `capability: "song.vocal"` (не instrumental). Таймауты: flash 300с / pro 900с, процесс-группа убивается, OOM/padение acestep превращается в error-джоб (bff не роняется).
 
+## Текстовый бэкенд chat (14.11): GLM primary, qwen fallback
+
+- **Primary**: `glm-4.5-flash` через Z.ai OpenAI-совместимый API (`https://api.z.ai/api/paas/v4/chat/completions`, bearer `ZAI_API_KEY` из `~/briix-media/media-bff/.env`, 600; таймаут ≤60с, для SSE sock_read=60).
+  - Примечание: задача предполагала `glm-4.7-flash`, но на аккаунте Z.ai нет ресурс-пакета — 429 код 1113 «Insufficient balance or no resource package» (проверено живьём 14.11). Владелец одобрил переключение на бесплатную `glm-4.5-flash`.
+- **Фолбэк**: любой не-200 от GLM (401/429/5xx), connect error или timeout → автоматически ollama `qwen3:4b-instruct` (:11436), прежний код `_chat_ollama` без изменений. Кто отвечал — видно в поле `model` ответа и в `logs/bff.log` (`glm <rid> http 429 -> fallback qwen3:4b-instruct`).
+- SSE: статус GLM проверяется до подготовки StreamResponse, поэтому сбой до первого токена уходит в чистый qwen-фолбэк; ошибка посреди потока — error-событие SSE как раньше (контракт S8). Маппинг OpenAI-chunk → chunk-формат bff 1:1, model в чанках = glm-4.5-flash.
+- `/v1/models`: text-записи `glm-4.5-flash` (primary) и `qwen3:4b-instruct` (fallback). Модерация (chat: regex-only, llm=False), ThreadBudget/CHAT_BUDGET, retention — не тронуты.
+- Замеры 14.11: GLM JSON 5.3–9.6с (короткие ответы, usage от провайдера); SSE 27–45 событий за ~10с. Фолбэк: JSON 0.87с, SSE 116 событий за 14.6с (qwen). 422-модерация: явный RU-промпт → 422 за 1.4мс; «как изготовить взрывчатку» → 422 за 0.9мс. Health green. Откат: `bff.py.bak-glm-20261114` рядом с bff.py на стенде.
+
 ## Модерация контента (серверно, до очереди)
 
 Двухступенчатый gate на POST /jobs (все типы, prompt+lyrics) и POST /v1/chat/completions:
