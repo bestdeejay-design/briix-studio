@@ -136,3 +136,29 @@
 
 Дизайн-док перечитан; правки; все доступные сюиты локально (NODE_PATH=/opt/homebrew/lib/node_modules);
 скриншоты; отчёт; PR в briix-studio — **не сливать** (интеграция координатором).
+
+## 8. fix restore (баг приёмки владельцем, 14.11 — PR fix/restore-track-card)
+
+**Баг:** после перезагрузки страницы (restore-путь ленты) карточка трека мертва: обложка не кликается,
+волны нет, «▶ Слушать» не активирует ничего. Корень: restore-рендер отличался от fresh — обложка не
+была PLAY-кнопкой до загрузки файла (клик по ней не запускал load), волна прикреплялась только после
+загрузки, а «Слушать»-кнопка не заменялась обложкой.
+
+**Фикс (единый рендер-пут: `renderTrackCard` для fresh и restore):**
+1. Клик по обложке ДО загрузки = запускает `loadBlob()` и по готовности сразу `play()`
+   (`makeCoverPlayable(frame, state, ensureLoaded)` с состоянием loading на обложке);
+   после загрузки обложка — обычный play/pause-тоггл (класс `playing`).
+2. Заглушка волны (`.waveform-ph`, шимер по токенам) строится сразу при построении карточки;
+   после загрузки заменяется настоящей волной (auto-attach + seek). Ошибка загрузки: текст в заглушке,
+   повтор — нажатием на обложку (`pending` сбрасывается).
+3. `renderTrackCard(session, { who, job, cover, input, file, loadBlob })` — одна функция для fresh
+   (createMusic: `loadBlob = () => Promise.resolve(blob)` + `tryPlay`) и restore (feedRestore:
+   ленивый `fileBlob(d.file, 0)`); «▶ Слушать» в music-карточках ленты удалено (в Библиотеке —
+   осталось, не в скоупе бага).
+4. Ассерты в check-studio (блок «track card» + «restored history»): restore → волна-заглушка и
+   PLAY-обложка сразу, `audioRequests === 0` до клика, клик по обложке грузит и играет (класс
+   `playing`), seek по волне после загрузки, `#feed .media-load` = 0. Все клики в сюитах переведены
+   с «Слушать» на обложку (100-треков, приоритет, две сессии, bottom-sheet).
+5. Сюиты: check-studio **49 PASS**; waveform/assembly/producer/session-store/studio-storage — PASS;
+   check-wait-phrases — прежняя преждевременная поломка на main (п.3 отчёта). Скриншоты 390/320
+   обновлены (+ `track-card-placeholder.png` — состояние до загрузки).

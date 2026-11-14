@@ -318,47 +318,31 @@
       } else if (d.t === 'music_draft') {
         renderMusicDraftCard(d, session);
       } else if (d.t === 'media') {
-        const body = card('assistant', d.who, '', session);
-        body.textContent = '';
-        const slot = document.createElement('div');
-        body.append(slot);
-        if (d.track) addMakeTrackAction(body.closest('.card'), d.track);
         if (d.kind === 'music') {
-          if (d.input) addMusicDetails(body, d.input);
-          addTrackMenu(body.closest('.card'), { job: d.job, input: d.input || {}, file: d.file, blob: null });
-        }
-        const owner = sessionProfile.nick;
-        const load = async () => {
-          slot.textContent = 'Загружаем файл…';
-          try {
-            const blob = await fileBlob(d.file, d.kind === 'music' ? 0 : 1);
-            if (!slot.isConnected || currentUser() !== owner) return;
-            slot.textContent = '';
-            if (d.kind === 'photo') {
-              const img = new Image(); img.alt = 'Результат'; img.src = feedObjectURL(blob); slot.append(img);
-            } else {
-              const audio = document.createElement('audio'); audio.controls = true; audio.controlsList = 'nodownload';
-              audio.preload = 'metadata'; audio.src = feedObjectURL(blob); slot.append(audio);
-              BriixWaveform.attach(audio, blob, slot);
-              tryPlay(audio, slot);
-              if (d.kind === 'music') {
-                makeCoverPlayable(body.closest('.card'), audio); // обложка = PLAY
-              } else {
-                addDownloadAction(body.closest('.card'), blob, 'briix-photo', '⬇ Скачать');
-              }
-            }
-          } catch (error) {
-            if (!slot.isConnected || currentUser() !== owner) return;
-            slot.textContent = 'Файл недоступен. ' + (error.message || '') + ' ';
-            const retry = document.createElement('button'); retry.type = 'button'; retry.className = 'action';
-            retry.textContent = 'Повторить'; retry.addEventListener('click', load); slot.append(retry);
-          }
-        };
-        if (d.kind === 'music') {
-          addTrackCover(body, d.job, d.cover);
-          const loadButton = document.createElement('button'); loadButton.type = 'button'; loadButton.className = 'action media-load';
-          loadButton.textContent = '▶ Слушать'; loadButton.addEventListener('click', load); slot.append(loadButton);
+          renderTrackCard(session, { who: d.who, job: d.job, cover: d.cover, input: d.input || {}, file: d.file,
+            loadBlob: () => fileBlob(d.file, 0) });
         } else {
+          const body = card('assistant', d.who, '', session);
+          body.textContent = '';
+          const slot = document.createElement('div');
+          body.append(slot);
+          if (d.track) addMakeTrackAction(body.closest('.card'), d.track);
+          const owner = sessionProfile.nick;
+          const load = async () => {
+            slot.textContent = 'Загружаем файл…';
+            try {
+              const blob = await fileBlob(d.file, 1);
+              if (!slot.isConnected || currentUser() !== owner) return;
+              slot.textContent = '';
+              const img = new Image(); img.alt = 'Результат'; img.src = feedObjectURL(blob); slot.append(img);
+              addDownloadAction(body.closest('.card'), blob, 'briix-photo', '⬇ Скачать');
+            } catch (error) {
+              if (!slot.isConnected || currentUser() !== owner) return;
+              slot.textContent = 'Файл недоступен. ' + (error.message || '') + ' ';
+              const retry = document.createElement('button'); retry.type = 'button'; retry.className = 'action';
+              retry.textContent = 'Повторить'; retry.addEventListener('click', load); slot.append(retry);
+            }
+          };
           slot.textContent = 'Изображение готово';
           const observer = new IntersectionObserver((records, obs) => {
             if (!slot.isConnected) { obs.disconnect(); return; }
@@ -577,20 +561,85 @@
   }
 
   // ---- карточка трека: обложка = PLAY, единое меню «⋯», transparency ----------
-  // Обложка запускает/останавливает воспроизведение; состояние playing видно на ней.
-  function makeCoverPlayable(cardEl, audio) {
-    const frame = cardEl?.querySelector('.track-cover');
+  // Обложка — единый рендер-путь для fresh и restore: если аудио ещё не загружено
+  // (restore после перезагрузки страницы), клик по обложке запускает загрузку и
+  // сразу play по готовности; иначе это обычный play/pause-тоггл.
+  function makeCoverPlayable(frame, state, ensureLoaded) {
     if (!frame || frame.dataset.playBound) return;
     frame.dataset.playBound = '1';
     frame.classList.add('playable');
     frame.setAttribute('role', 'button');
     frame.setAttribute('aria-label', 'Слушать трек');
     frame.tabIndex = 0;
-    const toggle = () => { if (audio.paused) audio.play().catch(() => {}); else audio.pause(); };
+    let started = false;
+    const toggle = () => {
+      if (!state.audio) {
+        if (started) return;
+        started = true;
+        frame.classList.add('loading');
+        ensureLoaded().then(audio => audio.play().catch(() => {}))
+          .catch(() => {})
+          .finally(() => { started = false; frame.classList.remove('loading'); });
+        return;
+      }
+      if (state.audio.paused) state.audio.play().catch(() => {}); else state.audio.pause();
+    };
     frame.addEventListener('click', toggle);
     frame.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
-    audio.addEventListener('play', () => { frame.classList.add('playing'); frame.setAttribute('aria-label', 'Пауза'); });
-    audio.addEventListener('pause', () => { frame.classList.remove('playing'); frame.setAttribute('aria-label', 'Слушать трек'); });
+  }
+
+  // Единый рендер трек-карточки (fresh и restore): обложка, заглушка волны
+  // (до загрузки файла), аудио-фолбэк, transparency, меню «⋯».
+  function renderTrackCard(session, { who, job, cover, input = {}, file, loadBlob }) {
+    const wrap = card('assistant', who, '', session);
+    wrap.textContent = '';
+    addTrackCover(wrap, job, cover);
+    const waveSlot = document.createElement('div');
+    waveSlot.className = 'waveform-track';
+    const placeholder = document.createElement('div');
+    placeholder.className = 'waveform-ph';
+    placeholder.setAttribute('aria-hidden', 'true');
+    waveSlot.append(placeholder);
+    wrap.append(waveSlot);
+    const audioSlot = document.createElement('div');
+    audioSlot.hidden = true;
+    wrap.append(audioSlot);
+    addMusicDetails(wrap, input);
+    const cardEl = wrap.closest('.card');
+    let cardBlob = null;
+    const ctx = { job, input, file, get blob() { return cardBlob; } };
+    addTrackMenu(cardEl, ctx);
+    const frame = cardEl.querySelector('.track-cover');
+    const state = { audio: null };
+    let pending = null;
+    const ensureLoaded = () => pending ||= (async () => {
+      try {
+        const blob = await loadBlob();
+        if (!frame.isConnected || currentUser() !== sessionProfile?.nick) throw new BusError('cancelled', 'Карточка недоступна.');
+        cardBlob = blob;
+        const audio = document.createElement('audio');
+        audio.controls = true;
+        audio.controlsList = 'nodownload'; // скачивание только через меню «⋯»: имя «Название - Исполнитель»
+        audio.preload = 'metadata';
+        audio.src = feedObjectURL(blob);
+        audioSlot.hidden = false;
+        audioSlot.append(audio);
+        placeholder.remove();
+        BriixWaveform.attach(audio, blob, waveSlot);
+        state.audio = audio;
+        audio.addEventListener('play', () => { frame.classList.add('playing'); frame.setAttribute('aria-label', 'Пауза'); });
+        audio.addEventListener('pause', () => { frame.classList.remove('playing'); frame.setAttribute('aria-label', 'Слушать трек'); });
+        return audio;
+      } catch (error) {
+        pending = null; // обложка остаётся кнопкой повтора
+        if (frame.isConnected && currentUser() === sessionProfile?.nick) {
+          placeholder.textContent = 'Файл недоступен. ' + (error.message || '') + ' Повтор — нажатием на обложку.';
+        }
+        throw error;
+      }
+    })();
+    makeCoverPlayable(frame, state, ensureLoaded);
+    return { cardEl, waveSlot, ensureLoaded };
   }
 
   // Имя файла трека: «Название - Исполнитель.ext» с сохранением юникода (кириллица
@@ -1367,20 +1416,14 @@
       wait.stop();
       watchStage.disconnect();
       stageBody.closest('.card').remove();
-      const audio = document.createElement('audio');
-      audio.controls = true;
-      audio.controlsList = 'nodownload'; // скачивание только через нашу кнопку: имя .m4a, обложка и текст внутри
       const blob = await fileBlob(result.result_url);
-      audio.src = feedObjectURL(blob);
-      const wrap = card('assistant', 'Трек готов (' + MODEL_LABELS[snapshot.quality] + ')', '', session);
-      wrap.textContent = '';
-      addTrackCover(wrap, id, result.cover_url);
-      audio.preload = 'metadata';
-      wrap.append(audio);
-      BriixWaveform.attach(audio, blob, wrap);
-      makeCoverPlayable(wrap.closest('.card'), audio); // обложка = PLAY
-      addMusicDetails(wrap, input);
-      addTrackMenu(wrap.closest('.card'), { job: id, input, file: result.result_url, blob });
+      // Единый рендер-путь с restore-карточкой: обложка = PLAY, волна, меню «⋯».
+      const trackCard = renderTrackCard(session, {
+        who: 'Трек готов (' + MODEL_LABELS[snapshot.quality] + ')',
+        job: id, cover: result.cover_url, input, file: result.result_url,
+        loadBlob: () => Promise.resolve(blob)
+      });
+      trackCard.ensureLoaded().then(audio => tryPlay(audio, trackCard.cardEl)).catch(() => {});
       feedPush({ t: 'media', who: 'Трек готов (' + MODEL_LABELS[snapshot.quality] + ')', kind: 'music', file: result.result_url, job: id, cover: result.cover_url || '', input }, session);
       libAdd({
         job: id, sessionId: session.id, kind: 'music', prompt: requestBase || '',
