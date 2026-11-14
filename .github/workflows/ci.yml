@@ -49,20 +49,17 @@ jobs:
 
   deploy-stand:
     # Единственный писец /home/badai/briix-demo/studio (briix.ru#107): briix.ru больше не деплоит studio/.
+    # Раннер briix-ci стоит на стенде A — деплой это локальный rsync, ключи не нужны.
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [tests]
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+    runs-on: [self-hosted, briix-ci]
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - name: Deploy studio/ to fonotext-stand:/home/badai/briix-demo/studio
-        env:
-          SSH_KEY: ${{ secrets.STAND_DEPLOY_KEY }}
+      - name: Deploy studio/ to /home/badai/briix-demo/studio
         run: |
           set -euo pipefail
-          mkdir -p ~/.ssh
-          echo "$SSH_KEY" > ~/.ssh/id_ed25519; chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H fonotext-stand >> ~/.ssh/known_hosts 2>/dev/null
-          rsync -a --delete --exclude='assets/' studio/ badai@fonotext-stand:/home/badai/briix-demo/studio/
-          rsync -a studio/assets/ badai@fonotext-stand:/home/badai/briix-demo/studio/assets/
-          ssh badai@fonotext-stand 'ls /home/badai/briix-demo/studio/ | wc -l'
+          rsync -a --delete --exclude='assets/' studio/ /home/badai/briix-demo/studio/
+          rsync -a studio/assets/ /home/badai/briix-demo/studio/assets/
+          ls /home/badai/briix-demo/studio/ | wc -l
+          curl -s -o /dev/null -w "studio http: %{http_code}\n" http://127.0.0.1:8440/studio/
