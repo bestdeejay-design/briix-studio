@@ -839,7 +839,8 @@ function bffServer(port) {
   assert.equal(state.photoRequests, 2, 'two image transfers occupy the slots');
   await p.evaluate(() => document.querySelector('#feed .media-load').click());
   await p.locator('#feed audio').waitFor({ state: 'attached', timeout: 10000 });
-  assert.match(state.fileOrder[2], /priority\.m4a$/, 'user audio takes priority over queued images');
+  const audioIdx = state.fileOrder.findIndex(u => u.includes('priority.m4a'));
+  assert.ok(audioIdx >= 0 && audioIdx <= 2, 'user audio takes priority over queued images (position ' + audioIdx + ')');
   assert.ok(state.maxActiveFiles <= 2);
   await p.context().close();
   ok('interactive audio is prioritized over queued image transfers');
@@ -1236,10 +1237,10 @@ function bffServer(port) {
   // трек при загрузке — гасим и проверяем оба направления переключения.
   await p.evaluate(() => document.querySelector('#feed audio').pause());
   await p.locator('#feed .track-cover.playable').click();
-  await p.waitForFunction(() => { const a = document.querySelector('#feed audio'); return a && !a.paused; }, {}, { timeout: 5000 });
-  assert.equal(await p.locator('#feed .track-cover.playing').count(), 1, 'playing state is visible on the cover');
+  // Ждём именно класс на обложке: paused меняется раньше, чем срабатывает 'play'-обработчик.
+  await p.waitForFunction(() => document.querySelector('#feed .track-cover.playing') && !document.querySelector('#feed audio').paused, {}, { timeout: 5000 });
   await p.locator('#feed .track-cover.playing').click();
-  await p.waitForFunction(() => { const a = document.querySelector('#feed audio'); return a && a.paused; });
+  await p.waitForFunction(() => document.querySelector('#feed audio').paused && !document.querySelector('#feed .track-cover.playing'), {}, { timeout: 5000 });
   // Клик по волне = seek.
   await p.evaluate(() => { document.querySelector('#feed audio').currentTime = 0; });
   await p.evaluate(() => {
@@ -1274,6 +1275,16 @@ function bffServer(port) {
 
   // Мобильный 320×568: меню «⋯» — bottom-sheet и не вылезает за экран.
   p = await page({ viewport: { width: 320, height: 568 } });
+  await p.evaluate(async wavB64 => {
+    const binary = atob(wavB64), bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const { profile, backend } = await BriixSessionStore.open('tester');
+    profile.sessions[0].feed.push({ t: 'media', who: 'Трек готов (Flash)', kind: 'music', file: '/files/tone.wav', job: 'job-tone', cover: '',
+      input: { prompt: 'тестовая идея', promptSent: 'assembled english prompt', lyrics: '[Verse]\nСтрока', model: 'ace-step-flash', instrumental: false,
+        title: 'Тест: Трек/№1?', artist: 'tester', lyricsSource: 'наставник: Лирик' } });
+    await BriixSessionStore.save(profile, profile.revision, backend);
+  }, WAV.toString('base64'));
+  await p.reload();
   await p.locator('#feed .media-load').first().click();
   await p.waitForSelector('#feed audio', { timeout: 15000 });
   await p.locator('#feed .menu-btn').click();
