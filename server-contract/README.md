@@ -125,3 +125,30 @@
   рекомендованная длина ~160–400 значений.
 - **INFRA-задача выполняется параллельно этим PR.** До внедрения клиент молча живёт на нативном
   плеере (404/ошибка → console.warn, без сообщений в UI) — зависимости от сервера нет.
+
+## Реализация на сервере (mux-кластер, INFRA #105/#107/#108 + seed, 15.11.2026)
+
+Внедрено на стенде A (media-bff), PR briix.ru `fix/mux-cluster`:
+
+- **Битрейт-матрица mux** (решение владельца 15.11): vocal flash → 192k; vocal pro → 320k;
+  instrumental (musicgen, любой model) → 320k. Формула: `320k если (instrumental или
+  model==ace-step-pro) иначе 192k`. Примечание: нативный ffmpeg AAC-энкодер на mono/32kHz
+  (musicgen) физически не набирает 320k — фактический потолок ~130k (замер 15.11);
+  vocal 48kHz отдают 195–322k по матрице.
+- **Mux-on-download**: M4A собирается из живого WAV в момент скачивания
+  (`GET /files/{id}.m4a` или прежний `GET /files/{id}`), кэш в рамках retention WAV (24 ч),
+  повторный GET из кэша <100ms. Теги: title = `params.title` (fallback первая строка лирики),
+  artist = `params.artist` (fallback «BRIIX»), ©lyr = `params.lyrics`, обложка attached_pic.
+- **Content-Disposition**: `attachment; filename="ascii-fallback.m4a"; filename*=UTF-8''{pct}
+  {Sanitized Title} - {Artist}.m4a` (sanitize: буквы/цифры/пробел/дефис, unicode сохраняется).
+  Параметр `?refetch=1` принудительно пересобирает M4A из WAV.
+- **peaks.json**: `GET /files/{id}-peaks.json` — ленивая генерация при первом запросе, один
+  проход ffmpeg по WAV → `{id, duration: float, peaks: [0..1...]}` (160–400 значений),
+  кэш рядом с WAV; WAV удалён (retention) → 404, клиент деградирует тихо. **Внимание:** сервер
+  отдаёт объект `{id, duration, peaks}`, а не голый массив, как в ожидании выше — клиенту
+  брать поле `peaks`.
+- **SEED-воспроизводимость** (дополнение владельца 15.11): `POST /jobs` принимает
+  `params.seed` (int 0..2^32-1, опционально) и `params.parent_job_id` (строка ≤64, опционально,
+  связка вариаций). Seed попадает в ace-lm request; после генерации provenance джобы получает
+  снапшот `{seed, lm_temperature, lm_cfg_scale, lm_top_p, inference_steps, parent_job_id?}` —
+  виден в `GET /jobs/{id}` и списке. Без seed — urandom как раньше.
