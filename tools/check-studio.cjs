@@ -599,13 +599,33 @@ function bffServer(port) {
   await musicItem.locator('.lib-cover img').waitFor({ state: 'visible', timeout: 10000 }); // обложка-миниатюра (infra#77)
   const musicWho = await musicItem.locator('.who').innerText();
   assert.match(musicWho, /ace-step/i, 'music .who carries the model');
-  assert.match(await musicItem.locator('a.action').first().innerText(), /Скачать аудио/, 'music download labelled generically');
-  const lyricsToggle = musicItem.locator('.lib-lyrics-toggle');
-  assert.equal(await lyricsToggle.isVisible(), true, 'lyrics toggle exists');
-  await lyricsToggle.click();
+  assert.ok(await musicItem.locator('.track-card').count() >= 1, 'library music card is the unified render (.track-card)');
+  assert.ok(!(await musicItem.innerText()).includes('Слушать'), 'no Listen anywhere in the library card');
+  assert.ok(!(await p.locator('#lib').innerText()).includes('Сессия неизвестна'), 'no unknown-session line');
+  // Лирика доступна из меню «⋯» пунктом «Показать лирику».
+  assert.equal(await musicItem.locator('.lib-lyrics-toggle').count(), 0, 'no separate lyrics row');
+  await musicItem.locator('.menu-btn').click();
+  await musicItem.locator('.track-menu:not([hidden]) button', { hasText: 'Показать лирику' }).click();
+  await p.keyboard.press('Escape');
   const lyricsBlock = musicItem.locator('.lib-lyrics.open .lib-lyrics-text');
-  assert.equal(await lyricsBlock.isVisible(), true, 'lyrics block opens');
+  assert.equal(await lyricsBlock.isVisible(), true, 'lyrics block opens from the menu');
   assert.match(await lyricsBlock.innerText(), /Город спит/, 'lyrics block carries the lyrics text');
+  // Единый рендер: каждая музыкальная карточка библиотеки — .track-card, старых строк нет.
+  const libCheck = await p.evaluate(() => {
+    const lib = document.getElementById('lib');
+    const musicItems = [...document.querySelectorAll('.lib-item')].filter(d => d.querySelector('.track-card'));
+    return {
+      musicItems: musicItems.length,
+      trackCards: document.querySelectorAll('.lib-item .track-card').length,
+      listen: (lib.innerText.match(/Слушать/g) || []).length,
+      unknown: (lib.innerText.match(/Сессия неизвестна/g) || []).length,
+      lyricsRows: document.querySelectorAll('.lib-item .lib-lyrics-toggle').length
+    };
+  });
+  assert.equal(libCheck.trackCards, libCheck.musicItems, 'every music library card is the unified render');
+  assert.equal(libCheck.listen, 0, 'no Listen anywhere in the library');
+  assert.equal(libCheck.unknown, 0, 'no unknown-session line anywhere in the library');
+  assert.equal(libCheck.lyricsRows, 0, 'no separate lyrics rows in the library');
   await p.locator('.lib-filters .tag', { hasText: '★ Избранное' }).click();
   assert.equal(await p.locator('.lib-item').count(), 0, 'not a favorite yet');
   await p.locator('.lib-filters .tag', { hasText: 'Все' }).click();
@@ -702,8 +722,10 @@ function bffServer(port) {
   assert.equal(await p.locator('.lib-item').count(), 1, 'one merged record per job');
   assert.equal(await p.locator('.lib-item .lib-cover').count(), 1, 'one thumbnail per track');
   assert.equal(await p.locator('.lib-item .track-cover').count(), 0, 'no duplicate full-size cover in library');
+  // Скачивание теперь в меню «⋯» (отдельной кнопки в единой карточке нет).
   const downloadPromise = p.waitForEvent('download');
-  await p.locator('.lib-item a.action').first().click();
+  await p.locator('.lib-item .menu-btn').first().click();
+  await p.locator('.track-menu:not([hidden]) button', { hasText: 'Скачать' }).first().click();
   const downloaded = await downloadPromise;
   assert.match(downloaded.suggestedFilename(), /\.m4a$/);
   ok('merged library, artwork and actual file download');
@@ -813,10 +835,13 @@ function bffServer(port) {
     attemptedAudio++;
     return attemptedAudio === 1 ? route.fulfill({ status: 404, headers: { 'Access-Control-Allow-Origin': `http://127.0.0.1:${STATIC_PORT}` } }) : route.continue();
   });
-  await p.locator('.lib-item .media-load').first().click();
-  await p.locator('.lib-item .lib-media button', { hasText: 'Повторить' }).first().click();
+  // Ленивая загрузка — кликом по обложке-мини (PLAY); «Слушать» в библиотеке больше нет.
+  assert.equal(await p.locator('.lib-item .media-load').count(), 0, 'no Listen button in the library');
+  await p.locator('.lib-item .lib-cover.playable').first().click();
+  await p.waitForSelector('.lib-item .load-error', { timeout: 15000 });
+  await p.locator('.lib-item .lib-cover.playable').first().click(); // повтор тем же PLAY
   await p.locator('.lib-item audio').first().waitFor();
-  assert.equal(attemptedAudio, 2, 'failed audio is explicitly retried');
+  assert.equal(attemptedAudio, 2, 'failed audio is explicitly retried via the cover');
   assert.equal(state.audioRequests, 1, 'explicit retry loads one audio file');
   assert.ok(state.maxActiveFiles <= 2, 'all authenticated file transfers share the bound');
   ok('100 library tracks: lazy audio and bounded transfers');
