@@ -50,7 +50,7 @@ wait-phrases.js, wait-ui.js — побайтово идентичны
 ## Что НЕ сделано / непроверено
 
 - **Деплой на прод не делал** (манифест: это следующий шаг после приёмки координатора). Адрес demo.briix.ru/studio/ не трогался, md5 прод-состояния сверить вживую не мог.
-- **CI нового репо не проверен вживую** (workflow запустится на push main — коммит уже сделал это, но результаты ранa надо смотреть в Actions; локально сюиты прогнаны с homebrew-путями, а не через npm-шаг workflow).
+- **CI нового репо — ЗЕЛЁНЫЙ, проверен вживую**: run main-push 43587368985 — success за 4m02s (лимит 10 мин), все шаги success; `check-wait-phrases` сам упал с exit 1 (ожидаемо, см. выше) и съеден `continue-on-error` — job зелёный. PR-run 43587414566 тоже success. Шумовые аннотации: Node.js 20 deprecated в actions, ubuntu-latest мигрирует на 26 — к результату не относятся.
 - **Правки briix.ru не делал** (demo-ci exclude, redirect-стаб studio/, ссылки в docs — по манифесту это отдельный PR координатора).
 - Стенд A, caddy, юниты, prod-файлы — не трогал.
 - `browser-env.cjs` в CI Ubuntu: в старом репо есть ветка `@sparticuz/chromium` — на ubuntu-latest с `playwright install --with-deps chromium` должен идти обычный chromium, но реальный прогон CI не видел.
