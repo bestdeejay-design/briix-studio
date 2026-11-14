@@ -133,10 +133,28 @@
     'инструментал': 'Instrumental', 'instrumental': 'Instrumental'
   };
 
-  // Переписывает ТОЛЬКО теги частей: [Куплет 2] → [Verse 2], [verse] → [Verse].
-  // Текст песни (внутри секций) не трогается.
+  // Тег-строка (живой кейс GLM-ответов): строка, которая целиком является именем
+  // части в markdown-обёртке — '**Outro**', '**Verse 2**', '__Припев__', '##Verse',
+  // '*Outro' — или просто 'Outro', '[Outro]'. Переписывается в канонический
+  // латинский тег. Строки, где имя части — не вся строка, и ремарки-скобки внутри
+  // тела лирики ([voice raw and visceral], (raw and visceral)) НЕ трогаются:
+  // это направления вокала, валидные для ACE-Step.
+  function normalizeSectionTags(text) {
+    return String(text || '').split('\n').map(line => {
+      // stripMarkdown снимает **/__/*/кавычки; '##Припев' (без пробела) — отдельно.
+      const bare = stripMarkdown(line).replace(/^\s*#{1,6}\s*/, '').trim();
+      const m = bare.match(/^\[?(.+?)(?:\s+(\d{1,2}))?\]?$/);
+      if (!m) return line;
+      const base = TAG_MAP[m[1].trim().toLowerCase()];
+      if (!base) return line;
+      return '[' + base + (m[2] ? ' ' + m[2] : '') + ']';
+    }).join('\n');
+  }
+
+  // Переписывает ТОЛЬКО теги частей: [Куплет 2] → [Verse 2], [verse] → [Verse],
+  // '**Outro**' (строка-тег в markdown) → [Outro]. Текст песни (внутри секций) не трогается.
   function latinizeTags(lyrics) {
-    return String(lyrics || '').replace(/\[([^\[\]\n]{1,40})\]/g, (full, label) => {
+    return normalizeSectionTags(String(lyrics || '')).replace(/\[([^\[\]\n]{1,40})\]/g, (full, label) => {
       const raw = label.trim();
       const m = raw.match(/^(.+?)(?:\s+(\d{1,2}))?$/);
       const base = TAG_MAP[m[1].trim().toLowerCase()] || null;
@@ -148,7 +166,8 @@
   // Каркас частей: intro → verse(s) → pre-chorus → chorus → bridge → outro.
   // Возвращает предупреждения; пустой массив = каркас соблюдён.
   function structureWarnings(lyrics) {
-    const s = String(lyrics || '');
+    // Markdown-теги ('**Verse**') — та же структура: предупреждение не выдаётся.
+    const s = normalizeSectionTags(String(lyrics || ''));
     const tags = [];
     s.replace(/\[([^\[\]\n]{1,40})\]/g, (full, label) => {
       const m = label.trim().match(/^(.+?)(?:\s+\d{1,2})?$/);
@@ -188,5 +207,5 @@
   }
 
   globalThis.BriixProducer = Object.freeze({ VERSION, MAX_IDEA, MAX_TITLE, MAX_PROMPT, MAX_LYRICS, messages, parse, warnings,
-    sanitize, stripMarkdown, stripServiceBoilerplate, isAsciiOnly, detectExplicitLanguage, latinizeTags, structureWarnings, translateMessages, validTranslation, CANON_TAGS });
+    sanitize, stripMarkdown, stripServiceBoilerplate, isAsciiOnly, detectExplicitLanguage, normalizeSectionTags, latinizeTags, structureWarnings, translateMessages, validTranslation, CANON_TAGS });
 })();

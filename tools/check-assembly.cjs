@@ -101,6 +101,23 @@ assert.ok(brain.isAsciiOnly(ruExplicit.postPrompt));
 assert.equal(brain.latinizeTags('[Куплет 2]\n[Припев]\n[Пред-Припев]\n[Интро]\n[Бридж]\n[Аутро]'),
   '[Verse 2]\n[Chorus]\n[Pre-Chorus]\n[Intro]\n[Bridge]\n[Outro]');
 assert.equal(brain.latinizeTags('[verse]\n[chorus]\nтекст не трогаем'), '[Verse]\n[Chorus]\nтекст не трогаем');
+// (н) живой кейс GLM: теги-строки в markdown — распознаются и канонизируются
+// (строка-имя части на любом известном языке — тоже тег-строка: 'Припев' → [Chorus]).
+assert.equal(brain.latinizeTags('[Verse]\nМой куплет\n**Chorus**\nПрипев\n**Outro**'),
+  '[Verse]\nМой куплет\n[Chorus]\n[Chorus]\n[Outro]', 'markdown tag-lines (GLM) become canonical tags');
+assert.equal(brain.normalizeSectionTags('__Verse 2__\n##Припев\n*Outro'), '[Verse 2]\n[Chorus]\n[Outro]',
+  'bold/heading/loose-asterisk tag-lines normalize');
+assert.equal(brain.normalizeSectionTags('Куплет 1\nOutro'), '[Verse 1]\n[Outro]', 'plain and numbered tag-lines normalize');
+// (о) ремарки вокала в скобках — валидны для ace-step, не трогаются.
+assert.equal(brain.latinizeTags('[Verse]\n[voice raw and visceral]\nСтрока (шёпотом) **не тег**'),
+  '[Verse]\n[voice raw and visceral]\nСтрока (шёпотом) **не тег**',
+  'vocal-direction brackets and inline markdown are preserved');
+// (п) markdown-теги = структура: предупреждение «нет тегов» не выдаётся.
+assert.equal(brain.structureWarnings('**Verse**\nстроки\n**Chorus**\nстроки').length, 0,
+  'markdown tag-lines satisfy the scaffold check');
+const bridgeWarns = brain.structureWarnings('**Bridge**\n' + 'lines');
+assert.ok(bridgeWarns.some(w => /Verse/.test(w)) && bridgeWarns.some(w => /Chorus/.test(w)),
+  'incomplete markdown scaffold still warns (verse/chorus missing), never auto-added');
 const skel = musicBrain.buildLyricsSkeleton('грустная песня про дождь', { kind: 'song' });
 const order = [...skel.matchAll(/\[([A-Za-z][^\]\n]*)\]/g)].map(m => m[1].replace(/\s+\d+$/, '').split(':')[0].trim());
 assert.deepEqual([...new Set(order)], ['Intro', 'Verse', 'Pre-Chorus', 'Chorus', 'Bridge', 'Outro'],
