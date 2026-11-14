@@ -586,7 +586,10 @@
     const details = document.createElement('details'); details.className = 'track-details';
     const summary = document.createElement('summary'); summary.textContent = 'Промпт и текст песни';
     const text = document.createElement('div');
-    text.textContent = 'Промпт: ' + (input.prompt || '—') + '\n\nТекст песни: ' + (input.lyrics || (input.instrumental ? 'Инструментал' : '—'));
+    let trackInfo = 'Промпт в модель: ' + (input.promptSent || input.prompt || '—'); // прозрачность: что уехало в модель (#109)
+    if (input.promptSent && input.prompt) trackInfo += '\n\nИсходная идея: ' + input.prompt;
+    trackInfo += '\n\nТекст песни: ' + (input.lyrics || (input.instrumental ? 'Инструментал' : '—'));
+    text.textContent = trackInfo;
     details.append(summary, text); container.append(details);
   }
 
@@ -799,10 +802,38 @@
     } finally { setBusy(false); updateEnabled(); }
   }
 
+  // Brain-теги приоритетнее: добавляем к переводу только те, которых ещё нет.
+  function mergePromptTags(base, tags) {
+    if (!base) return tags || '';
+    if (!tags) return base;
+    const low = base.toLowerCase();
+    const add = tags.split(',').map(t => t.trim()).filter(t => t && !low.includes(t.toLowerCase()));
+    return add.length ? base + ', ' + add.join(', ') : base;
+  }
+
+  // Перевод не-ASCII идеи в английский связный промпт через producer-чат.
+  // Не обязателен, если brain-теги уже закрыли смысл (правило #109), — поэтому
+  // неудача перевода не роняет генерацию: brain-теги остаются гарантированным
+  // минимумом. Болтовня/JSON/markdown и не-ASCII отбраковываются в валидаторе.
+  async function translatePrompt(text, outerSignal) {
+    const signal = AbortSignal.any([outerSignal, AbortSignal.timeout(60000)]);
+    const raw = await chatNonStream({ messages: BriixProducer.translateMessages(text), maxTokens: 300, signal });
+    return BriixProducer.validTranslation(raw);
+  }
+
   async function autoLyrics(topic, outerSignal) {
-    // vocal-модели требуют текст: если лирика пустая — qwen3 пишет её сам
+    // vocal-модели требуют текст: если лирика пустая — автор песен пишет её сам.
+    // Языковое правило владельца (#109): дефолт — английский; русский/иной —
+    // только при явном указании. Теги частей — всегда латиницей, каркас адаптивный.
+    const language = BriixProducer.detectExplicitLanguage(topic);
+    const langLine = language === 'ru' ? ' Пиши текст песни на русском.'
+      : language === 'fr' ? ' Écris les paroles en français.'
+      : ' Язык явно не указан — пиши текст песни по-английски.';
     const messages = [
-      { role: 'system', content: 'Ты — автор песен. Напиши текст песни по теме пользователя на указанном им языке; если язык не указан, на русском. 8–16 строк. Обязательно используй структурные теги [verse] и [chorus] (можно [bridge], [outro]). Без пояснений и вступлений — только текст песни с тегами.' },
+      { role: 'system', content: 'Ты — автор песен. Напиши текст песни по теме пользователя.' + langLine +
+        ' Обязательный каркас частей: интро, куплеты, пред-припев, припев, бридж, аутро — адаптивно по смыслу (8–24 строки).' +
+        ' Метки секций — всегда латиницей: [Intro], [Verse], [Pre-Chorus], [Chorus], [Bridge], [Outro] (номера — [Verse 1], [Verse 2]).' +
+        ' Без пояснений и вступлений — только текст песни с тегами.' },
       { role: 'user', content: 'Тема песни: ' + topic }
     ];
     let full = '';
@@ -814,7 +845,8 @@
       if (error.name === 'TimeoutError') throw new BusError('timeout', 'Автор песни не ответил за 150 секунд.');
       throw error;
     }
-    return full.trim().slice(0, 8000);
+    // Чистка снимает только markdown/служебные обёртки; теги — латиницей.
+    return BriixProducer.latinizeTags(BriixProducer.sanitize(full)).slice(0, 8000);
   }
 
   async function createMusic(description) {
@@ -822,19 +854,22 @@
     // Зафиксировать настройки до автолирики: пользователь может менять их во время ожидания.
     const snapshot = { advanced, quality, instrumental, parentJobId: pendingMusicSource?.sessionId === session.id ? pendingMusicSource.jobId : null };
     if (snapshot.parentJobId) pendingMusicSource = null;
-    const style = snapshot.advanced ? els.musicPrompt.value.trim() : description;
-    let lyrics = snapshot.advanced ? els.lyrics.value.trim() : '';
+    // Сборка (#109): исходная идея пользователя сохраняется неизменной (в карточку
+    // и журнал идёт она), а в модель уходит чистая сборка без markdown и болтовни.
+    const rawIdea = snapshot.advanced ? els.musicPrompt.value.trim() : description;
+    const style = BriixProducer.sanitize(rawIdea); // снимает только markdown-обрамление и служебные обёртки
+    let lyrics = snapshot.advanced ? BriixProducer.latinizeTags(BriixProducer.sanitize(els.lyrics.value)) : '';
     const vocal = !snapshot.instrumental;
     if (!style && !lyrics) { card('notice', 'Музыка', 'Опишите трек — стиль или лирику.'); return; }
     if (vocal && !lyrics && !style) { card('notice', 'Музыка', 'Опишите трек — о чём песня?'); return; }
     if (!snapshot.advanced) els.prompt.value = '';
     else els.musicPrompt.value = '';
     updateEnabled();
-    const requestText = style || lyrics; // что просили — карточка в ленте и в журнале
+    const requestText = rawIdea || lyrics; // в карточку — исходная идея без изменений (#109)
     const restoreMusicDraft = () => {
       if (session !== activeSession) return;
       if (snapshot.advanced) {
-        if (!els.musicPrompt.value.trim()) els.musicPrompt.value = style;
+        if (!els.musicPrompt.value.trim()) els.musicPrompt.value = rawIdea;
       } else if (mode === 'music') {
         if (!els.prompt.value.trim()) els.prompt.value = description;
       } else if (!drafts.music.trim()) drafts.music = description;
@@ -899,11 +934,45 @@
           return;
         }
       }
+      // ---- Brain-ступень сборки промпта (#109) --------------------------------
+      // Детерминированный мозг DJ1: английские теги ACE-Step <= 240 символов.
+      const brain = BRIIX_MUSIC_BRAIN.buildTags(style || lyrics || '', {
+        kind: snapshot.instrumental ? 'instrumental' : 'song',
+        language: BriixProducer.detectExplicitLanguage(rawIdea) || (snapshot.instrumental ? null : 'en'),
+        bpm: BRIIX_MUSIC_BRAIN.detectBpm(style || lyrics || '')
+      });
+      let finalPrompt;
+      if (snapshot.advanced && style && BriixProducer.isAsciiOnly(style)) {
+        // Пользователь/продюсер уже собрал английский промпт: не переписываем его.
+        finalPrompt = style;
+      } else if (style && !BriixProducer.isAsciiOnly(style)) {
+        // Не-ASCII идея (например русская) → связный английский перевод через
+        // producer-чат; brain-теги приоритетнее сырого перевода и остаются,
+        // если перевод не состоялся. Болтовня/JSON/markdown отбраковываются.
+        let fluent = null;
+        try { fluent = await translatePrompt(style, handle.controller.signal); }
+        catch (error) { if (error.name === 'AbortError' || error.code === 'cancelled') throw error; }
+        finalPrompt = fluent ? mergePromptTags(fluent, brain.tags) : (brain.tags || style);
+      } else if (style) {
+        // Быстрый путь с уже английской идеей: brain-теги обязательны —
+        // добавляем те, которых в идее ещё нет.
+        finalPrompt = mergePromptTags(style, brain.tags);
+      } else {
+        // Только лирика: промптом остаётся она сама.
+        finalPrompt = lyrics;
+      }
+      if (snapshot.advanced && !snapshot.instrumental && lyrics) {
+        const structure = BriixProducer.structureWarnings(lyrics); // ручная лирика: предупредить, не навязывать
+        if (structure.length) card('notice', 'Структура лирики', structure.join(' '), session);
+      }
       const params = { model: MUSIC_MODELS[snapshot.quality] };
       if (snapshot.instrumental) params.instrumental = true;
       if (lyrics) params.lyrics = lyrics;
-      const input = { prompt: style || lyrics, lyrics, model: MUSIC_MODELS[snapshot.quality], instrumental: snapshot.instrumental, parentJobId: snapshot.parentJobId };
-      const id = await submitJob({ type: 'music', prompt: style || lyrics, params });
+      // В карточку/сессию — исходная идея без изменений (правило #109),
+      // promptSent — ровно то, что ушло в модель; повтор подставляет исходную идею.
+      const requestBase = rawIdea || lyrics;
+      const input = { prompt: requestBase, promptSent: finalPrompt !== requestBase ? finalPrompt : undefined, lyrics, model: MUSIC_MODELS[snapshot.quality], instrumental: snapshot.instrumental, parentJobId: snapshot.parentJobId };
+      const id = await submitJob({ type: 'music', prompt: finalPrompt, params });
       recordSessionJob(session, id, 'music', input);
       const result = await pollJob(id, { shouldStop: () => handle.cancelled, onStatus: d => {
         if (d.stage) stageBody.querySelector('[data-wait]')?.setAttribute('data-wait-stage', d.stage);
@@ -928,7 +997,7 @@
       feedPush({ t: 'media', who: 'Трек готов (' + MODEL_LABELS[snapshot.quality] + ')', kind: 'music', file: result.result_url, job: id, cover: result.cover_url || '', input }, session);
       const titleSource = (lyrics || style || '').split('\n').map(s => s.trim()).find(s => s.length > 2) || '';
       libAdd({
-        job: id, sessionId: session.id, kind: 'music', prompt: style || lyrics || '',
+        job: id, sessionId: session.id, kind: 'music', prompt: requestBase || '',
         lyrics: lyrics || '', instrumental: snapshot.instrumental, inputComplete: true, parentJobId: snapshot.parentJobId,
         title: titleSource.slice(0, 60),
         model: MUSIC_MODELS[snapshot.quality], file: result.result_url, cover: result.cover_url || '', created: Date.now(), fav: false
@@ -1042,7 +1111,7 @@
       if (handle.cancelled || timedOut || !sessionProfile?.sessions.includes(session)) return;
       const result = BriixProducer.parse(raw, { instrumental: snapshot.instrumental, existingLyrics: snapshot.advanced && !snapshot.instrumental && snapshot.lyrics.trim() ? snapshot.lyrics : '' });
       const entry = { t: 'producer_draft', version: BriixProducer.VERSION, snapshot, title: result.title,
-        prompt: result.prompt, lyrics: result.lyrics, applied: false, createdAt: Date.now() };
+        prompt: BriixProducer.sanitize(result.prompt), lyrics: BriixProducer.latinizeTags(BriixProducer.sanitize(result.lyrics)), applied: false, createdAt: Date.now() };
       renderProducerDraft(entry, session);
       await feedPush(entry, session);
     } catch (error) {
@@ -1106,6 +1175,19 @@
       warning.textContent = list.join(' ');
     };
     style.addEventListener('input', refreshWarning); refreshWarning(); body.append(warning);
+    // Brain-ступень (#109): детерминированные теги ACE-Step из исходной идеи —
+    // провенанс для прозрачности. В модель уходит английский промпт этого черновика;
+    // brain-теги автоматически добавляются, только если итоговый промпт не английский.
+    if (globalThis.BRIIX_MUSIC_BRAIN) {
+      const brain = BRIIX_MUSIC_BRAIN.buildTags(entry.snapshot.idea, {
+        kind: entry.snapshot.instrumental ? 'instrumental' : 'song',
+        language: BriixProducer.detectExplicitLanguage(entry.snapshot.idea) || (entry.snapshot.instrumental ? null : 'en'),
+        bpm: BRIIX_MUSIC_BRAIN.detectBpm(entry.snapshot.idea)
+      });
+      const brainNote = document.createElement('p'); brainNote.className = 'producer-note';
+      brainNote.textContent = 'Теги ACE-Step (brain): ' + (brain.tags || '—') + '.';
+      body.append(brainNote);
+    }
     const state = document.createElement('p'); state.className = 'producer-note'; state.setAttribute('role', 'status');
     state.textContent = entry.applied ? 'Черновик был принят. Генерация запускается отдельно.' : 'Пока ничего не изменено в полях генерации.';
     body.append(state);
