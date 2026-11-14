@@ -59,7 +59,8 @@ jobs:
       - name: Deploy studio/ to /home/badai/briix-demo/studio
         run: |
           set -euo pipefail
-          rsync -a --delete --exclude='assets/' studio/ /home/badai/briix-demo/studio/
-          rsync -a studio/assets/ /home/badai/briix-demo/studio/assets/
+          # rsync на стенде нет — идемпотентная перезапись через tar-конвейер
+          tar -cf - -C studio . | tar -xf - -C /home/badai/briix-demo/studio/
+          tar -cf - -C studio/assets . | tar -xf - -C /home/badai/briix-demo/studio/assets/
           ls /home/badai/briix-demo/studio/ | wc -l
           curl -s -o /dev/null -w "studio http: %{http_code}\n" http://127.0.0.1:8440/studio/
