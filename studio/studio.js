@@ -561,6 +561,16 @@
   }
 
   // ---- карточка трека: обложка = PLAY, единое меню «⋯», transparency ----------
+  // Серверные пики волны: /files/{id}-peaks.json (контракт для INFRA — параллельная
+  // задача; нет пиков — карточка тихо живёт на нативном плеере).
+  function fetchPeaks(job) {
+    return request('/files/' + encodeURIComponent(job) + '-peaks.json', { headers: headers() })
+      .then(r => r.json())
+      .then(peaks => {
+        if (!Array.isArray(peaks) || !peaks.length) throw new Error('Пики недоступны.');
+        return peaks;
+      });
+  }
   // Обложка — единый рендер-путь для fresh и restore: если аудио ещё не загружено
   // (restore после перезагрузки страницы), клик по обложке запускает загрузку и
   // сразу play по готовности; иначе это обычный play/pause-тоггл.
@@ -588,8 +598,8 @@
     frame.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
   }
 
-  // Единый рендер трек-карточки (fresh и restore): обложка, заглушка волны
-  // (до загрузки файла), аудио-фолбэк, transparency, меню «⋯».
+  // Единый рендер трек-карточки (fresh и restore): обложка, волна из серверных
+  // пиков (сразу, до загрузки аудио), аудио-фолбэк, transparency, меню «⋯».
   function renderTrackCard(session, { who, job, cover, input = {}, file, loadBlob }) {
     const wrap = card('assistant', who, '', session);
     wrap.textContent = '';
@@ -611,6 +621,21 @@
     addTrackMenu(cardEl, ctx);
     const frame = cardEl.querySelector('.track-cover');
     const state = { audio: null };
+    // Волна из пиков строится сразу при карточке — до загрузки аудио (решение
+    // владельца 14.11: сервер отдаёт /files/{id}-peaks.json, посчитанный из WAV).
+    // Нет пиков (старые треки) — тихо остаётся нативный плеер, шимер убирается.
+    let wave = null;
+    fetchPeaks(job).then(peaks => {
+      if (!frame.isConnected) throw new Error('Карточка недоступна.');
+      placeholder.remove();
+      wave = BriixWaveform.attachFromPeaks(peaks, waveSlot, {
+        onSeekPending: () => { if (!state.audio) ensureLoaded(); } // seek до загрузки — грузим трек
+      });
+      if (state.audio) wave.setAudio(state.audio);
+    }).catch(() => {
+      console.warn('BRIIX waveform: пики недоступны (' + job + ') — только нативный плеер.');
+      placeholder.remove();
+    });
     let pending = null;
     const ensureLoaded = () => pending ||= (async () => {
       try {
@@ -625,7 +650,7 @@
         audioSlot.hidden = false;
         audioSlot.append(audio);
         placeholder.remove();
-        BriixWaveform.attach(audio, blob, waveSlot);
+        if (wave) wave.setAudio(audio);
         state.audio = audio;
         audio.addEventListener('play', () => { frame.classList.add('playing'); frame.setAttribute('aria-label', 'Пауза'); });
         audio.addEventListener('pause', () => { frame.classList.remove('playing'); frame.setAttribute('aria-label', 'Слушать трек'); });
@@ -2329,7 +2354,11 @@
       audio.preload = 'metadata';
       audio.src = url;
       container.append(audio);
-      BriixWaveform.attach(audio, blobBytes.get(entry.job), container);
+      // Волна в библиотеке — из тех же серверных пиков; нет пиков — тихий нативный плеер.
+      fetchPeaks(entry.job).then(peaks => {
+        if (!container.isConnected || currentUser() !== owner) return;
+        BriixWaveform.attachFromPeaks(peaks, container, {}).setAudio(audio);
+      }).catch(() => console.warn('BRIIX waveform: пики недоступны (' + entry.job + ') — только нативный плеер.'));
       return audio;
     }
     return null;

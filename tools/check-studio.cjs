@@ -167,6 +167,14 @@ function bffServer(port) {
         return;
       }
 
+      const peaksM = req.url.match(/^\/files\/([^/]+)-peaks\.json$/);
+      if (peaksM && req.method === 'GET') {
+        if (peaksM[1].includes('nopeaks')) { res.writeHead(404, { 'Content-Type': 'application/json', ...cors }); res.end(JSON.stringify({ error: { code: 'not_found' } })); return; }
+        const peaks = Array.from({ length: 160 }, (_, i) => 0.2 + 0.6 * Math.abs(Math.sin(i / 9)));
+        res.writeHead(200, { 'Content-Type': 'application/json', ...cors });
+        res.end(JSON.stringify(peaks));
+        return;
+      }
       if (req.url.startsWith('/files/') && (req.url.includes('.m4a') || req.url.includes('.png') || req.url.includes('.wav'))) {
         if (req.url.includes('-cover.png')) {
           state.coverRequests++;
@@ -783,7 +791,8 @@ function bffServer(port) {
   // Обложка = PLAY и в restore-карточке: до загрузки файла запросов аудио нет.
   const coversBefore = await p.evaluate(() => [...document.querySelectorAll('#feed .track-cover')].every(f => f.classList.contains('playable')));
   assert.equal(coversBefore, true, 'restored covers are PLAY buttons right away');
-  assert.ok(await p.evaluate(() => document.querySelectorAll('#feed .waveform-ph').length === 100), 'wave placeholder shown before load');
+  // Волна из peaks.json строится сразу при карточке, до загрузки аудио.
+  await p.waitForFunction(() => document.querySelectorAll('#feed .waveform-canvas').length === 100, {}, { timeout: 15000 });
   await p.waitForTimeout(500);
   assert.equal(state.audioRequests, 0, 'restored history does not fetch 100 audio files');
   await p.evaluate(() => [...document.querySelectorAll('#feed .track-cover')].slice(0, 2).forEach(f => f.click()));
@@ -1234,14 +1243,14 @@ function bffServer(port) {
     await BriixSessionStore.save(profile, profile.revision, backend);
   }, WAV.toString('base64'));
   await p.reload();
-  // Restore-путь: волна-заглушка и PLAY-обложка есть сразу, аудио не грузится без клика.
-  await p.waitForSelector('#feed .waveform-ph', { timeout: 10000 });
+  // Restore-путь: волна из peaks.json и PLAY-обложка есть СРАЗУ, аудио не грузится без клика.
+  await p.waitForSelector('#feed .waveform-canvas', { timeout: 10000 });
   assert.equal(await p.locator('#feed .track-cover.playable').count(), 1, 'cover is a PLAY button before any load');
   assert.equal(await p.locator('#feed .media-load').count(), 0, 'no Listen button: the cover replaced it');
   assert.equal(state.audioRequests, 0, 'restore does not fetch audio until the cover is clicked');
+  assert.equal(await p.locator('#feed audio').count(), 0, 'no audio element before the cover click');
   await p.locator('#feed .track-cover.playable').click();
   await p.waitForSelector('#feed audio', { timeout: 15000 });
-  await p.waitForSelector('#feed .waveform-canvas', { timeout: 15000 }); // авто-attach после загрузки
   // Обложка = PLAY (настоящий играбельный WAV в mock). tryPlay мог автозапустить
   // трек при загрузке — гасим и проверяем оба направления переключения.
   await p.evaluate(() => document.querySelector('#feed audio').pause());
