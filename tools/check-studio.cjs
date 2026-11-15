@@ -374,7 +374,15 @@ function bffServer(port) {
   assert.ok(seen.length >= 1, 'polling stages were shown: ' + seen.join(','));
   const musicPost = state.jobPosts.at(-1);
   assert.equal(musicPost.type, 'music');
-  assert.equal(musicPost.prompt, 'dream pop, 90 BPM, female vocals');
+  // issue #20: ASCII-идея не переписывается, но мозг v2 доводит caption слоями —
+  // с этого места ритм-секция и продакшн обязательны. Поэтому сверяем свойства,
+  // а не точную строку v1 (иначе тест закреплял бы старое поведение).
+  const musicPrompt = String(musicPost.prompt);
+  assert.ok(musicPrompt.startsWith('dream pop, 90 BPM, female vocals'), 'ASCII idea stays at the head of the prompt');
+  assert.match(musicPrompt, /groove|beat|drum/, 'v2 brain adds a rhythm layer');
+  assert.match(musicPrompt, /production|warmth|mix|saturation/, 'v2 brain adds a production layer');
+  assert.match(musicPrompt, /English lyrics/, 'brain adds the lyrics-language tag');
+  assert.equal(musicPrompt.split(', ').filter(t => t === 'atmospheric').length <= 1, true, 'no duplicate tags');
   assert.match(musicPost.params.lyrics, /\[Chorus\]/);
   assert.equal(musicPost.params.model, 'ace-step-flash');
   assert.equal(musicPost.params.duration, undefined, 'duration must NOT be sent (infra#93: length follows lyrics)');
@@ -1014,7 +1022,14 @@ function bffServer(port) {
   await p.waitForFunction(() => document.querySelectorAll('#feed audio').length === 2, {}, { timeout: 25000 });
   assert.equal(state.jobPosts.length, 2);
   // Отредактированная не-ASCII идея переводится, brain-теги дедуплицируются.
-  assert.equal(state.jobPosts[1].prompt, 'long musical idea, rhythmic, atmospheric, instrumental');
+  // #20: мозг v2 докладывает ритм-слой и продакшн даже инструменталу —
+  // проверяем свойства (перевод во главе, теги не дублируются, лимит 240).
+  const repeatPost = String(state.jobPosts[1].prompt);
+  assert.ok(repeatPost.startsWith('long musical idea, rhythmic, atmospheric'), 'translation stays at the head');
+  assert.match(repeatPost, /\binstrumental\b/, 'instrumental marker kept');
+  assert.match(repeatPost, /groove|beat|drum/, 'v2 brain adds a rhythm layer for instrumentals too');
+  assert.equal((repeatPost.match(/atmospheric/g) || []).length, 1, 'brain tags deduped against the translation');
+  assert.ok(repeatPost.length <= 240, 'brain prompt stays within MAX_TAGS');
   const linked = await p.evaluate(async () => {
     const { profile } = await BriixSessionStore.open('tester');
     return profile.sessions[0].feed.filter(x => x.kind === 'music').map(x => ({ job: x.job, parent: x.input.parentJobId }));
