@@ -55,6 +55,10 @@
   } catch { /* ignore */ }
   const headers = () => ({ Authorization: 'Bearer ' + token(), 'Content-Type': 'application/json' });
 
+  // Каталог моделей (F-59): один запрос за сессию, без авторизации. Сбой
+  // не мешает работе — ожидание просто останется без ориентира времени.
+  BRIIX_CATALOG.load(server()).catch(() => {});
+
   class BusError extends Error {
     constructor(code, message, status = 0) { super(message || code); this.code = code; this.status = status; }
   }
@@ -422,11 +426,12 @@
   function resumeWaitingJob(session, rec) {
     if (session !== activeSession) return;
     const stageBody = card('stage', rec.kind === 'music' ? 'Музыка (продолжение)' : 'Фото (продолжение)', '', session);
-    const wait = waitRow(rec.kind === 'music' ? 'music' : 'image', rec.kind === 'music' ? 'synthesizing' : 'generating');
+    const eta = etaNote(rec.kind === 'music' ? (rec.input?.model || '') : 'flux-2-klein-4b', 'продолжение');
+    const wait = waitRow(rec.kind === 'music' ? 'music' : 'image', rec.kind === 'music' ? 'synthesizing' : 'generating', { onTick: eta.update });
     const handle = makeCancelHandle();
     handle.jobId = rec.job;
     appendStop(wait.row, handle);
-    stageBody.append(wait.row);
+    stageBody.append(wait.row, eta.el);
     (async () => {
       try {
         const result = await pollJob(rec.job, { shouldStop: () => handle.cancelled, onStatus: d => {
@@ -565,10 +570,20 @@
       renderChrome();
     }
   })));
-  attachMenu(els.modelChip, els.modelMenu, () => Object.keys(MUSIC_MODELS).map(q => ({
-    label: MODEL_LABELS[q], sub: MUSIC_MODELS[q], selected: q === quality,
-    onPick: () => { quality = q; renderChrome(); }
-  })));
+  attachMenu(els.modelChip, els.modelMenu, () => {
+    // Честная карточка модели (F-59): идентификатор + замеренный ориентир +
+    // статус из каталога. Каталог может быть не загружен — тогда без статуса.
+    BRIIX_CATALOG.load(server()).catch(() => {});
+    return Object.keys(MUSIC_MODELS).map(q => {
+      const id = MUSIC_MODELS[q];
+      const cat = BRIIX_CATALOG.model(id);
+      const etaS = BRIIX_CATALOG.etaSeconds(id);
+      const bits = [id];
+      if (etaS) bits.push('~' + fmtMinutes(etaS));
+      if (cat && !cat.ready) bits.push('недоступна');
+      return { label: MODEL_LABELS[q], sub: bits.join(' · '), selected: q === quality, onPick: () => { quality = q; renderChrome(); } };
+    });
+  });
 
   // ---- карточки ленты ---------------------------------------------------------
   // Автоскролл только когда лента у низа: читающие выше не выдёргиваются.
@@ -615,8 +630,41 @@
     const s = Math.floor(ms / 1000);
     return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
   }
+  // Человекочитаемые минуты для ориентира: «минуту» / «2 минуты» / «10 минут».
+  function fmtMinutes(seconds) {
+    const m = Math.round(seconds / 60);
+    if (m <= 1) return 'минуту';
+    const plural = m % 10 >= 2 && m % 10 <= 4 && (m % 100 < 10 || m % 100 >= 20) ? 'ы' : '';
+    return m + ' минут' + plural;
+  }
+  // Тональная зона фраз (F-62): 0–30 с — ранний тон, 30–180 с — рабочий, дальше — долгий.
+  function waitZone(ms) { return ms < 30000 ? 'early' : ms < 180000 ? 'mid' : 'late'; }
+  // Честный ориентир ожидания из каталога моделей (F-59): не процент и не обещание,
+  // а замер стенда + мягкая шкала «прошло X из ~Y». Превышение ×1,5 — смена тона.
+  function etaNote(modelId, humanLabel) {
+    const el = document.createElement('div');
+    el.className = 'stage-eta';
+    const sec = typeof BRIIX_CATALOG !== 'undefined' ? BRIIX_CATALOG.etaSeconds(modelId) : null;
+    if (!sec) { el.hidden = true; return { el, seconds: null, update: () => {} }; }
+    const approx = fmtMinutes(sec);
+    const base = 'Ориентир: ~' + approx + (humanLabel ? ' (' + humanLabel + ')' : '') + ' — замер стенда.';
+    el.textContent = base;
+    let shownLate = false;
+    return {
+      el, seconds: sec,
+      update(ms) {
+        const late = ms > sec * 1500;
+        if (late !== shownLate) { shownLate = late; el.classList.toggle('late', late); }
+        el.textContent = late
+          ? 'Дольше обычного (~' + approx + '). Задача продолжается на сервере и появится в библиотеке — можно подождать или остановить (✕).'
+          : (ms < 20000 ? base : 'Прошло ' + fmtElapsed(ms) + ' из ~' + approx + '.');
+      }
+    };
+  }
   // wait-line + секундомер в один ряд; таймер чистится при удалении карточки.
-  function waitRow(type, stage) {
+  // onTick — подписка на ежесекундный тик (ориентир F-59 обновляется тем же тиком);
+  // он же переводит фразы в тональную зону по времени (F-62).
+  function waitRow(type, stage, { onTick } = {}) {
     const t0 = Date.now();
     const elapsed = document.createElement('span');
     elapsed.className = 'stage-elapsed';
@@ -624,7 +672,17 @@
     const row = document.createElement('div');
     row.className = 'wait-row';
     row.append(waitLine(type, stage), elapsed);
-    const timer = setInterval(() => { elapsed.textContent = fmtElapsed(Date.now() - t0); }, 1000);
+    const phrase = () => row.querySelector('[data-wait]');
+    const timer = setInterval(() => {
+      const ms = Date.now() - t0;
+      elapsed.textContent = fmtElapsed(ms);
+      const p = phrase();
+      if (p && p.dataset.waitMock !== '1') {
+        const zone = waitZone(ms);
+        if (p.dataset.waitZone !== zone) p.dataset.waitZone = zone; // смена зоны обновляет фразу
+      }
+      onTick?.(ms);
+    }, 1000);
     return { row, stop: () => clearInterval(timer) };
   }
 
@@ -1449,10 +1507,11 @@
     const skel = document.createElement('div');
     skel.className = 'skeleton-img';
     stageBody.append(skel);
-    const wait = waitRow('image', 'generating');
+    const eta = etaNote('flux-2-klein-4b', 'фото');
+    const wait = waitRow('image', 'generating', { onTick: eta.update });
     const handle = makeCancelHandle(); // ✕ гасит только эту джобу
     appendStop(wait.row, handle);
-    stageBody.append(wait.row);
+    stageBody.append(wait.row, eta.el);
     try {
       const id = await submitJob({ type: 'image', prompt: text, params: { artist: currentUser() } }); // T-41: фото-джоба атрибутируема в общем списке /jobs
       handle.jobId = id; // ✕ после отправки отменяет джобу и на сервере (T-05)
@@ -1573,7 +1632,8 @@
     card('user', 'Вы', requestText, session);
     feedPush({ t: 'user', who: 'Вы', text: requestText }, session);
     const stageBody = card('stage', 'Музыка', '', session); // мгновенно, включая фазу автолирики
-    const wait = waitRow('music', !vocal ? 'model-warmup' : (vocal && !lyrics ? 'writing-lyrics' : 'synthesizing'));
+    const eta = etaNote(MUSIC_MODELS[snapshot.quality], MODEL_LABELS[snapshot.quality]);
+    const wait = waitRow('music', !vocal ? 'model-warmup' : (vocal && !lyrics ? 'writing-lyrics' : 'synthesizing'), { onTick: eta.update });
     const handle = makeCancelHandle(); // ✕ гасит автолирику и поллинг этой джобы
     appendStop(wait.row, handle);
     stageBody.append(wait.row);
@@ -1607,7 +1667,7 @@
       barLabel.textContent = stageNames[curStage] ? 'Этап: ' + stageNames[curStage] : 'Задача выполняется';
     };
     paint();
-    stageBody.append(bar, barLabel);
+    stageBody.append(bar, barLabel, eta.el);
     const watchStage = new MutationObserver(() => {
       const now = stageBody.querySelector('[data-wait]')?.getAttribute('data-wait-stage');
       if (now && now !== curStage) { curStage = now; paint(); }

@@ -101,18 +101,21 @@ function bffServer(port) {
     return p;
   }
 
-  // 1. Пулы: объём, уникальность, стадии сервера (включая instrumental) и зоны мока.
+  // 1. Пулы: объём, уникальность, стадии сервера (включая instrumental), зоны мока
+  //    и тональные зоны по времени (F-62).
   let p = await page();
   const pools = await p.evaluate(() => {
     const data = window.BRIIX_WAIT_PHRASES;
     const out = {};
     for (const [type, set] of Object.entries(data)) {
-      const all = Object.values(set).flatMap(v => Array.isArray(v) ? v : Object.values(v).flat());
-      out[type] = { total: all.length, unique: new Set(all).size, stages: Object.keys(set), mock: set.mock ? Object.keys(set.mock) : [] };
+      const all = Array.isArray(set) ? set.slice()
+        : Object.values(set).flatMap(v => Array.isArray(v) ? v : Object.values(v).flat());
+      out[type] = { total: all.length, unique: new Set(all).size, stages: Array.isArray(set) ? [] : Object.keys(set), mock: !Array.isArray(set) && set.mock ? Object.keys(set.mock) : [] };
     }
     return out;
   });
   for (const [type, info] of Object.entries(pools)) {
+    if (type === 'easter') { assert.ok(info.total >= 3, 'пасхалок мало'); continue; }
     assert.ok(info.total >= 40, type + ': пул меньше 40 фраз');
     assert.equal(info.total, info.unique, type + ': повторы внутри пула');
   }
@@ -122,7 +125,43 @@ function bffServer(port) {
   assert.ok(genCount >= 10, 'пул generating заполнен (>= 10 фраз), есть ' + genCount);
   assert.deepEqual(pools.music.mock, ['start', 'middle', 'final']);
   assert.ok(!('video' in pools), 'мёртвый видео-пул удалён (F-61)');
-  ok('pools: 40+ unique phrases per type, vocal+instrumental stages, no dead video pool', { types: Object.keys(pools) });
+  const zones = await p.evaluate(() => {
+    const z = window.BRIIX_WAIT_PHRASES.music.zones || {};
+    return { keys: Object.keys(z), early: (z.early || []).length, mid: (z.mid || []).length, late: (z.late || []).length };
+  });
+  assert.deepEqual(zones.keys, ['early', 'mid', 'late'], 'три тональные зоны (F-62)');
+  assert.ok(zones.early >= 4 && zones.mid >= 4 && zones.late >= 4, 'зоны не пустые');
+  assert.ok(await p.evaluate(() => !!window.BRIIX_WAIT_PHRASES.image.zones?.late?.length), 'у фото тоже зоны');
+  ok('pools: 40+ unique phrases per type, stages, zones (F-62), no dead video pool', { types: Object.keys(pools) });
+
+  // 1b. Тональная зона и пасхалки в выборе (F-62): зона подмешивается к стадии,
+  //     пасхалка — редкая. Проверяем детерминированно через Math.random.
+  const tone = await p.evaluate(() => {
+    const W = window.BRIIX_WAIT, D = window.BRIIX_WAIT_PHRASES;
+    W.reset();
+    const random = Math.random;
+    let zonePicks = 0, easterPicks = 0;
+    Math.random = () => 0.001; // зона (0.5) и пасхалка (0.05) срабатывают всегда
+    const easterPick = W.pick({ type: 'music', stage: 'synthesizing', zone: 'late' });
+    Math.random = random;
+    // Пасхалка: малое значение рандома → выбор из easter-пула.
+    if (D.easter.includes(easterPick)) easterPicks++;
+    // Зона без пасхалки: рандом между 0.05 и 0.5 обходит пасхалку и попадает в зону.
+    Math.random = () => 0.2;
+    for (let i = 0; i < 8; i++) {
+      const phrase = W.pick({ type: 'music', stage: 'synthesizing', zone: 'late' });
+      if (D.music.zones.late.includes(phrase)) zonePicks++;
+    }
+    Math.random = random;
+    // Без зоны — старое поведение: стадия + общие фразы.
+    const pool = W.poolFor({ type: 'music', stage: 'synthesizing' });
+    return { easterPicks, zonePicks, zoneList: W.poolFor({ type: 'music', stage: 'synthesizing', zone: 'late' }).zoneList, noZone: pool.zoneList };
+  });
+  assert.equal(tone.easterPicks, 1, 'малый рандом даёт пасхалку');
+  assert.ok(tone.zonePicks >= 5, 'рандом 0.2 берёт фразу из зоны, пока пул зоны не исчерпан: ' + tone.zonePicks);
+  assert.deepEqual(tone.zoneList, await p.evaluate(() => window.BRIIX_WAIT_PHRASES.music.zones.late), 'zoneList отдаёт пул зоны');
+  assert.deepEqual(tone.noZone, [], 'без зоны zoneList пуст');
+  ok('tone zones and easter eggs participate in pick (F-62)', tone);
 
   // 2. Привязка к стадии и к зоне мока.
   const binding = await p.evaluate(() => {

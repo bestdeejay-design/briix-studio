@@ -16,6 +16,8 @@
   const NO_REPEAT = 15;
   const MAX_RECENT = 40;
   const STAGED_PROBABILITY = 0.65;   // чаще говорим о текущей стадии, иногда — общее
+  const ZONE_PROBABILITY = 0.5;      // F-62: тональная зона участвует в половине выборов
+  const EASTER_PROBABILITY = 0.05;   // F-62: редкая «пасхалка» — примерно раз на 20 ротаций
   const nodes = new WeakMap();
   let recent = load();
   let timer = null;
@@ -48,25 +50,32 @@
   window.addEventListener('pagehide', () => save(true));
   const data = () => window.BRIIX_WAIT_PHRASES || {};
 
-  /* Пул для узла: реальная стадия, честная зона мока или общие фразы типа. */
+  /* Пул для узла: реальная стадия, честная зона мока или общие фразы типа.
+   * Для реального ожидания zones[early|mid|late] — тональная надстройка над
+   * стадийным пулом (F-62): не замена, а ещё один источник. */
   function poolFor({ type = 'music', stage = '', mock = false, zone = '' } = {}) {
     const set = data()[type] || {};
     if (mock) {
       const zones = set.mock || {};
       const list = Array.isArray(zones[zone]) ? zones[zone] : [];
       const fallback = Object.values(zones).flat();
-      return { key: type + ':mock:' + (list.length ? zone : 'any'), staged: false, list: list.length ? list : fallback };
+      return { key: type + ':mock:' + (list.length ? zone : 'any'), staged: false, mock: true, list: list.length ? list : fallback, zoneList: [] };
     }
     const staged = Array.isArray(set[stage]) ? set[stage] : [];
     const any = Array.isArray(set.any) ? set.any : [];
-    return { key: type + ':' + (staged.length ? stage : 'any'), staged: staged.length ? stage : null, list: [...staged, ...any] };
+    const toneZones = set.zones || {};
+    const zoneList = Array.isArray(toneZones[zone]) ? toneZones[zone] : [];
+    return { key: type + ':' + (staged.length ? stage : 'any') + (zoneList.length ? ':' + zone : ''), staged: staged.length ? stage : null, mock: false, list: [...staged, ...any], zoneList };
   }
 
+  // remember() также считает выборы (picks) — пасхалки идут через него же.
   function remember(type, phrase) {
     const list = recent[type] || [];
     list.push(phrase);
     recent[type] = list.slice(-MAX_RECENT);
     save();
+    picks++;
+    return phrase;
   }
 
   function pick(options) {
@@ -79,13 +88,24 @@
     const seen = new Set((recent[type] || []).slice(-window));
     let candidates = pool.list.filter(x => !seen.has(x));
     if (!candidates.length) candidates = pool.list.slice();   // пул исчерпан — окно не должно вешать ожидание
+    // Редкая пасхалка (F-62): факт студии вместо рабочей фразы, ~1 к 20.
+    // Только для реального ожидания — мок не притворяется студией.
+    const easter = Array.isArray(data().easter) ? data().easter : [];
+    if (!pool.mock && easter.length && Math.random() < EASTER_PROBABILITY) {
+      const fresh = easter.filter(x => !seen.has(x));
+      if (fresh.length) return remember(type, fresh[Math.floor(Math.random() * fresh.length)]);
+    }
     let from = candidates;
-    if (pool.staged && Math.random() < STAGED_PROBABILITY) {
+    // Тональная зона по времени ожидания (F-62): короткий старт / рабочий тон / долгий тон.
+    if (!pool.mock && pool.zoneList.length && Math.random() < ZONE_PROBABILITY) {
+      const zoneCandidates = pool.zoneList.filter(x => !seen.has(x));
+      if (zoneCandidates.length) from = zoneCandidates;
+    }
+    if (pool.staged && from === candidates && Math.random() < STAGED_PROBABILITY) {
       const stagedList = candidates.filter(x => (data()[type]?.[pool.staged] || []).includes(x));
       if (stagedList.length) from = stagedList;
     }
     const phrase = from[Math.floor(Math.random() * from.length)];
-    picks++;
     remember(type, phrase);
     return phrase;
   }

@@ -81,6 +81,16 @@ function bffServer(port) {
       const readBody = cb => { let raw = ''; req.on('data', c => { raw += c; }); req.on('end', () => cb(JSON.parse(raw || '{}'))); };
 
       if (req.url === '/health') { send(200, { ok: true }); return; }
+      // Каталог моделей — как на живом bff: без авторизации (F-59).
+      if (req.url === '/v1/models') {
+        send(200, { object: 'list', data: [
+          { id: 'ace-step-flash', object: 'model', status: 'ready', capabilities: ['song.vocal'], latency: { source: 'measured', seconds: 111, conditions: '30с трек' } },
+          { id: 'ace-step-pro', object: 'model', status: 'unavailable', capabilities: ['song.vocal'], latency: { source: 'measured', seconds: 596, conditions: '150с трек' } },
+          { id: 'flux-2-klein-4b', object: 'model', status: 'ready', capabilities: ['image.generate'], latency: { source: 'measured', seconds: 261, conditions: 'холодный и тёплый сопоставимы' } },
+          { id: 'musicgen-small', object: 'model', status: 'ready', capabilities: ['music.generate'], latency: { source: 'none', seconds: null, conditions: '' } }
+        ] });
+        return;
+      }
       if (req.headers.authorization !== 'Bearer ' + TOKEN) { send(401, { error: { code: 'unauthorized', message: 'no' } }); return; }
 
       if (req.url === '/v1/chat/completions' && req.method === 'POST') {
@@ -1456,6 +1466,41 @@ function bffServer(port) {
   assert.ok(await p.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth) <= 0, 'no h-scroll with open sheet');
   await p.screenshot({ path: path.join(require('node:os').tmpdir(), 'studio-320-sheet.png'), fullPage: false });
   ok('mobile 320x568: track menu is a bottom sheet inside the viewport');
+
+  // F-59: каталог моделей — честные ориентиры ожидания и статус в меню.
+  p = await page();
+  await p.waitForFunction(() => window.BRIIX_CATALOG.size() >= 4, {}, { timeout: 10000 });
+  const catalog = await p.evaluate(() => ({
+    flash: window.BRIIX_CATALOG.etaSeconds('ace-step-flash'),
+    pro: window.BRIIX_CATALOG.etaSeconds('ace-step-pro'),
+    musicgen: window.BRIIX_CATALOG.etaSeconds('musicgen-small'), // source:none — не ориентир
+    proStatus: window.BRIIX_CATALOG.model('ace-step-pro').status
+  }));
+  assert.equal(catalog.flash, 111, 'замеренная латентность Flash читается');
+  assert.equal(catalog.pro, 596, 'замеренная латентность Pro читается');
+  assert.equal(catalog.musicgen, null, 'source:none не притворяется ориентиром');
+  assert.equal(catalog.proStatus, 'unavailable');
+  // Ориентир в карточке ожидания: инструментал без автолирики — сразу джоба.
+  await p.locator('.mode[data-mode="music"]').click();
+  await p.locator('.seg-btn[data-vocal="1"]').click();
+  await p.locator('#prompt').fill('весёлый лоу-фай этюд');
+  await p.locator('#genTrack').click();
+  // Мок делает джобу готовой через ~5 с — снимаем ориентир в тот же момент,
+  // когда карточка ожидания появилась (без отдельного re-query).
+  const etaState = await p.waitForFunction(() => {
+    const el = document.querySelector('.card.stage .stage-eta');
+    return el && !el.hidden ? { text: el.textContent, late: el.classList.contains('late') } : false;
+  }, {}, { timeout: 15000 }).then(h => h.jsonValue());
+  assert.match(etaState.text, /Ориентир: ~2 минуты \(Flash\) — замер стенда/, 'ориентир из каталога в карточке ожидания: ' + JSON.stringify(etaState.text));
+  assert.equal(etaState.late, false, 'тон задержки включается только после ×1,5 — не раньше');
+  // Дожидаемся конца генерации (мок быстро отдаёт ready), затем — меню моделей.
+  await p.waitForSelector('.card.stage', { state: 'detached', timeout: 20000 });
+  await p.locator('#modelChip').click();
+  const menuText = (await p.locator('#modelMenu button').allInnerTexts()).join('\n');
+  assert.match(menuText, /Flash\s*ace-step-flash · ~2 минуты/, 'меню Flash показывает ориентир: ' + JSON.stringify(menuText));
+  assert.match(menuText, /Pro\s*ace-step-pro · ~10 минут · недоступна/, 'меню Pro честно показывает ориентир и недоступность');
+  ok('catalog /v1/models: measured ETA in the wait card and honest model menu (F-59)', catalog);
+  await p.close();
 
   assert.deepEqual(errors, [], 'no page errors anywhere');
   await browser.close();
