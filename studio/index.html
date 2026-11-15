@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizableViewport">
 <meta name="color-scheme" content="dark">
+<!-- T-35: тема и иконки — раньше favicon отдавался 404 на каждый заход -->
+<meta name="theme-color" content="#0d0e10">
+<link rel="icon" href="./favicon.svg" type="image/svg+xml" sizes="any">
+<link rel="manifest" href="./manifest.webmanifest">
 <title>BRIIX Студия</title>
 <script>
 // Зеркало на Pages (briix.ru) без шины /api — сразу на рабочую студию (demo.briix.ru).
@@ -11,7 +15,9 @@ if (location.hostname === 'briix.ru' || location.hostname === 'www.briix.ru') {
   location.replace('https://demo.briix.ru/studio/' + location.hash);
 }
 </script>
-<link rel="stylesheet" href="studio.css?v=20261114-agent-b-1">
+<link rel="stylesheet" href="studio.css?v=c1de4536b7">
+<!-- T-35: главный скрипт стартует заранее; URL совпадает с тегом ниже (иначе двойная загрузка) -->
+<link rel="preload" as="script" href="studio.js?v=b485a0a964">
 </head>
 <body>
 
@@ -57,6 +63,8 @@ if (location.hostname === 'briix.ru' || location.hostname === 'www.briix.ru') {
     <span id="mpTime" class="mp-time"></span>
   </div>
   <div id="storageWarning" class="storage-warning" role="alert" hidden></div>
+  <!-- T-26: баннер «Нет соединения» — операции при офлайне приостановлены -->
+  <div id="netBanner" class="net-banner" role="status" hidden></div>
   <div id="sessionsOverlay" class="sessions-overlay" hidden>
     <section id="sessionsDialog" class="sessions-dialog" role="dialog" aria-modal="true" aria-labelledby="sessionsTitle" tabindex="-1">
       <div class="sessions-head"><h2 id="sessionsTitle">История</h2><button id="sessionsClose" class="tool icon-only" type="button" aria-label="Закрыть историю">✕</button></div>
@@ -220,16 +228,18 @@ if (location.hostname === 'briix.ru' || location.hostname === 'www.briix.ru') {
     </div>
   </nav>
 </main>
-<script src="./wait-phrases.js?v=20261115"></script>
-<script src="./wait-ui.js?v=20261115"></script>
-<script src="catalog.js?v=20261115"></script>
-<script src="ops.js?v=20261115"></script>
-<script src="toasts.js?v=20261115"></script>
-<script src="session-store.js?v=20261114-agent-b-1"></script>
-<script src="waveform.js?v=20261114-peaks-1"></script>
-<script src="player.js?v=20261115"></script>
-<script src="producer-brain.js?v=20261114-agent-b-1"></script>
-<script src="music-brain.js?v=20261114-agent-b-1"></script>
-<script src="studio.js?v=20261114-agent-b-1"></script>
+<!-- T-35: 7 блокирующих скриптов стали defer (парсинг не ждёт, порядок сохранён);
+     wait-phrases.js (24,6 КБ данных) вообще не в HTML — wait-ui.js подтягивает
+     его лениво при первом живом ожидании -->
+<script defer src="./wait-ui.js?v=8c1753e686"></script>
+<script defer src="catalog.js?v=a9dd9e6116"></script>
+<script defer src="ops.js?v=760bf48ea0"></script>
+<script defer src="toasts.js?v=50285e4a33"></script>
+<script defer src="session-store.js?v=52128a0386"></script>
+<script defer src="waveform.js?v=0ee97fc2a9"></script>
+<script defer src="player.js?v=778d4b4c76"></script>
+<script defer src="producer-brain.js?v=f82a6e65db"></script>
+<script defer src="music-brain.js?v=18fb6a3242"></script>
+<script defer src="studio.js?v=b485a0a964"></script>
 </body>
 </html>

@@ -21,6 +21,10 @@ jobs:
       - name: node --check (studio + tools)
         run: |
           for f in studio/*.js tools/*.cjs; do node --check "$f"; done
+      - name: asset versions (T-35)
+        # ?v= в index.html/wait-ui.js = контент-хэш файла; ручные версии
+        # рассинхронизировались и могли подать несовместимую пару из кэша.
+        run: node tools/asset-versions.cjs
       - name: check-assembly
         run: node tools/check-assembly.cjs
       - name: check-producer

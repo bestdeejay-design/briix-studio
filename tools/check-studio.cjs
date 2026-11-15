@@ -12,7 +12,7 @@ const STATIC_PORT = Number(process.env.BRIIX_STUDIO_STATIC_PORT || 18388);
 const BFF_PORT = Number(process.env.BRIIX_STUDIO_BFF_PORT || 18300);
 const TOKEN = 'test-token';
 
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.m4a': 'audio/mp4', '.json': 'application/json', '.woff2': 'font/woff2' };
+const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json', '.m4a': 'audio/mp4', '.json': 'application/json', '.woff2': 'font/woff2' };
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
 const M4A_PATH = path.join(ROOT, 'assets/media/showcase/ballad30.m4a');
 const M4A = fs.existsSync(M4A_PATH) ? fs.readFileSync(M4A_PATH) : Buffer.from('fake-m4a');
@@ -35,7 +35,7 @@ let state;
 function resetBff() {
   state = {
     chatPosts: [], chatBlocked: false, chatImproveText: 'УЛУЧШЕННЫЙ ТЕКСТ', chatSlow: false, improveDelay: 0, favoriteFail: false, coverRateLimit: 0, coverRequests: 0, audioRequests: 0, photoRequests: 0, fileOrder: [], fileDelay: 0, activeFiles: 0, maxActiveFiles: 0, jobsLists: 0,
-    jobPosts: [], jobBlock: false, pollFailures: [], pollAttempts: 0, polls: 0, deleted: {}, favs: {}, jobSeq: 1, pollsOf: {}, cancels: [], foreign: []
+    jobPosts: [], jobBlock: false, pollFailures: [], pollAttempts: 0, polls: 0, deleted: {}, favs: {}, jobSeq: 1, pollsOf: {}, cancels: [], foreign: [], chatCrlf: false, chatMidstreamError: false, streamEnds: 0, midstreamCloses: 0, slowFiles: [], chatSlowText: '', chatSlowTick: 0
   };
 }
 resetBff();
@@ -66,9 +66,46 @@ function sse(res, fullText, intervalMs = 5) {
       res.write('data: [DONE]\n\n');
       clearInterval(timer);
       res.end();
+      state.streamEnds++;
     }
   }, intervalMs);
   res.on('close', () => clearInterval(timer));
+}
+
+/* T-15: жёсткие варианты SSE — прокси с \r\n\r\n, JSON, побитый на две
+ * data:-строки внутри одного события, и ошибка посреди потока без [DONE]
+ * (клиент обязан отменить reader — иначе соединение зависнет). */
+function sseCrlf(res, fullText) {
+  res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive', 'Access-Control-Allow-Origin': `http://127.0.0.1:${STATIC_PORT}` });
+  const words = fullText.split(' ');
+  let i = 0;
+  const timer = setInterval(() => {
+    if (i < words.length) {
+      const json = JSON.stringify({ choices: [{ delta: { content: (i ? ' ' : '') + words[i] } }] });
+      const mid = Math.floor(json.length / 2);
+      // один event = два data:-фрагмента одного JSON + \r\n-переводы (nginx-стиль)
+      res.write('data: ' + json.slice(0, mid) + '\r\n');
+      res.write('data: ' + json.slice(mid) + '\r\n\r\n');
+      i++;
+    } else {
+      res.write('data: [DONE]\r\n\r\n');
+      clearInterval(timer);
+      res.end();
+      state.streamEnds++;
+    }
+  }, 5);
+  res.on('close', () => clearInterval(timer));
+}
+
+function sseMidstreamError(res) {
+  res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive', 'Access-Control-Allow-Origin': `http://127.0.0.1:${STATIC_PORT}` });
+  res.write('data: ' + JSON.stringify({ choices: [{ delta: { content: 'начало ответа ' } }] }) + '\n\n');
+  setTimeout(() => {
+    res.write('data: ' + JSON.stringify({ error: { code: 'upstream_error', message: 'Бэкенд лёг посреди потока' } }) + '\n\n');
+    // [DONE] не шлём и соединение не закрываем: выживает только клиент,
+    // который отменяет reader при ошибке (T-15). Фиксируем момент разрыва.
+  }, 60);
+  res.on('close', () => { state.midstreamCloses++; });
 }
 
 function bffServer(port) {
@@ -104,7 +141,9 @@ function bffServer(port) {
             if (state.improveDelay) setTimeout(reply, state.improveDelay); else reply();
             return;
           }
-          if (state.chatSlow) return sse(res, 'медленное слово '.repeat(80), 120);
+          if (state.chatMidstreamError) return sseMidstreamError(res);
+          if (state.chatCrlf) return sseCrlf(res, 'Стрим через жёсткий прокси: ' + last.slice(-30));
+          if (state.chatSlow) return sse(res, state.chatSlowText || 'медленное слово '.repeat(80), state.chatSlowTick || 120);
           // Разговорный музыкальный режим (вариант B): наставник отвечает разговорно
           // и всегда с draft-блоком в маркер-формате клиента.
           if (/Продюсер|Лирик|Автор песни/.test(body.messages[0]?.content || '')) {
@@ -218,7 +257,13 @@ function bffServer(port) {
         const current = state;
         current.activeFiles++;
         current.maxActiveFiles = Math.max(current.maxActiveFiles, current.activeFiles);
-        const finish = () => { current.activeFiles--; res.writeHead(200, { 'Content-Type': isWav ? 'audio/wav' : music ? 'audio/mp4' : 'image/png', ...cors }); res.end(isWav ? WAV : music ? M4A : PNG); };
+        let done = false;
+        const release = () => { if (!done) { done = true; current.activeFiles--; } };
+        res.on('close', release);
+        // T-27: файлы из slowFiles висят вечно — слот очереди держит только
+        // клиентский таймаут (60 с); разрыв фиксируем закрытием соединения.
+        if (current.slowFiles.some(f => req.url.includes(f))) return;
+        const finish = () => { release(); res.writeHead(200, { 'Content-Type': isWav ? 'audio/wav' : music ? 'audio/mp4' : 'image/png', ...cors }); res.end(isWav ? WAV : music ? M4A : PNG); };
         if (current.fileDelay) setTimeout(finish, current.fileDelay); else finish();
         return;
       }
@@ -236,11 +281,29 @@ function bffServer(port) {
   const ok = (name, data = {}) => { results.push({ name }); console.log('PASS', name, JSON.stringify(data)); };
   const errors = [];
   const URL_ = `http://127.0.0.1:${STATIC_PORT}/studio/index.html`;
+  // Ожидание состояния Node-стороны мока (BFF-счётчики недоступны из страницы).
+  async function waitForState(fn, { timeout = 15000, what = 'state' } = {}) {
+    const started = Date.now();
+    while (!fn(state)) {
+      if (Date.now() - started > timeout) throw new Error('waitForState timeout: ' + what);
+      await new Promise(r => setTimeout(r, 100));
+    }
+  }
 
-  async function page({ viewport = { width: 1440, height: 1000 }, token = TOKEN, user = 'tester' } = {}) {
+  async function page({ viewport = { width: 1440, height: 1000 }, token = TOKEN, user = 'tester', objectUrls = false } = {}) {
     const context = await browser.newContext({ viewport, reducedMotion: 'reduce' });
     const p = await context.newPage();
     p.on('pageerror', e => errors.push(e.message));
+    if (objectUrls) {
+      // A12: считаем живые objectURL — обёртки стоят ДО скриптов страницы.
+      await p.addInitScript(() => {
+        window.__liveUrls = new Set();
+        const create = URL.createObjectURL.bind(URL);
+        URL.createObjectURL = blob => { const url = create(blob); window.__liveUrls.add(url); return url; };
+        const revoke = URL.revokeObjectURL.bind(URL);
+        URL.revokeObjectURL = url => { window.__liveUrls.delete(url); revoke(url); };
+      });
+    }
     const sessionScript = ({ t, port, user }) => {
       localStorage.setItem('briix-media-live-token', t);
       localStorage.setItem('briix-media-live-server', JSON.stringify('http://127.0.0.1:' + port));
@@ -1900,6 +1963,258 @@ function bffServer(port) {
   assert.equal(wiped.session, null, 'сессионный ключ удалён');
   assert.equal(wiped.idbFresh, true, 'IndexedDB пересоздана пустой');
   ok('login privacy: ?key= cleaned+sessionStorage, honest empty key, full device wipe (T-42/F-43/T-43)');
+  await p.close();
+
+  // ==== Этап 3.8: стриминг, память, сеть, стартовая загрузка =====================
+
+  // T-15: SSE через «жёсткий прокси» — \r\n-переводы и JSON, побитый на две
+  // data:-строки внутри события. Раньше парсер терял такие события целиком.
+  resetBff(); state.chatCrlf = true;
+  p = await page();
+  await p.locator('#prompt').fill('привет через прокси');
+  await p.locator('#send').click();
+  await waitForState(() => state.streamEnds >= 1, { what: 'CRLF stream reached [DONE]' });
+  await p.waitForFunction(() => [...document.querySelectorAll('#feed .card.assistant .body')].some(b => b.textContent.includes('Стрим через жёсткий прокси')), {}, { timeout: 15000 });
+  assert.equal(state.streamEnds, 1, 'стрим дошёл до [DONE]');
+  ok('chatStream survives CRLF separators and multi-line data events (T-15)');
+
+  // T-15: ошибка посреди потока без [DONE] — reader обязан отмениться,
+  // иначе соединение висит вечно (сервер держит его открытым специально).
+  resetBff(); state.chatMidstreamError = true;
+  p = await page();
+  await p.locator('#prompt').fill('ошибка посреди потока');
+  await p.locator('#send').click();
+  await p.waitForFunction(() => [...document.querySelectorAll('#feed .card')].some(c => c.textContent.includes('Бэкенд лёг посреди потока')), {}, { timeout: 15000 });
+  await waitForState(() => state.midstreamCloses >= 1, { what: 'midstream connection closed' });
+  ok('chatStream cancels the reader on mid-stream error (T-15)', { closes: state.midstreamCloses });
+  await p.close();
+
+  // T-39: чанки применяются одним requestAnimationFrame — без кадра в DOM
+  // ничего не пишется (раньше — запись+чтение геометрии на каждый токен).
+  resetBff(); state.chatSlow = true; state.chatSlowText = 'кадр '.repeat(24); state.chatSlowTick = 60;
+  p = await page();
+  await p.evaluate(() => {
+    // Держим rAF: колбэки копятся в очереди, кадры «не наступают».
+    window.__rafQueue = [];
+    window.__rafOrig = window.requestAnimationFrame.bind(window);
+    window.requestAnimationFrame = cb => { window.__rafQueue.push(cb); return window.__rafQueue.length; };
+    window.__rafCancelOrig = window.cancelAnimationFrame;
+    window.cancelAnimationFrame = () => {};
+  });
+  await p.locator('#prompt').fill('стрим по кадрам');
+  await p.locator('#send').click();
+  await p.waitForFunction(() => window.__rafQueue.length > 0, {}, { timeout: 15000 });
+  await p.waitForTimeout(450); // сервер успел дописать ещё много чанков
+  const held = await p.evaluate(() => ({
+    queued: window.__rafQueue.length,
+    text: document.querySelector('#feed .card.assistant .body span')?.textContent || ''
+  }));
+  assert.equal(held.text, '', 'T-39: без кадра DOM не трогается (в ожидании кадра: ' + held.queued + ')');
+  assert.equal(held.queued, 1, 'T-39: запланирован ровно один кадр-флеш, а не по чанку');
+  const afterFrame = await p.evaluate(() => {
+    const cbs = window.__rafQueue.splice(0);
+    for (const cb of cbs) cb();
+    return document.querySelector('#feed .card.assistant .body span')?.textContent || '';
+  });
+  const batched = afterFrame.split('кадр').length - 1;
+  assert.ok(batched >= 5, 'T-39: один кадр применил сразу ' + batched + ' чанков (а не по одному на токен)');
+  await p.evaluate(() => {
+    window.requestAnimationFrame = window.__rafOrig;
+    window.cancelAnimationFrame = window.__rafCancelOrig;
+  });
+  await p.waitForFunction(() => [...document.querySelectorAll('#feed .card.assistant .body')].some(b => b.textContent.trim().startsWith('кадр кадр')), {}, { timeout: 15000 });
+  ok('stream chunks flush once per animation frame (T-39)', { queued: held.queued });
+  await p.close();
+
+  // F-39: читатель выше низа ленты — готовое фото считается, пилюля «↓ N новых»
+  // ведёт к нему и исчезает у низа.
+  resetBff();
+  p = await page();
+  await p.evaluate(async () => {
+    const { profile, backend } = await BriixSessionStore.open('tester');
+    profile.sessions[0].feed = Array.from({ length: 40 }, (_, i) => ({
+      t: i % 2 ? 'assistant' : 'user', who: i % 2 ? 'Наставник' : 'Вы', text: 'строка истории номер ' + i
+    }));
+    await BriixSessionStore.save(profile, profile.revision, backend);
+  });
+  await p.reload();
+  await p.waitForFunction(() => document.querySelectorAll('#feed .card').length === 40);
+  assert.equal(await p.locator('#newBelow').count() === 0 || await p.locator('#newBelow').isHidden(), true, 'F-39: после restore пилюли нет');
+  await p.locator('.mode[data-mode="photo"]').click();
+  await p.locator('#prompt').fill('пилюля новых сообщений');
+  await p.locator('#send').click();
+  await p.waitForSelector('#feed .card.stage');
+  await p.evaluate(() => { document.getElementById('feed').scrollTop = 0; }); // ушли читать старое
+  // результат приходит, пока читатель у верха: карточка есть, картинки ещё нет (observer)
+  await p.waitForFunction(() => [...document.querySelectorAll('#feed .card.assistant .who')].some(w => w.textContent.includes('Фото готово')), {}, { timeout: 25000 });
+  await p.waitForSelector('#newBelow:not([hidden])');
+  assert.match(await p.locator('#newBelow').innerText(), /новое|новых/, 'F-39: пилюля считает новое');
+  await p.locator('#newBelow').click();
+  await p.waitForFunction(() => document.getElementById('newBelow')?.hidden === true, {}, { timeout: 10000 });
+  // клик должен привести к новому: либо лента у низа, либо карточка «Фото готово» в кадре
+  const landed = await p.evaluate(() => {
+    const f = document.getElementById('feed');
+    const photo = [...f.querySelectorAll('.card.assistant')].find(c => c.textContent.includes('Фото готово'));
+    return f.scrollHeight - f.scrollTop - f.clientHeight < 140
+      || (photo && photo.getBoundingClientRect().bottom <= f.getBoundingClientRect().bottom + 4);
+  });
+  assert.equal(landed, true, 'F-39: клик привёл к новому (фото в кадре)');
+  await p.waitForSelector('#feed img.media-in', { timeout: 10000 }); // переход раскрыл карточку — img догрузился
+  ok('new-content pill appears for readers above the feed bottom (F-39)');
+  await p.close();
+
+  // T-30/T-31 (A12): живые objectURL не растут — повторные скачивания делят
+  // один URL, LRU держит ≤8 файлов, вытесненный файл перезагружается.
+  resetBff();
+  p = await page({ objectUrls: true });
+  await p.locator('.mode[data-mode="photo"]').click();
+  await p.locator('#prompt').fill('один url на файл');
+  await p.locator('#send').click();
+  await p.waitForSelector('#feed img.media-in', { timeout: 25000 });
+  assert.equal(await p.evaluate(() => window.__liveUrls.size), 1, 'A12: фото — ровно один objectURL');
+  const photoDl = p.locator('#feed .card a.action[download]').last();
+  await photoDl.click(); await photoDl.click(); await photoDl.click();
+  await p.waitForTimeout(400);
+  assert.equal(await p.evaluate(() => window.__liveUrls.size), 1, 'A12: три скачивания — по-прежнему один URL (раньше live=4)');
+  ok('repeat downloads reuse the cached objectURL (A12/T-30)');
+  await p.close();
+
+  resetBff();
+  p = await page({ objectUrls: true });
+  await p.evaluate(() => {
+    localStorage.setItem('briix-studio-library-tester', JSON.stringify(
+      Array.from({ length: 9 }, (_, i) => ({ job: 'lru-' + i, sessionId: 's0', kind: 'music', prompt: 'трек ' + i, file: '/files/lru-' + i + '.m4a', created: Date.now() - i, fav: false }))
+    ));
+  });
+  await p.locator('.tab[data-tab="library"]').click();
+  await p.waitForFunction(() => document.querySelectorAll('.lib-item').length === 9);
+  async function libDownload(i) {
+    await p.locator('.lib-item').nth(i).locator('.menu-btn').click();
+    await p.locator('.track-menu:not([hidden]) button', { hasText: 'Скачать' }).click();
+  }
+  for (let i = 0; i < 9; i++) await libDownload(i);
+  await p.waitForFunction(() => window.__liveUrls.size <= 8, {}, { timeout: 15000 });
+  assert.equal(await p.evaluate(() => window.__liveUrls.size), 8, 'T-31: LRU вытеснил девятый файл (≤8)');
+  await libDownload(0); // вытесненный lru-0 перезагружается, живых всё ещё 8
+  await p.waitForFunction(() => window.__liveUrls.size === 8 && document.querySelectorAll('.toast.done').length >= 1, {}, { timeout: 15000 });
+  assert.equal(state.fileOrder.filter(u => u.includes('lru-')).length, 10, 'T-31: вытесненный файл перезагружен, остальные — из кэша');
+  ok('media LRU: 9 files → 8 live URLs, evicted file reloads on demand (T-31/A12)');
+  await p.close();
+
+  // T-27: зависший сервер не держит слоты очереди вечно — 60 с и честная
+  // ошибка; ожидающая очередь оживает.
+  resetBff(); state.slowFiles = ['slow-a.m4a', 'slow-b.m4a'];
+  p = await page();
+  await p.evaluate(() => {
+    localStorage.setItem('briix-studio-library-tester', JSON.stringify([
+      { job: 'slow-1', sessionId: 's0', kind: 'music', prompt: 'медленный а', file: '/files/slow-a.m4a', created: Date.now(), fav: false },
+      { job: 'slow-2', sessionId: 's0', kind: 'music', prompt: 'медленный б', file: '/files/slow-b.m4a', created: Date.now() - 1, fav: false },
+      { job: 'fast-1', sessionId: 's0', kind: 'music', prompt: 'быстрый', file: '/files/fast-1.m4a', created: Date.now() - 2, fav: false }
+    ]));
+  });
+  await p.locator('.tab[data-tab="library"]').click();
+  await p.waitForFunction(() => document.querySelectorAll('.lib-item').length === 3);
+  await p.clock.install(); // таймеры страницы — под нашим контролем
+  await libDownload(0);
+  await libDownload(1);
+  await waitForState(() => state.fileOrder.filter(u => u.includes('slow-')).length === 2, { what: 'slow files requested' });
+  await libDownload(2); // оба слота заняты — быстрый ждёт
+  await p.waitForTimeout(400);
+  assert.equal(state.fileOrder.some(u => u.includes('fast-1')), false, 'T-27: быстрый файл ждёт за зависшими слотами');
+  await p.clock.fastForward(61000); // 60 секунд виртуально: зависшие рвутся
+  await p.waitForFunction(() => [...document.querySelectorAll('.lib-error')].some(e => e.textContent.includes('60 с')), {}, { timeout: 15000 });
+  await p.waitForFunction(() => [...document.querySelectorAll('.toast.done')].some(t => t.textContent.includes('Скачано')), {}, { timeout: 15000 });
+  assert.ok(state.fileOrder.some(u => u.includes('fast-1')), 'T-27: очередь ожила после таймаута — быстрый файл скачан');
+  await waitForState(() => state.activeFiles === 0, { what: 'file slots released' });
+  ok('hung file server releases queue slots after 60s timeout (T-27)');
+  await p.close();
+
+  // T-26: фоновая вкладка не поллит; возврат — немедленный опрос.
+  resetBff();
+  p = await page();
+  await p.locator('.mode[data-mode="music"]').click();
+  await p.locator('#prompt').fill('спокойный инструментальный этюд для проверки видимости');
+  await p.locator('#genTrack').click();
+  await waitForState(() => state.pollAttempts >= 1, { what: 'first poll' });
+  await p.evaluate(() => {
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  const frozenPolls = state.pollAttempts;
+  await p.waitForTimeout(5000);
+  assert.equal(state.pollAttempts, frozenPolls, 'T-26: скрытая вкладка не поллит стенд');
+  await p.evaluate(() => {
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => false });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await waitForState(() => state.pollAttempts > frozenPolls, { timeout: 6000, what: 'poll resumes on visible' });
+  ok('background tab stops polling, visible tab polls immediately (T-26)');
+  await p.close();
+
+  // T-26: офлайн-баннер + быстрый честный отказ без похода на сервер.
+  resetBff();
+  p = await page();
+  await p.evaluate(() => window.dispatchEvent(new Event('offline')));
+  await p.waitForSelector('#netBanner:not([hidden])');
+  assert.match(await p.locator('#netBanner').innerText(), /Нет соединения/);
+  const postsBefore = state.chatPosts.length;
+  await p.locator('#prompt').fill('сообщение без сети');
+  await p.locator('#send').click();
+  await p.waitForFunction(() => [...document.querySelectorAll('#feed .card')].some(c => c.textContent.includes('Нет соединения с сервером')), {}, { timeout: 10000 });
+  assert.equal(state.chatPosts.length, postsBefore, 'T-26: запрос не ушёл на сервер');
+  await p.evaluate(() => window.dispatchEvent(new Event('online')));
+  await p.waitForFunction(() => document.getElementById('netBanner')?.hidden === true, {}, { timeout: 10000 });
+  ok('offline banner + immediate honest failure, online restores (T-26)');
+  await p.close();
+
+  // T-26: BroadcastChannel — вторая вкладка видит избранное первой без reload.
+  resetBff();
+  {
+    const bcCtx = await browser.newContext({ viewport: { width: 1280, height: 900 }, reducedMotion: 'reduce' });
+    await bcCtx.addInitScript(({ t, port, user }) => {
+      localStorage.setItem('briix-media-live-token', t);
+      localStorage.setItem('briix-media-live-server', JSON.stringify('http://127.0.0.1:' + port));
+      localStorage.setItem('briix-studio-profiles', JSON.stringify({ [user]: { pinHash: 'x', created: 0 } }));
+      localStorage.setItem('briix-studio-user', user);
+      localStorage.setItem('briix-studio-library-' + user, JSON.stringify([
+        { job: 'bc-photo', sessionId: 's0', kind: 'photo', prompt: 'фото для синхронизации', file: '/files/bc-1.png', created: Date.now(), fav: false }
+      ]));
+    }, { t: TOKEN, port: BFF_PORT, user: 'syncer' });
+    const pa = await bcCtx.newPage(); pa.on('pageerror', e => errors.push(e.message));
+    const pb = await bcCtx.newPage(); pb.on('pageerror', e => errors.push(e.message));
+    await pa.goto(URL_); await pa.waitForSelector('#send');
+    await pb.goto(URL_); await pb.waitForSelector('#send');
+    await pa.locator('.tab[data-tab="library"]').click();
+    await pb.locator('.tab[data-tab="library"]').click();
+    await pa.waitForSelector('.lib-item img.media-in', { timeout: 15000 });
+    await pb.waitForSelector('.lib-item', { timeout: 15000 });
+    await pa.locator('.lib-item button.action', { hasText: 'В избранное' }).click();
+    await pb.waitForFunction(() => document.querySelector('.lib-item')?.classList.contains('fav'), {}, { timeout: 10000 });
+    assert.match(await pb.locator('.lib-item button.action').first().innerText(), /В избранном/, 'вкладка B увидела ♥ из вкладки A');
+    await bcCtx.close();
+  }
+  ok('BroadcastChannel syncs library favorites across tabs (T-26)');
+
+  // T-35: старт — defer на всех скриптах, версии по контент-хэшу,
+  // favicon/manifest/theme-color, словарь ожидания ленивый.
+  resetBff();
+  p = await page();
+  const startInfo = await p.evaluate(() => ({
+    scripts: [...document.scripts].filter(s => s.src).map(s => ({ src: s.getAttribute('src'), defer: s.defer })),
+    head: document.head.innerHTML
+  }));
+  assert.ok(startInfo.scripts.length >= 9, 'все модули подключены');
+  assert.ok(startInfo.scripts.every(s => s.defer), 'T-35: каждый скрипт defer');
+  assert.ok(startInfo.scripts.every(s => /\?v=[0-9a-f]{10}$/.test(s.src)), 'T-35: версии — контент-хэши, а не ручные даты');
+  assert.match(startInfo.head, /rel="icon"/, 'favicon подключён');
+  assert.match(startInfo.head, /rel="manifest"/, 'manifest подключён');
+  assert.match(startInfo.head, /theme-color/, 'theme-color объявлен');
+  assert.equal(await p.evaluate(() => performance.getEntriesByType('resource').some(e => e.name.includes('wait-phrases'))), false,
+    'T-35: словарь ожидания не грузится на старте');
+  await p.locator('#prompt').fill('прогрев словаря ожидания');
+  await p.locator('#send').click();
+  await p.waitForFunction(() => performance.getEntriesByType('resource').some(e => e.name.includes('wait-phrases')), {}, { timeout: 10000 });
+  ok('defer + content-hash versions + favicon/manifest/theme-color + lazy wait-phrases (T-35)');
   await p.close();
 
   assert.deepEqual(errors, [], 'no page errors anywhere');

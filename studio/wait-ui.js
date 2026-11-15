@@ -10,6 +10,10 @@
 (() => {
   'use strict';
   const KEY = 'briix-wait-phrases-v1';
+  // T-35: пул фраз (24,6 КБ данных) не грузится на старте — он нужен только в
+  // момент живого ожидания. Версия по контент-хэшу синхронизируется с index.html
+  // инструментом tools/asset-versions.cjs.
+  const PHRASES_URL = './wait-phrases.js?v=d6abab3594';
   const MIN_MS = 4000;
   const MAX_MS = 6000;
   const TICK_MS = 1000;
@@ -49,6 +53,23 @@
   }
   window.addEventListener('pagehide', () => save(true));
   const data = () => window.BRIIX_WAIT_PHRASES || {};
+
+  // Ленивая загрузка словаря (T-35): первый [data-wait]-узел подтягивает файл;
+  // пока едет — спиннер честно крутится без текста, сбой не роняет ожидание.
+  let phrasesPromise = null;
+  function ensureData() {
+    if (window.BRIIX_WAIT_PHRASES) return Promise.resolve();
+    if (!phrasesPromise) {
+      phrasesPromise = new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = PHRASES_URL;
+        script.onload = () => resolve();
+        script.onerror = () => { phrasesPromise = null; reject(new Error('wait-phrases недоступен')); };
+        document.head.append(script);
+      }).catch(() => { /* фразы не критичны: ожидание без них просто беззвучно */ });
+    }
+    return phrasesPromise;
+  }
 
   /* Пул для узла: реальная стадия, честная зона мока или общие фразы типа.
    * Для реального ожидания zones[early|mid|late] — тональная надстройка над
@@ -121,7 +142,13 @@
   function fill(el, isRotation) {
     const options = optionsOf(el);
     const phrase = pick(options);
-    if (!phrase) { el.textContent = ''; return; }
+    if (!phrase) {
+      el.textContent = '';
+      // T-35: пусто может значить «словарь ещё не загрузился» — подтянем и
+      // перезаполним, как только данные приедут.
+      if (!window.BRIIX_WAIT_PHRASES) ensureData().then(refresh);
+      return;
+    }
     el.textContent = phrase;
     const now = Date.now();
     nodes.set(el, { sig: signature(el), nextAt: now + MIN_MS + Math.floor(Math.random() * (MAX_MS - MIN_MS)) });
@@ -167,6 +194,7 @@
 
   window.BRIIX_WAIT = {
     refresh,
+    ensureData, // T-35: ленивый словарь — можно запросить заранее (тесты/прогрев)
     poolFor,
     pick,
     noRepeatWindow: () => NO_REPEAT,

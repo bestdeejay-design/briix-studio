@@ -80,6 +80,9 @@
   }
 
   async function request(path, options = {}) {
+    // T-26: если сеть точно отвалилась (событие offline), не жжём браузерные
+    // таймауты на каждый запрос — сразу честная ошибка с понятной причиной.
+    if (!netOnline) throw new BusError('offline', 'Нет соединения с сервером. Проверьте сеть и повторите — данные не потеряются.');
     let response;
     try { response = await fetch(server() + path, options); }
     catch (error) {
@@ -128,13 +131,26 @@
     return text;
   }
 
+  // T-15: одно SSE-событие может состоять из нескольких data:-строк — по
+  // спецификации они склеиваются; \r\n (nginx/прокси) нормализуем. Раньше
+  // парсер понимал только одиночный data: с \n\n.
   function parseEvent(raw) {
-    const line = raw.split('\n').find(l => l.startsWith('data:'));
-    if (!line) return null;
-    const payload = line.slice(5).trim();
+    const lines = [];
+    for (const line of raw.split('\n')) {
+      const clean = line.endsWith('\r') ? line.slice(0, -1) : line;
+      if (clean.startsWith('data:')) lines.push(clean.slice(5).replace(/^ /, ''));
+    }
+    if (!lines.length) return null;
+    const payload = lines.join('\n').trim();
     if (!payload) return null;
     if (payload === '[DONE]') return { done: true };
-    try { return JSON.parse(payload); } catch { return null; }
+    try { return JSON.parse(payload); } catch { /* возможно, прокси побил JSON на строки */ }
+    if (lines.length > 1) {
+      const joined = lines.join('').trim();
+      if (joined === '[DONE]') return { done: true };
+      try { return JSON.parse(joined); } catch { return null; }
+    }
+    return null;
   }
 
   async function chatStream({ messages, onChunk, signal }) {
@@ -146,20 +162,27 @@
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '', delivered = '';
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      let index;
-      while ((index = buffer.indexOf('\n\n')) >= 0) {
-        const event = parseEvent(buffer.slice(0, index));
-        buffer = buffer.slice(index + 2);
-        if (!event) continue;
-        if (event.done) { reader.cancel().catch(() => {}); buffer = ''; break; }
-        if (event.error) throw new BusError(event.error.code || 'upstream_error', event.error.message || 'Ошибка бэкенда посреди потока.');
-        const piece = event.choices?.[0]?.delta?.content;
-        if (piece) { delivered += piece; onChunk?.(piece); }
+    // T-15: reader отменяется при ЛЮБОМ выходе — ошибке события, исключении в
+    // onChunk, отмене по ✕. Раньше тело ответа оставалось открытым до GC.
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let match;
+        // T-15: разделитель — и \n\n, и \r\n\r\n (прокси перекодируют переводы строк).
+        while ((match = buffer.match(/\r\n\r\n|\n\n/))) {
+          const event = parseEvent(buffer.slice(0, match.index));
+          buffer = buffer.slice(match.index + match[0].length);
+          if (!event) continue;
+          if (event.done) { buffer = ''; break; }
+          if (event.error) throw new BusError(event.error.code || 'upstream_error', event.error.message || 'Ошибка бэкенда посреди потока.');
+          const piece = event.choices?.[0]?.delta?.content;
+          if (piece) { delivered += piece; onChunk?.(piece); }
+        }
       }
+    } finally {
+      try { reader.cancel().catch(() => {}); } catch { /* поток уже закрыт */ }
     }
     if (!delivered) throw new BusError('empty_stream', 'Сервер закрыл поток без текста.');
     return delivered;
@@ -178,9 +201,15 @@
     let failures = 0, retryWait = 0;
     activePolls++;
     try {
-      while (Date.now() - started < timeoutMs) {
+      // T-26: время в скрытой вкладке не сжигает бюджет ожидания — серверная
+      // задача там продолжает работать, поллинг возобновится при возврате.
+      while (Date.now() - started - hiddenMs() < timeoutMs) {
         if (shouldStop?.()) throw new BusError('cancelled', 'Ожидание остановлено. Задача продолжает выполняться на сервере — результат не сохранится.');
         await new Promise(r => setTimeout(r, Math.max(intervalMs, activePolls * 2500, retryWait)));
+        // T-26: фоновой вкладке поллинг не нужен (THREAD_BUDGET=8 на стенде) —
+        // паркуемся до возврата; при возврате запрос уходит сразу же.
+        await waitPageVisible();
+        await waitNetOnline();
         if (shouldStop?.()) throw new BusError('cancelled', 'Ожидание остановлено. Задача продолжает выполняться на сервере — результат не сохранится.');
         let response;
         try { response = await request('/jobs/' + encodeURIComponent(id), { headers: headers() }); }
@@ -191,6 +220,8 @@
           // держим удар до 5 сбоев подряд с бэкоффом (T-14: один потерянный пакет
           // больше не рвёт 10-минутную pro-генерацию).
           if (error.status === 401 || error.name === 'AbortError') throw error;
+          // T-26: известный офлайн — не сбой, а пауза: счётчик не растёт.
+          if (error.code === 'offline') { failures = 0; retryWait = 0; onRetry?.(0); continue; }
           failures++;
           if (failures >= 5) throw error;
           retryWait = retryDelay({ headers: { get: () => error.retryAfter } }, failures - 1);
@@ -274,7 +305,7 @@
     sessionsList: $('sessionsList'), storageWarning: $('storageWarning'),
     opsOverlay: $('opsOverlay'), opsText: $('opsText'), opsStopLogout: $('opsStopLogout'),
     opsStay: $('opsStay'), opsCancel: $('opsCancel'), opsBadge: $('opsBadge'),
-    keyRemember: $('keyRemember'), profileWipeBtn: $('profileWipeBtn')
+    keyRemember: $('keyRemember'), profileWipeBtn: $('profileWipeBtn'), netBanner: $('netBanner')
   };
 
   let mode = 'chat';
@@ -296,6 +327,62 @@
     const url = URL.createObjectURL(blob);
     feedObjectUrls.add(url);
     return url;
+  }
+
+  // ---- T-30/T-31: единый LRU-кэш медиа-файлов --------------------------------
+  // Аудио/фото/скачивания делят один кэш: objectURL у каждого файла ОДИН,
+  // выталкивание по давности (≤8 файлов и ≤32 МБ) ревочит URL. Файл, который
+  // прямо сейчас виден (img/audio в DOM) или играется, не выталкиваем.
+  // Прежде: blobCache/blobTypes/blobBytes без предела роста (65 МБ на 50 треков)
+  // плюс одноразовый URL на каждый клик «Скачать», живший до выхода.
+  const MEDIA_CACHE_MAX_FILES = 8;
+  const MEDIA_CACHE_MAX_BYTES = 32 * 1024 * 1024;
+  const mediaFiles = new Map(); // key → { blob, url }; порядок = давность использования
+  let mediaFilesBytes = 0;
+  let mediaTmpSeq = 0;
+  function mediaKey(path) { return currentUser() + '|' + (path || ''); }
+  function mediaCacheGet(key) {
+    const entry = mediaFiles.get(key);
+    if (!entry) return null;
+    mediaFiles.delete(key); mediaFiles.set(key, entry); // касание — в конец
+    return entry;
+  }
+  function mediaCachePut(key, blob) {
+    const existing = mediaFiles.get(key);
+    if (existing) { mediaFiles.delete(key); mediaFiles.set(key, existing); return existing; }
+    const entry = { blob, url: URL.createObjectURL(blob) };
+    mediaFiles.set(key, entry);
+    mediaFilesBytes += blob.size;
+    mediaCacheTrim();
+    return entry;
+  }
+  function mediaCacheDrop(key) {
+    const entry = mediaFiles.get(key);
+    if (!entry) return;
+    mediaFiles.delete(key); mediaFilesBytes -= entry.blob.size;
+    URL.revokeObjectURL(entry.url);
+  }
+  function mediaInUse(url) {
+    if (BriixPlayer.current?.src === url) return true;
+    try { return !!document.querySelector('audio[src="' + url + '"], img[src="' + url + '"]'); } catch { return false; }
+  }
+  function mediaCacheTrim() {
+    for (const [key, entry] of mediaFiles) {
+      if (mediaFiles.size <= MEDIA_CACHE_MAX_FILES && mediaFilesBytes <= MEDIA_CACHE_MAX_BYTES) break;
+      if (mediaInUse(entry.url)) continue; // видимый/играющий файл закреплён
+      mediaCacheDrop(key);
+    }
+  }
+  function mediaCacheClear() {
+    for (const key of [...mediaFiles.keys()]) mediaCacheDrop(key);
+  }
+  // Кэш или загрузка: ключ — путь файла (с пользователем), чтобы чужой профиль
+  // не читал чужие блобы; без пути (in-memory блоб) — временный ключ.
+  function mediaEnsure(path, load) {
+    const key = path ? mediaKey(path) : 'tmp:' + (++mediaTmpSeq);
+    const entry = path ? mediaCacheGet(key) : null;
+    if (entry) return Promise.resolve(entry);
+    return Promise.resolve().then(load).then(blob => mediaCachePut(key, blob));
   }
 
   // T-51: единственный активный звук — модуль player.js (лента/библиотека/restore
@@ -471,28 +558,32 @@
   // в text и в track). Старые записи со строкой в track читаются как раньше.
   const trackBriefOf = d => (d.track === true ? d.text : (typeof d.track === 'string' ? d.track : ''));
   function feedRestore(session) {
-    for (const d of session.feed) {
-      if (!d || typeof d !== 'object') continue;
-      if (d.t === 'producer_draft') {
-        renderProducerDraft(d, session);
-      } else if (d.t === 'music_draft') {
-        renderMusicDraftCard(d, session);
-      } else if (d.t === 'media') {
-        if (d.kind === 'music') {
-          renderTrackCard(session, { who: d.who, job: d.job, cover: d.cover, input: d.input || {}, file: d.file,
-            loadBlob: () => fileBlob(d.file, 0) });
+    // F-39: восстановленная история — не «новые» карточки; пилюля не считается.
+    restoringFeed = true;
+    try {
+      for (const d of session.feed) {
+        if (!d || typeof d !== 'object') continue;
+        if (d.t === 'producer_draft') {
+          renderProducerDraft(d, session);
+        } else if (d.t === 'music_draft') {
+          renderMusicDraftCard(d, session);
+        } else if (d.t === 'media') {
+          if (d.kind === 'music') {
+            renderTrackCard(session, { who: d.who, job: d.job, cover: d.cover, input: d.input || {}, file: d.file,
+              loadBlob: () => fileBlob(d.file, 0) });
+          } else {
+            const body = card('assistant', d.who, '', session);
+            body.textContent = '';
+            // R2/T-18: фото-restore — тот же компонент, что fresh и Библиотека.
+            body.append(photoCard({ file: d.file, loadBlob: () => fileBlob(d.file, 1), alt: d.prompt || '' }).body);
+            if (d.track) addMakeTrackAction(body.closest('.card'), trackBriefOf(d));
+          }
         } else {
-          const body = card('assistant', d.who, '', session);
-          body.textContent = '';
-          // R2/T-18: фото-restore — тот же компонент, что fresh и Библиотека.
-          body.append(photoCard({ loadBlob: () => fileBlob(d.file, 1), alt: d.prompt || '' }).body);
-          if (d.track) addMakeTrackAction(body.closest('.card'), trackBriefOf(d));
+          const body = card(d.t, d.who, d.text, session);
+          if (d.t === 'assistant' && d.track) addMakeTrackAction(body.closest('.card'), trackBriefOf(d));
         }
-      } else {
-        const body = card(d.t, d.who, d.text, session);
-        if (d.t === 'assistant' && d.track) addMakeTrackAction(body.closest('.card'), trackBriefOf(d));
       }
-    }
+    } finally { restoringFeed = false; }
   }
   const assistantId = { chat: 'mentor', photo: 'art-dir', music: 'producer' };
   // T-22: бэкап полей перед «✨ Улучшить» живёт на сессии — undo в сессии B
@@ -550,7 +641,7 @@
         if (session !== activeSession || !body.isConnected) return;
         body.textContent = '';
         // R2/T-18: восстановление готовой джобы — единая фото-карточка.
-        body.append(photoCard({ eagerBlob: blob }).body);
+        body.append(photoCard({ eagerBlob: blob, file: data.result_url }).body);
       } catch (error) { if (body.isConnected) body.textContent = 'Файл недоступен. ' + (error.message || ''); }
       feedPush({ t: 'media', who: 'Фото готово', kind: 'photo', file: data.result_url, job: rec.job }, session);
       if (!libEntry(rec.job)) libAdd({ job: rec.job, sessionId: session.id, kind: 'photo', prompt: rec.input?.prompt || '', file: data.result_url, created: Date.now(), fav: false });
@@ -729,10 +820,61 @@
   // ---- карточки ленты ---------------------------------------------------------
   // Автоскролл только когда лента у низа: читающие выше не выдёргиваются.
   // force — для нового сообщения пользователя (всегда показываем его).
-  function scrollFeed(force = false) {
-    const nearBottom = els.feed.scrollHeight - els.feed.scrollTop - els.feed.clientHeight < 140;
-    if (force || nearBottom) els.feed.scrollTop = els.feed.scrollHeight;
+  function isFeedNearBottom() {
+    return els.feed.scrollHeight - els.feed.scrollTop - els.feed.clientHeight < 140;
   }
+  function scrollFeed(force = false) {
+    if (force || isFeedNearBottom()) els.feed.scrollTop = els.feed.scrollHeight;
+  }
+
+  // ---- F-39: пилюля «↓ N новых» ----------------------------------------------
+  // Читатель выше низа ленты не пропускает готовые треки/фото: пока он не у
+  // низа, живые (не restore) карточки считаются, пилюля у нижней границы
+  // ленты ведёт к ним. Убранные карточки (stage → результат) счёт уменьшают.
+  let newBelowPill = null;
+  const newBelowCards = new Set();
+  function ensurePill() {
+    if (!newBelowPill) {
+      const pill = document.createElement('button');
+      pill.type = 'button';
+      pill.id = 'newBelow';
+      pill.className = 'new-below';
+      pill.hidden = true;
+      pill.addEventListener('click', () => { scrollFeed(true); });
+      newBelowPill = pill;
+    }
+    els.feed.append(newBelowPill); // append переносит узел в конец — за карточками сессии
+    return newBelowPill;
+  }
+  function paintPill() {
+    const n = newBelowCards.size;
+    if (!n || isFeedNearBottom() || els.feed.hidden) {
+      newBelowCards.clear();
+      if (newBelowPill) newBelowPill.hidden = true; // пустой счёт не создаёт узел
+      return;
+    }
+    const pill = ensurePill();
+    pill.textContent = '↓ ' + n + (n === 1 ? ' новое' : ' новых');
+    pill.setAttribute('aria-label', n === 1 ? 'К новому сообщению в ленте' : 'К ' + n + ' новым сообщениям в ленте');
+    pill.hidden = false;
+  }
+  // Уход карточки (stage снят, ошибка убрана) уменьшает счёт; свои сообщения
+  // пользователь видит всегда (force-скролл) — их не считаем.
+  function noteNewCard(cardEl) {
+    newBelowCards.add(cardEl);
+    paintPill();
+  }
+  if (typeof MutationObserver === 'function') {
+    new MutationObserver(() => {
+      let changed = false;
+      for (const el of newBelowCards) if (!el.isConnected) { newBelowCards.delete(el); changed = true; }
+      if (changed) paintPill();
+    }).observe(els.feed, { childList: true, subtree: true });
+  }
+  els.feed.addEventListener('scroll', () => { if (isFeedNearBottom() && newBelowCards.size) paintPill(); }, { passive: true });
+
+  // Флаг «идёт восстановление истории»: старые карточки не считаются новыми.
+  let restoringFeed = false;
 
   function card(kind, who, text, session = activeSession) {
     const div = document.createElement('div');
@@ -747,8 +889,42 @@
     div.append(whoEl, body);
     const root = session && rootFor(session);
     (root || els.feed).append(div);
-    if (session === activeSession) scrollFeed(kind === 'user');
+    if (session === activeSession) {
+      if (kind === 'user') scrollFeed(true);
+      else if (kind !== 'stage' && !restoringFeed) {
+        // читатель у низа — едем за карточкой; выше низа — пилюля (F-39)
+        if (isFeedNearBottom()) scrollFeed();
+        else noteNewCard(div);
+      } else scrollFeed(kind === 'user');
+    }
     return body;
+  }
+
+  // ---- T-39: стрим без layout thrash -----------------------------------------
+  // Чанки копятся и применяются ОДНИМ requestAnimationFrame — один reflow на
+  // кадр вместо записи+чтения геометрии на каждый токен. Автоскролл — только
+  // если на момент кадра читатель был у низа, и тоже не чаще кадра.
+  function streamSink(textSpan, wait) {
+    let buffer = '', rafId = 0, first = true;
+    const flush = () => {
+      rafId = 0;
+      if (!buffer) return;
+      const stick = isFeedNearBottom(); // геометрию читаем ДО записи текста
+      if (first && wait?.isConnected) { wait.remove(); first = false; }
+      textSpan.textContent += buffer;
+      buffer = '';
+      if (stick) els.feed.scrollTop = els.feed.scrollHeight;
+    };
+    return {
+      push(piece) {
+        buffer += piece;
+        if (!rafId) rafId = requestAnimationFrame(flush);
+      },
+      // Досрочно применить накопленное (отмена/ошибка): недоставленный текст
+      // не должен пропасть из-за того, что кадр не успел наступить.
+      sync() { if (rafId) { cancelAnimationFrame(rafId); flush(); } },
+      dispose() { if (rafId) { cancelAnimationFrame(rafId); rafId = 0; } }
+    };
   }
 
   // Мини-спиннер + ротация фраз живого ожидания (wait-ui.js). Клик по ленте не нужен:
@@ -1022,15 +1198,17 @@
     let pending = null;
     const ensureLoaded = () => pending ||= (async () => {
       try {
-        const blob = await loadBlob();
+        // T-30/T-31: блоб и objectURL трека — в общем LRU-кэше: повторное
+        // воспроизведение и «Скачать» не создают новых URL (A12).
+        const entry = await mediaEnsure(file, loadBlob);
         if (!frame.isConnected || currentUser() !== sessionProfile?.nick) throw new BusError('cancelled', 'Карточка недоступна.');
-        cardBlob = blob;
+        cardBlob = entry.blob;
         loadError.remove();
         const audio = document.createElement('audio');
         audio.controls = true;
         audio.controlsList = 'nodownload'; // скачивание только через меню «⋯»: имя «Название - Исполнитель»
         audio.preload = 'metadata';
-        audio.src = feedObjectURL(blob);
+        audio.src = entry.url;
         audioSlot.hidden = false;
         audioSlot.append(audio);
         placeholder.remove();
@@ -1150,13 +1328,16 @@
     const input = ctx.input || {};
     const download = async () => {
       try {
-        const blob = ctx.blob || await fileBlob(ctx.file || input.file);
-        const name = mediaFileName('music', input, blob); // F-22: единое правило имени
+        // T-30: URL из LRU-кэша — повторные скачивания не плодят objectURL (A12).
+        const entry = ctx.blob
+          ? await mediaEnsure(ctx.file || input.file, () => ctx.blob)
+          : await mediaEnsure(ctx.file || input.file, () => fileBlob(ctx.file || input.file));
+        const name = mediaFileName('music', input, entry.blob); // F-22: единое правило имени
         const link = document.createElement('a');
-        link.href = feedObjectURL(blob);
+        link.href = entry.url;
         link.download = name;
         document.body.append(link); link.click(); link.remove();
-        BRIIX_TOASTS.toast('Скачано: ' + name + ' (' + fmtBytes(blob.size) + ')', { kind: 'done', key: 'download' }); // F-38
+        BRIIX_TOASTS.toast('Скачано: ' + name + ' (' + fmtBytes(entry.blob.size) + ')', { kind: 'done', key: 'download' }); // F-38
       } catch (error) { errorCard(error); }
     };
     const favorite = () => {
@@ -1204,7 +1385,7 @@
           catch (error) { errorCard(error); return; }
         }
         libSave(libLoad().filter(x => x.job !== ctx.job));
-        if (blobCache.has(ctx.job)) { URL.revokeObjectURL(blobCache.get(ctx.job)); blobCache.delete(ctx.job); }
+        if (ctx.file) mediaCacheDrop(mediaKey(ctx.file)); // T-30: кэш файла тоже чистим
         jobsInFlight.clear();
         libControls.get(ctx.job)?.removeSelf(); // T-36: без пересборки Библиотеки
         cardEl.remove();
@@ -1272,7 +1453,9 @@
     details.append(summary, text); container.append(details);
   }
 
-  // Кнопка «Скачать» под готовым фото/треком (blob уже в памяти страницы).
+  // Кнопка «Скачать» под готовым фото (blob уже в памяти или догрузится).
+  // T-30/T-31: URL живёт в общем LRU-кэше; при вытеснении клик перезагружает
+  // файл заново — кнопка не ломается и не течёт (одноразовых URL больше нет).
   function extOf(blob) {
     const t = blob.type || '';
     if (t.includes('png')) return 'png';
@@ -1281,43 +1464,70 @@
     if (t.includes('mpeg')) return 'mp3';
     return 'm4a'; // audio/mp4 и дефолт
   }
-  function addDownloadAction(container, blob, fileName, label) {
+  function addDownloadAction(container, ensure, fileNameFor, label) {
     const row = document.createElement('div');
     row.className = 'actions';
     const link = document.createElement('a');
     link.className = 'action';
-    link.href = feedObjectURL(blob);
-    link.download = fileName;
-    link.title = fileName; // F-21: видно, что именно будет сохранено
+    link.href = '#';
+    link.title = 'Файл сохранится с понятным именем'; // F-21: видно, что именно будет сохранено
     link.textContent = label || '⬇ Скачать';
+    const applyName = blob => {
+      const name = fileNameFor(blob);
+      link.download = name;
+      link.title = name; // F-21
+    };
+    link.addEventListener('click', async event => {
+      event.preventDefault();
+      if (link.dataset.busy === '1') return;
+      link.dataset.busy = '1';
+      try {
+        const entry = await ensure(); // { blob, url } — из кэша или повторной загрузкой
+        applyName(entry.blob);
+        const act = document.createElement('a');
+        act.href = entry.url;
+        act.download = link.download;
+        act.title = link.download;
+        document.body.append(act); act.click(); act.remove();
+        BRIIX_TOASTS.toast('Скачано: ' + link.download + ' (' + fmtBytes(entry.blob.size) + ')', { kind: 'done', key: 'download' });
+      } catch (error) {
+        link.textContent = 'Файл недоступен. ' + (error.message || '');
+      } finally { link.dataset.busy = ''; }
+    });
     row.append(link);
     container.append(row);
+    return { link, applyName };
   }
 
   // Единая фото-карточка (R2/T-18): fresh в ленте, restore после перезагрузки,
   // Библиотека и восстановление готовой джобы — один код: слот, ленивая загрузка
   // по observer, повтор при ошибке, «Скачать» с датой в имени. Прежде тут было
   // четыре почти одинаковых рендера с разным поведением.
-  function photoCard({ eagerBlob = null, loadBlob = null, alt = '' }) {
+  function photoCard({ eagerBlob = null, loadBlob = null, file = '', alt = '' }) {
     const owner = currentUser();
     const photoAltText = alt;
     const wrap = document.createElement('div');
     wrap.className = 'photo-card';
     const slot = document.createElement('div');
     wrap.append(slot);
+    // T-30/T-31: блоб фото — в общем LRU-кэше по пути файла: повторные показы
+    // и скачивания используют один objectURL (A12), вытеснение ревочит.
+    const ensure = () => mediaEnsure(file, () => eagerBlob ? Promise.resolve(eagerBlob) : loadBlob());
     const load = async () => {
       slot.textContent = 'Загружаем файл…';
       try {
-        const blob = eagerBlob || await loadBlob();
+        const entry = await ensure();
         if (!slot.isConnected || currentUser() !== owner) return;
         slot.textContent = '';
         const img = new Image();
         img.alt = 'Фото: ' + (photoAltText || 'результат генерации'); // F-51: не безликое «Результат»
         img.className = 'media-in';
-        img.src = feedObjectURL(blob);
+        img.decoding = 'async'; // T-40: декодирование не блокирует главный поток
+        img.src = entry.url;
         requestAnimationFrame(() => img.classList.add('loaded'));
         slot.append(img);
-        addDownloadAction(wrap, blob, mediaFileName('photo', {}, blob));
+        // Имя известно сразу после загрузки — пользователь видит его до клика (F-21).
+        addDownloadAction(wrap, ensure, blob => mediaFileName('photo', {}, blob)).applyName(entry.blob);
       } catch (error) {
         if (!slot.isConnected || currentUser() !== owner) return;
         slot.textContent = 'Файл недоступен. ' + (error.message || '') + ' ';
@@ -1478,14 +1688,13 @@
     body.classList.add('streaming');
     body.closest('.card')?.setAttribute('aria-busy', 'true'); // F-49: лента молчит, карточка занята
     setBusy(true, who + ' печатает…');
+    let sink = null; // T-39: создаётся в try, досрочно синхронизируется в catch
     try {
       const messages = [{ role: 'system', content: assistant.system }, ...session.history.filter(m => m && ['user', 'assistant'].includes(m.role) && typeof m.content === 'string').slice(-80), turn];
-      let first = true;
-      const full = await chatStream({ messages, signal: handle.controller.signal, onChunk: piece => {
-        if (first) { wait.remove(); first = false; } // ждущий блок уступает место стриму, ✕ остаётся
-        textSpan.textContent += piece;
-        scrollFeed();
-      } });
+      // T-39: чанки копятся и применяются одним кадром (без layout thrash).
+      sink = streamSink(textSpan, wait);
+      const full = await chatStream({ messages, signal: handle.controller.signal, onChunk: piece => sink.push(piece) });
+      sink.dispose();
       stopRow.remove();
       body.textContent = full; // чистый текст вместо служебных узлов
       session.history.push(turn, { role: 'assistant', content: full });
@@ -1493,6 +1702,7 @@
       addMakeTrackAction(body.closest('.card'), full);
     } catch (error) {
       stopRow.remove();
+      sink?.sync(); // T-39: недоставленный в кадр текст не пропадает
       if (error.name === 'AbortError') {
         if (body.textContent.trim()) { // частичный ответ остаётся в ленте
           const note = document.createElement('div');
@@ -1588,18 +1798,16 @@
     body.classList.add('streaming');
     body.closest('.card')?.setAttribute('aria-busy', 'true'); // F-49
     setBusy(true, who + ' печатает…');
+    let sink = null; // T-39
     try {
       const messages = [
         { role: 'system', content: assistant.system + musicDraftInstruction + '\n\n' + musicSessionContext() },
         ...history.filter(m => m && ['user', 'assistant'].includes(m.role) && typeof m.content === 'string').slice(-40),
         { role: 'user', content: text }
       ];
-      let first = true;
-      const full = await chatStream({ messages, signal: handle.controller.signal, onChunk: piece => {
-        if (first) { wait.remove(); first = false; }
-        textSpan.textContent += piece;
-        scrollFeed();
-      } });
+      sink = streamSink(textSpan, wait); // T-39: один reflow на кадр
+      const full = await chatStream({ messages, signal: handle.controller.signal, onChunk: piece => sink.push(piece) });
+      sink.dispose();
       stopRow.remove();
       body.classList.remove('streaming');
       const parsed = parseMusicDraft(full, snapshot.instrumental);
@@ -1612,6 +1820,7 @@
       feedPush(entry, session);
     } catch (error) {
       stopRow.remove();
+      sink?.sync(); // T-39
       if (error.name === 'AbortError') {
         if (body.textContent.trim()) {
           const note = document.createElement('div');
@@ -1783,11 +1992,12 @@
       settleSessionJob(session, id);
       wait.stop();
       stageBody.closest('.card').remove();
-      const blob = await fileBlob(result.result_url);
+      // T-27: загрузка файла отменяема вместе с операцией (✕ / смена сессии).
+      const blob = await fileBlob(result.result_url, 1, handle.controller.signal);
       // R2/T-18: единая фото-карточка (fresh = restore = Библиотека).
       const wrap = card('assistant', 'Фото готово', '', session);
       wrap.textContent = '';
-      wrap.append(photoCard({ eagerBlob: blob, alt: text }).body);
+      wrap.append(photoCard({ eagerBlob: blob, file: result.result_url, alt: text }).body);
       feedPush({ t: 'media', who: 'Фото готово', kind: 'photo', file: result.result_url, job: id, prompt: text }, session); // prompt → alt при restore (F-51)
       libAdd({ job: id, sessionId: session.id, kind: 'photo', prompt: text, file: result.result_url, created: Date.now(), fav: false });
     } catch (error) {
@@ -2037,7 +2247,8 @@
       wait.stop();
       watchStage.disconnect();
       stageBody.closest('.card').remove();
-      const blob = await fileBlob(result.result_url);
+      // T-27: загрузка файла отменяема вместе с операцией (✕ / смена сессии).
+      const blob = await fileBlob(result.result_url, 1, handle.controller.signal);
       // Единый рендер-путь с restore-карточкой: обложка = PLAY, волна, меню «⋯».
       const trackCard = renderTrackCard(session, {
         who: 'Трек готов (' + MODEL_LABELS[snapshot.quality] + ')',
@@ -2098,7 +2309,40 @@
     const delay = Number.isFinite(seconds) ? seconds : Number.isFinite(date) ? Math.max(0, date) : 1000 * (2 ** attempt);
     return delay + Math.random() * 150;
   }
-  function fileBlob(pathOrUrl, priority = 0) {
+  // T-27: таймаут на загрузку файла. Зависший сервер больше не держит слот
+  // общей очереди (их всего 2) до бесконечности: 60 с — и соединение рвётся
+  // с честным текстом. Прокидываем и signal операции (✕ / смена сессии).
+  const FILE_TIMEOUT_MS = 60000;
+  function fetchWithTimeout(url, options, signal, ms) {
+    const controller = new AbortController();
+    const state = { timedOut: false };
+    const timer = setTimeout(() => { state.timedOut = true; controller.abort(); }, ms);
+    const onAbort = () => controller.abort();
+    if (signal) {
+      if (signal.aborted) onAbort();
+      else signal.addEventListener('abort', onAbort, { once: true });
+    }
+    return fetch(url, { ...options, signal: controller.signal }).finally(() => {
+      clearTimeout(timer);
+      if (signal) signal.removeEventListener('abort', onAbort);
+    }).catch(error => {
+      if (state.timedOut) {
+        const e = new BusError('timeout', 'Сервер не отдал файл за ' + Math.round(ms / 1000) + ' с — соединение прервано, попробуйте ещё раз.');
+        e.timedOut = true;
+        throw e;
+      }
+      throw error;
+    });
+  }
+  // T-27: смена профиля/выход — очередь не дорабатывает загрузки прежнего
+  // пользователя: ожидающие задачи снимаются сразу, слоты освобождаются.
+  function resetFileQueue() {
+    for (const item of fileQueue.splice(0)) {
+      try { item.reject(new BusError('cancelled', 'Сессия завершена — загрузки отменены.')); } catch { /* потребитель уже ушёл */ }
+    }
+    fileInFlight.clear();
+  }
+  function fileBlob(pathOrUrl, priority = 0, signal) {
     let url, trusted;
     try {
       trusted = new URL(server());
@@ -2111,6 +2355,8 @@
         url.search || url.hash || !/^[a-zA-Z0-9._-]+$/.test(fileName) || fileName === '.' || fileName === '..') {
       return Promise.reject(new BusError('unsafe_url', 'Недоверенный адрес файла.'));
     }
+    // T-26: известный офлайн — сразу честная ошибка, слот очереди не занимается.
+    if (!netOnline) return Promise.reject(new BusError('offline', 'Нет соединения с сервером. Проверьте сеть и повторите.'));
     const owner = currentUser(), credential = token(), origin = server();
     const key = JSON.stringify([owner, credential, url.href]);
     if (fileInFlight.has(key)) return fileInFlight.get(key);
@@ -2120,9 +2366,13 @@
           if (currentUser() !== owner || token() !== credential || server() !== origin) throw new BusError('cancelled', 'Профиль или ключ изменился.');
           try {
             // Never follow redirects with the bearer: the destination may be another origin.
-            const result = await fetch(url.href, { headers: { Authorization: 'Bearer ' + credential }, redirect: 'error' });
+            const result = await fetchWithTimeout(url.href, { headers: { Authorization: 'Bearer ' + credential }, redirect: 'error' }, signal, FILE_TIMEOUT_MS);
             return { response: result, blob: result.ok ? await result.blob() : null };
-          } catch (error) { throw new BusError('network', 'Файл недоступен: проверьте подключение или адрес.'); }
+          } catch (error) {
+            if (error.timedOut) throw error; // T-27: текст про 60 с уже внутри
+            if (signal?.aborted) throw new BusError('cancelled', 'Загрузка файла отменена.');
+            throw new BusError('network', 'Файл недоступен: проверьте подключение или адрес.');
+          }
         }, priority);
         if (response.blob) return response.blob;
         const status = response.response.status;
@@ -2648,22 +2898,23 @@
     if (sessionProfile) { saveDraft(activeSession); if (!(await persistSessions())) return; }
     libSeq++;
     if (producerSaveTimer) { clearTimeout(producerSaveTimer); producerSaveTimer = null; }
+    resetFileQueue(); // T-27: очередь не дорабатывает загрузки ушедшего профиля
     sessionProfile = null; activeSession = null; storageBlocked = true; sessionRoots.clear();
     els.feed.innerHTML = ''; els.lib.innerHTML = '';
     els.prompt.value = ''; els.lyrics.value = ''; els.musicPrompt.value = '';
     Object.keys(drafts).forEach(k => { drafts[k] = ''; });
-    blobCache.forEach(url => URL.revokeObjectURL(url)); blobCache.clear(); blobTypes.clear(); blobBytes.clear();
+    mediaCacheClear(); // T-30/T-31: LRU-кэш медиа — все objectURL ревочатся
     coverUrlCache.forEach(url => URL.revokeObjectURL(url)); coverUrlCache.clear();
     feedObjectUrls.forEach(url => URL.revokeObjectURL(url)); feedObjectUrls.clear();
+    newBelowCards.clear(); // F-39
+    if (newBelowPill) newBelowPill.hidden = true;
+    els.netBanner.hidden = true; // T-26
     localStorage.removeItem(USER_KEY);
     els.studio.hidden = true; els.gate.hidden = false; els.nickInput.value = '';
     pinBuf = ''; renderDots(); gateHint('PIN — 4–6 цифр. Новый ник регистрируется при первом входе.'); els.nickInput.focus();
   }
 
   // ---- библиотека (клиентская; переезд на GET /jobs — INFRA #77) ----------------
-  const blobCache = new Map(); // job_id → objectURL
-  const blobTypes = new Map();
-  const blobBytes = new Map();
   const coverUrlCache = new Map(); // путь обложки → objectURL (T-36, LRU 60)
   let libFilter = 'all';
 
@@ -2674,7 +2925,10 @@
   }
   function libSave(list) {
     const nick = currentUser();
-    if (nick) { try { localStorage.setItem(libKey(nick), JSON.stringify(list)); } catch { /* переполнение */ } }
+    if (nick) {
+      try { localStorage.setItem(libKey(nick), JSON.stringify(list)); } catch { /* переполнение */ }
+      broadcast('lib'); // T-26: соседняя вкладка перерисует библиотеку без storage-событий
+    }
   }
   function libAdd(entry) {
     const list = libLoad();
@@ -2882,6 +3136,7 @@
             if (coverUrlCache.size > 60) { const oldest = coverUrlCache.keys().next().value; URL.revokeObjectURL(coverUrlCache.get(oldest)); coverUrlCache.delete(oldest); }
           }
           const image = new Image(); image.alt = coverTitle ? 'Обложка трека «' + coverTitle + '»' : 'Обложка трека'; // F-51
+          image.decoding = 'async'; // T-40
           image.onerror = () => {
             coverUrlCache.delete(path);
             if (frame.contains(image)) { frame.textContent = '♫'; frame.setAttribute('aria-label', 'Обложка недоступна'); }
@@ -2932,8 +3187,10 @@
       e.preventDefault();
       if (download.classList.contains('busy')) return;
       try {
-        let url = blobCache.get(entry.job);
-        if (!url) {
+        // T-30/T-31: кэш по пути файла (LRU ≤8/32 МБ) — повторное скачивание
+        // не качает файл заново и не плодит objectURL (A12).
+        let entry2 = mediaCacheGet(mediaKey(entry.file));
+        if (!entry2) {
           // F-21: честное «Загружаем…» вместо молчаливого ожидания очереди файлов.
           download.classList.add('busy');
           const idleLabel = download.textContent;
@@ -2941,18 +3198,17 @@
           try {
             const blob = await fileBlob(entry.file);
             if (currentUser() !== owner) return;
-            url = URL.createObjectURL(blob);
-            blobCache.set(entry.job, url); blobTypes.set(entry.job, blob.type); blobBytes.set(entry.job, blob);
+            entry2 = mediaCachePut(mediaKey(entry.file), blob);
           } finally { download.classList.remove('busy'); download.textContent = idleLabel; }
         }
         const link = document.createElement('a');
-        link.href = url;
+        link.href = entry2.url;
         // F-22: единое правило имени — как из ленты: «Название - Исполнитель.ext».
-        link.download = mediaFileName(entry.kind, entry, { type: blobTypes.get(entry.job) || '' });
+        link.download = mediaFileName(entry.kind, entry, { type: entry2.blob.type || '' });
         link.title = link.download;
         document.body.append(link); link.click(); link.remove();
-        BRIIX_TOASTS.toast('Скачано: ' + link.download + ' (' + fmtBytes(blob.size) + ')', { kind: 'done', key: 'download' });
-      } catch { showLibError(div, 'Не удалось скачать файл. Проверьте подключение и попробуйте снова.'); }
+        BRIIX_TOASTS.toast('Скачано: ' + link.download + ' (' + fmtBytes(entry2.blob.size) + ')', { kind: 'done', key: 'download' });
+      } catch (error) { showLibError(div, 'Не удалось скачать файл. ' + (error.message || 'Проверьте подключение и попробуйте снова.')); }
     });
     const fav = document.createElement('button');
     fav.type = 'button';
@@ -2995,8 +3251,7 @@
       }
       if (currentUser() !== owner) return;
       libSave(libLoad().filter(x => x.job !== entry.job));
-      if (blobCache.has(entry.job)) URL.revokeObjectURL(blobCache.get(entry.job));
-      blobCache.delete(entry.job); blobTypes.delete(entry.job); blobBytes.delete(entry.job);
+      mediaCacheDrop(mediaKey(entry.file)); // T-30: objectURL файла ревочится
       jobsInFlight.clear(); // серверный список изменился — при следующем рендере перечитать
       libControls.get(entry.job)?.removeSelf(); // T-36: точечное удаление без пересборки
     });
@@ -3018,12 +3273,10 @@
       const media = document.createElement('div');
       media.className = 'lib-media';
       // R2/T-18: фото Библиотеки — та же единая фото-карточка, что в ленте;
-      // скачанный однажды файл не качается повторно (blobBytes).
-      const cachedPhoto = blobBytes.get(entry.job);
+      // скачанный однажды файл не качается повторно — общий LRU-кэш (T-31).
       media.append(photoCard({
-        loadBlob: cachedPhoto
-          ? () => Promise.resolve(cachedPhoto)
-          : () => fileBlob(entry.file, 1).then(blob => { blobBytes.set(entry.job, blob); blobTypes.set(entry.job, blob.type); return blob; })
+        file: entry.file,
+        loadBlob: () => fileBlob(entry.file, 1)
       }).body);
       row.append(download, fav, del);
       main.append(who, promptEl, media, row);
@@ -3117,7 +3370,83 @@
     els.lib.hidden = next !== 'library';
     els.composer.hidden = next !== 'chat';
     if (next === 'library') renderLibrary();
+    if (next === 'chat') paintPill(); // F-39: после возврата из Библиотеки счёт жив
   }
+
+  // ---- T-26: сеть, видимость вкладки, синхронизация вкладок ---------------------
+  // Поллинг не долбит стенд из фоновой вкладки; возврат в вкладку/сеть —
+  // немедленный опрос и перечитывание библиотеки; вторая вкладка видит
+  // изменения первой без перезагрузки (BroadcastChannel).
+  let netOnline = typeof navigator !== 'undefined' ? navigator.onLine !== false : true;
+  let pageHidden = typeof document !== 'undefined' && document.hidden;
+  let hiddenSince = 0, hiddenTotalMs = 0;
+  const visibleWaiters = new Set();
+  const onlineWaiters = new Set();
+  function hiddenMs() { return hiddenTotalMs + (hiddenSince ? Date.now() - hiddenSince : 0); }
+  function waitPageVisible() {
+    if (!pageHidden) return Promise.resolve();
+    return new Promise(resolve => visibleWaiters.add(resolve));
+  }
+  function waitNetOnline() {
+    if (netOnline) return Promise.resolve();
+    return new Promise(resolve => onlineWaiters.add(resolve));
+  }
+  function refreshAfterReturn() {
+    // Библиотека/статус могли измениться, пока вкладка спала: серверный список
+    // перечитывается, открытая Библиотека перерисовывается.
+    if (!currentUser() || storageBlocked) return;
+    jobsInFlight.clear();
+    if (!els.lib.hidden) renderLibrary();
+  }
+  document.addEventListener('visibilitychange', () => {
+    const nowHidden = document.hidden;
+    if (nowHidden && !hiddenSince) hiddenSince = Date.now();
+    if (!nowHidden && hiddenSince) { hiddenTotalMs += Date.now() - hiddenSince; hiddenSince = 0; }
+    const was = pageHidden;
+    pageHidden = nowHidden;
+    if (was && !nowHidden) {
+      for (const resolve of visibleWaiters) resolve();
+      visibleWaiters.clear();
+      refreshAfterReturn();
+    }
+  });
+  // Баннер «Нет соединения» — единственное место, где пользователь видит
+  // состояние сети; запросы при этом падают сразу и с понятным текстом (T-26).
+  function paintNetBanner() {
+    els.netBanner.hidden = netOnline;
+    els.netBanner.textContent = 'Нет соединения с сервером. Отправка и генерации приостановлены — они продолжатся, когда сеть вернётся.';
+  }
+  window.addEventListener('offline', () => {
+    netOnline = false;
+    paintNetBanner();
+  });
+  window.addEventListener('online', () => {
+    netOnline = true;
+    paintNetBanner();
+    for (const resolve of onlineWaiters) resolve();
+    onlineWaiters.clear();
+    refreshAfterReturn();
+  });
+  // BroadcastChannel('briix-studio'): сессии/библиотека синхронизируются между
+  // вкладками одного браузера (сейчас вторая вкладка видит чужие изменения
+  // только после перезагрузки).
+  let studioChannel = null;
+  function broadcast(type) {
+    try { studioChannel?.postMessage({ type, user: currentUser() }); } catch { /* канал закрыт */ }
+  }
+  try {
+    if ('BroadcastChannel' in window) {
+      studioChannel = new BroadcastChannel('briix-studio');
+      studioChannel.addEventListener('message', event => {
+        const data = event.data;
+        if (!data || data.user !== currentUser()) return;
+        if (data.type === 'lib') {
+          jobsInFlight.clear();
+          if (!els.lib.hidden) renderLibrary();
+        }
+      });
+    }
+  } catch { /* нет канала — вкладки просто не синхронизируются */ }
   // ---- wiring -------------------------------------------------------------------
   els.modes.addEventListener('click', e => {
     const button = e.target.closest('.mode');
@@ -3253,7 +3582,7 @@
     els.prompt.value = ''; els.lyrics.value = ''; els.musicPrompt.value = '';
     Object.keys(drafts).forEach(k => { drafts[k] = ''; });
     sessionBusy.clear();
-    blobCache.forEach(url => URL.revokeObjectURL(url)); blobCache.clear(); blobTypes.clear(); blobBytes.clear();
+    mediaCacheClear(); // T-30/T-31
     coverUrlCache.forEach(url => URL.revokeObjectURL(url)); coverUrlCache.clear();
     feedObjectUrls.forEach(url => URL.revokeObjectURL(url)); feedObjectUrls.clear();
     renderOpsBadge();

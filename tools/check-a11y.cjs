@@ -13,7 +13,7 @@ const ROOT = path.resolve(__dirname, '..');
 const STATIC_PORT = Number(process.env.BRIIX_A11Y_STATIC_PORT || 18395);
 const BFF_PORT = Number(process.env.BRIIX_A11Y_BFF_PORT || 18305);
 const TOKEN = 'test-token';
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.jpg': 'image/jpeg', '.png': 'image/png', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.json': 'application/json', '.m4a': 'audio/mp4', '.wav': 'audio/wav' };
+const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.jpg': 'image/jpeg', '.png': 'image/png', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json', '.woff2': 'font/woff2', '.json': 'application/json', '.m4a': 'audio/mp4', '.wav': 'audio/wav' };
 
 function staticServer(port) {
   return new Promise(resolve => {

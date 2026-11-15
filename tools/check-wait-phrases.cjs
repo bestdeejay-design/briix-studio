@@ -16,7 +16,7 @@ const ROOT = path.resolve(__dirname, '..');
 const STATIC_PORT = Number(process.env.BRIIX_WAIT_STATIC_PORT || 18390);
 const BFF_PORT = Number(process.env.BRIIX_WAIT_BFF_PORT || 18301);
 const TOKEN = 'test-token';
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.jpg': 'image/jpeg', '.png': 'image/png', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.json': 'application/json', '.m4a': 'audio/mp4', '.mp4': 'video/mp4', '.webm': 'video/webm' };
+const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.jpg': 'image/jpeg', '.png': 'image/png', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json', '.woff2': 'font/woff2', '.json': 'application/json', '.m4a': 'audio/mp4', '.mp4': 'video/mp4', '.webm': 'video/webm' };
 
 function staticServer(port) {
   return new Promise(resolve => {
@@ -98,6 +98,10 @@ function bffServer(port) {
     await p.goto(`http://127.0.0.1:${STATIC_PORT}/studio/index.html`);
     await p.waitForSelector('#studio:not([hidden])');
     await p.waitForFunction(() => !!window.BRIIX_WAIT, {}, { timeout: 10000 });
+    // T-35: словарь фраз больше не грузится на старте — подтягиваем явно
+    // (в живой студии это делает первый [data-wait]-узел).
+    await p.evaluate(() => window.BRIIX_WAIT.ensureData());
+    await p.waitForFunction(() => !!window.BRIIX_WAIT_PHRASES, {}, { timeout: 10000 });
     return p;
   }
 
