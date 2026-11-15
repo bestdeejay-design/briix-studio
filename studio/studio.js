@@ -419,6 +419,29 @@
   window.addEventListener('beforeunload', e => {
     if (pendingSaves > 0) { e.preventDefault(); e.returnValue = ''; }
   });
+
+  // F-35: клавиатура не накрывает композер. На Android Chrome 108+ это делает
+  // meta interactive-widget=resizableViewport (dvh уменьшается вместе с вьюпортом);
+  // на iOS meta не действует — там поднимаем композер сами, по visualViewport.
+  function syncKbInset(vv) {
+    const kb = Math.max(0, Math.round((window.innerHeight || 0) - (vv.height + (vv.offsetTop || 0))));
+    document.documentElement.style.setProperty('--kb-inset', kb > 24 ? kb + 'px' : '0px');
+    return kb;
+  }
+  if (window.visualViewport) {
+    const vv = window.visualViewport;
+    const onVv = () => syncKbInset(vv);
+    window.addEventListener('resize', onVv);
+    vv.addEventListener('resize', onVv);
+    vv.addEventListener('scroll', onVv);
+    onVv();
+    // Фокус в поле — держим каретку в видимой области, пока клавиатура выезжает.
+    document.addEventListener('focusin', e => {
+      if (!e.target.matches || !e.target.matches('textarea, input:not([type="checkbox"])')) return;
+      setTimeout(() => e.target.scrollIntoView({ block: 'nearest' }), 150);
+    });
+  }
+  window.__syncKbInset = syncKbInset; // hook для сюиты (F-35)
   function rootFor(session) { return sessionRoots.get(session.id); }
   function recordSessionJob(session, job, kind, input) {
     if (!session.jobs) session.jobs = [];
@@ -1340,7 +1363,12 @@
     els.modelName.textContent = MODEL_LABELS[quality];
     els.vocalSeg.querySelectorAll('.seg-btn').forEach(b => b.setAttribute('aria-pressed', String(Number(b.dataset.vocal) === (instrumental ? 1 : 0))));
     els.tuneToggle.setAttribute('aria-pressed', String(advanced));
-    els.prepareMusic.textContent = instrumental ? '✦ Подготовить трек' : '✦ Подготовить песню';
+    // F-37: подпись зависит от режима (песня/инструментал); на узких экранах
+    // виден короткий лейбл, полный — всегда в aria-label и title.
+    els.prepareMusic.setAttribute('aria-label', instrumental ? 'Подготовить трек' : 'Подготовить песню');
+    const prepareFull = els.prepareMusic.querySelector('.lbl-full');
+    if (prepareFull) prepareFull.textContent = instrumental ? '✦ Подготовить трек' : '✦ Подготовить песню';
+    else els.prepareMusic.textContent = instrumental ? '✦ Подготовить трек' : '✦ Подготовить песню';
     meta();
     updateEnabled();
   }

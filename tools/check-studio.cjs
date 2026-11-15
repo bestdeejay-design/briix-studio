@@ -778,6 +778,95 @@ function bffServer(port) {
   await p.screenshot({ path: path.join(require('node:os').tmpdir(), 'studio-390-music.png'), fullPage: false });
   ok('mobile 390x844: composer sticky bottom, no h-scroll, touch targets >=44', { ...geo });
 
+  // 18b. F-35/F-36/F-37 — мобайл глубже: клавиатура, ландшафт, 320px без обрезки.
+  // F-35: meta даёт Android-уменьшение вьюпорта, visualViewport-подстраховка — iOS.
+  const kbMeta = await p.evaluate(() => document.querySelector('meta[name="viewport"]').content);
+  assert.match(kbMeta, /interactive-widget=resizableViewport/, 'F-35: viewport содержит interactive-widget=resizableViewport');
+  await p.locator('.mode[data-mode="chat"]').click(); // компактный композер — чистый замер подъёма
+  const lift = await p.evaluate(() => {
+    const send = document.getElementById('send');
+    const before = send.getBoundingClientRect().bottom;
+    const kb = window.__syncKbInset({ height: window.innerHeight - 260, offsetTop: 0 });
+    const after = send.getBoundingClientRect().bottom;
+    const css = getComputedStyle(document.documentElement).getPropertyValue('--kb-inset').trim();
+    const aboveKb = after <= window.innerHeight - kb + 2;
+    window.__syncKbInset(window.visualViewport); // вернуть как было
+    return { kb, lifted: before - after, css, aboveKb };
+  });
+  assert.equal(lift.kb, 260, 'F-35: высота клавиатуры измерена');
+  assert.ok(lift.lifted >= 255, 'F-35: композер поднялся над клавиатурой, +' + Math.round(lift.lifted));
+  assert.equal(lift.css, '260px', 'F-35: --kb-inset проставлен');
+  assert.equal(lift.aboveKb, true, 'F-35: композер целиком выше линии клавиатуры');
+  await p.close();
+  ok('keyboard lifts the composer: interactive-widget + visualViewport fallback (F-35)', lift);
+
+  // F-36: ландшафт 844×390 — мета-полоса со статусом видна, тач-таргеты ≥44
+  // (брейкпоинт по pointer:coarse, а не по ширине ≤480px).
+  const landCtx = await browser.newContext({ viewport: { width: 844, height: 390 }, hasTouch: true, isMobile: true, reducedMotion: 'reduce' });
+  const lp = await landCtx.newPage();
+  lp.on('pageerror', e => errors.push(e.message));
+  await lp.addInitScript(({ t, port, user }) => {
+    localStorage.setItem('briix-media-live-token', t);
+    localStorage.setItem('briix-media-live-server', JSON.stringify('http://127.0.0.1:' + port));
+    localStorage.setItem('briix-studio-profiles', JSON.stringify({ [user]: { pinHash: 'x', created: 0 } }));
+    localStorage.setItem('briix-studio-user', user);
+  }, { t: TOKEN, port: BFF_PORT, user: 'tester' });
+  await lp.goto(URL_);
+  await lp.waitForSelector('#send');
+  await lp.locator('.mode[data-mode="music"]').click();
+  const land = await lp.evaluate(() => {
+    const meta = document.querySelector('.meta');
+    const small = [...document.querySelectorAll('button')].filter(e => e.offsetParent !== null && !e.closest('[hidden]'))
+      .map(e => ({ t: e.textContent.trim().slice(0, 18), w: Math.round(e.getBoundingClientRect().width), h: Math.round(e.getBoundingClientRect().height) }))
+      .filter(r => r.w < 44 || r.h < 44);
+    return {
+      metaVisible: !!meta && meta.offsetHeight > 0 && getComputedStyle(meta).display !== 'none',
+      status: document.getElementById('status').textContent,
+      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      small
+    };
+  });
+  assert.ok(land.metaVisible, 'F-36: мета-полоса видна в ландшафте (раньше display:none прятал #status)');
+  assert.equal(land.status, 'готов');
+  assert.ok(land.overflow <= 0, 'F-36: без горскролла в ландшафте');
+  assert.deepEqual(land.small, [], 'F-36: тач-таргеты ≥44px в ландшафте (pointer:coarse): ' + JSON.stringify(land.small));
+  await landCtx.close();
+  ok('landscape 844x390: status meta visible, coarse-pointer targets >=44 (F-36)', { small: land.small.length });
+
+  // F-37: 320px — короткие лейблы без обрезки, полный смысл в aria-label,
+  // пояснение продюсера видно.
+  p = await page({ viewport: { width: 320, height: 568 } });
+  await p.locator('.mode[data-mode="music"]').click();
+  await p.locator('#prompt').fill('ночной джаз для двоих');
+  const narrow = await p.evaluate(() => {
+    const chips = [...document.querySelectorAll('.tool.chip')].filter(e => e.offsetParent !== null && !e.closest('[hidden]'))
+      .map(e => ({ t: (e.innerText || e.textContent).trim(), cut: e.scrollWidth > e.clientWidth + 1 }));
+    const hint = document.getElementById('producerHint');
+    const btn = document.getElementById('prepareMusic');
+    const gen = document.getElementById('genTrack');
+    const send = document.getElementById('send').getBoundingClientRect();
+    return {
+      chips,
+      genShort: chips.some(c => c.t === 'Трек'),
+      genAria: gen.getAttribute('aria-label'),
+      prepareAria: btn.getAttribute('aria-label'),
+      producerHintVisible: !!hint && hint.offsetParent !== null,
+      producerDescribedBy: btn.getAttribute('aria-describedby'),
+      sendVisible: send.bottom <= window.innerHeight && send.top >= 0,
+      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth
+    };
+  });
+  assert.ok(narrow.overflow <= 0, 'F-37: без горскролла на 320px');
+  assert.deepEqual(narrow.chips.filter(c => c.cut), [], 'F-37: ни один чип не обрезан: ' + JSON.stringify(narrow.chips));
+  assert.ok(narrow.genShort, 'F-37: на 320px кнопка генерации — короткий лейбл «Трек»');
+  assert.equal(narrow.genAria, 'Сгенерировать трек', 'F-37: полный смысл — в aria-label');
+  assert.equal(narrow.prepareAria, 'Подготовить песню', 'F-37: aria-label продюсера не зависит от ширины');
+  assert.ok(narrow.sendVisible, 'F-37: кнопка отправки в кадре на 320px');
+  assert.ok(narrow.producerHintVisible, 'F-37: пояснение продюсера видно на 320px');
+  assert.equal(narrow.producerDescribedBy, 'producerHint', 'F-37: кнопка продюсера связана с пояснением');
+  ok('mobile 320x568: short chip labels + full aria, producer hint visible (F-37)', { chips: narrow.chips.length });
+  await p.close();
+
 
   // Регресс: после reload в запрос действительно уходит восстановленный контекст.
   resetBff();

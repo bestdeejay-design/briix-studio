@@ -60,7 +60,9 @@ button:disabled { cursor: not-allowed; opacity: .4; }
 .studio {
   height: 100dvh; max-width: 720px; margin: 0 auto;
   display: flex; flex-direction: column;
-  padding: 0 16px calc(12px + env(safe-area-inset-bottom));
+  /* F-35: --kb-inset ставит JS из visualViewport — на iOS клавиатура не накрывает композер;
+     на Android то же делает interactive-widget=resizableViewport (dvh уменьшается). */
+  padding: 0 16px calc(12px + env(safe-area-inset-bottom) + var(--kb-inset, 0px));
 }
 .feed { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 20px 4px 16px; }
  .feed:empty::before {
@@ -356,7 +358,7 @@ button:disabled { cursor: not-allowed; opacity: .4; }
 
 /* ---- мобайл 390×844: тач-таргеты 44, композер у нижнего края ---------------- */
 @media (max-width: 480px) {
-  .studio { padding: 0 10px calc(8px + env(safe-area-inset-bottom)); }
+  .studio { padding: 0 10px calc(8px + env(safe-area-inset-bottom) + var(--kb-inset, 0px)); }
   .feed { padding-top: 12px; }
   .mode, .tool { min-height: 44px; }
   .seg-btn { min-height: 44px; }
@@ -368,8 +370,20 @@ button:disabled { cursor: not-allowed; opacity: .4; }
   .tag { min-height: 44px; padding: 4px 12px; }
   .prompt { font-size: 16px; }
 }
+/* F-37: на узких экранах — короткий лейбл, полный смысл всегда в aria-label/title */
+.tool .lbl-short { display: none; }
 @media (max-width: 380px) {
-  .tool.chip { max-width: 130px; overflow: hidden; text-overflow: ellipsis; }
+  .tool .lbl-full { display: none; }
+  .tool .lbl-short { display: inline; }
+}
+/* F-36: тач-таргеты 44px на любом тач-экране, не только при ширине ≤480px —
+   ландшафт телефона (ширина 844 > 480, высота 390) раньше оставался
+   с десктопными 36px. */
+@media (hover: none) and (pointer: coarse) {
+  .mode, .tool, .seg-btn, .tag, .tab, .menu button, .action, .improve, .undo { min-height: 44px; }
+  .send { width: 44px; height: 44px; }
+  .tool.icon-only { min-width: 44px; }
+  .lib-item .action { min-height: 44px; }
 }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
@@ -532,7 +546,10 @@ button:disabled { cursor: not-allowed; opacity: .4; }
 @media (max-height: 600px) {
   .studio-header { min-height: 38px; }
   .advanced { max-height: 22dvh; }
-  .meta { display: none; }
+  /* F-36: ландшафт не прячет мета-полосу — в #status живёт обратная связь
+     (занятость, повторы связи); делаем её компактной вместо display:none. */
+  .meta { min-height: 0; padding: 4px 6px 1px; font-size: 10px; }
+  .meta #status { font-size: 10px; max-width: 55vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
 
 .composer-hint { margin: 0 8px; font-size: 12px; color: var(--muted); }
@@ -690,5 +707,5 @@ button:disabled { cursor: not-allowed; opacity: .4; }
 @keyframes field-flash { 0% { box-shadow: 0 0 0 2px var(--accent); } 100% { box-shadow: 0 0 0 2px transparent; } }
 .field-flash { animation: field-flash 1.5s ease-out 2; }
 @media (prefers-reduced-motion: reduce) { .field-flash { animation: none; box-shadow: 0 0 0 2px var(--accent); } }
-@media (max-width: 480px) { .producer-entry span { display: none; } }
+@media (max-width: 480px) { .producer-entry span { font-size: 11px; } } /* F-37: пояснение продюсера видно и на мобайле */
 .producer-raw { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
