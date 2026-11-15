@@ -1188,6 +1188,37 @@ function bffServer(port) {
   assert.match(await p.locator('#modelName').innerText(), /Pro/, 'модель переключена на запись сервера (ace-step-pro)');
   ok('repeat from server record: honest prompt-size confirm, no empty-draft wipe (F-20/A15)');
 
+  // T-22: бэкап «✨ Улучшить» привязан к сессии — undo в сессии B не подставит
+  // текст из сессии A (доказательство аудита: принял черновик в A → перешёл в B →
+  // «↩ Вернуть как было» писал в поле B текст из A).
+  resetBff(); state.chatImproveText = 'улучшенный вариант для сессии A';
+  p = await page();
+  // Лента непуста — иначе «Новый чат» не создаст вторую сессию (guard newChat).
+  await p.locator('#prompt').fill('вопрос для наполнения ленты');
+  await p.locator('#send').click();
+  await p.waitForSelector('#feed .card.assistant');
+  await p.locator('.mode[data-mode="music"]').click();
+  await p.locator('#tuneToggle').click(); // advanced: поля стиль/лирика
+  await p.locator('#musicPrompt').fill('исходный стиль сессии A');
+  await p.locator('#improvePrompt').click();
+  await p.waitForFunction(() => document.querySelector('#musicPrompt')?.value === 'улучшенный вариант для сессии A', {}, { timeout: 15000 });
+  assert.equal(await p.locator('#undoPrompt').isVisible(), true, 'в сессии A доступен возврат');
+  // Новая сессия: своих бэкапов нет, кнопка возврата скрыта, поля не тронуты.
+  await p.locator('#sessionsOpen').click();
+  await p.locator('#sessionsNew').click();
+  await p.waitForSelector('#sessionsOverlay', { state: 'hidden' });
+  await p.locator('.mode[data-mode="music"]').click();
+  await p.locator('#tuneToggle').click();
+  await p.locator('#musicPrompt').fill('свой стиль сессии B');
+  assert.equal(await p.locator('#undoPrompt').isHidden(), true, 'в сессии B нет чужой кнопки возврата (T-22)');
+  // Возврат в A: undo всё ещё знает исходный текст сессии A.
+  await p.locator('#sessionsOpen').click();
+  await p.locator('#sessionsList .session-item').filter({ hasText: 'вопрос для наполнения ленты' }).first().click();
+  await p.waitForSelector('#sessionsOverlay', { state: 'hidden' });
+  await p.locator('#undoPrompt').click();
+  assert.equal(await p.locator('#musicPrompt').inputValue(), 'исходный стиль сессии A', 'undo возвращает текст своей сессии (T-22)');
+  ok('session-bound undo backup: no cross-session restore (T-22)');
+
   // Контролируемый 429-шторм: считаем реальные попытки и восстановленные карточки в mock.
   resetBff(); state.coverRateLimit = 4;
   state.jobPosts = Array.from({ length: 4 }, (_, i) => ({ id: 'job-storm-' + i, type: 'music', prompt: 'Шторм ' + i, params: { model: 'ace-step-flash' } }));

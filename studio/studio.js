@@ -367,7 +367,13 @@
     }
   }
   const assistantId = { chat: 'mentor', photo: 'art-dir', music: 'producer' };
-  const undoBackup = { lyrics: null, musicPrompt: null };
+  // T-22: бэкап полей перед «✨ Улучшить» живёт на сессии — undo в сессии B
+  // больше не подставляет текст из сессии A (и переживает перезагрузку).
+  function sessionUndo(session, field, value) {
+    if (!session) return;
+    if (value === undefined) return session.undo?.[field];
+    (session.undo ||= {})[field] = value;
+  }
 
   // ---- T-52: ожидание переживает перезагрузку -------------------------------
   // session.jobs пишется при отправке (recordSessionJob). На старте сессии
@@ -2087,16 +2093,17 @@
         feedPush({ t: 'notice', who: 'Предложение помощника', text: improved.trim() }, session);
         return;
       }
-      undoBackup[field] = original;
+      sessionUndo(session, field, original);
       el.value = improved.trim();
       (field === 'lyrics' ? els.undoLyrics : els.undoPrompt).hidden = false;
     } catch (error) { errorCard(error, session); } finally { improving.delete(field); button.classList.remove('busy'); setBusy(false); }
   }
 
   function undo(field) {
-    if (undoBackup[field] == null) return;
-    (field === 'lyrics' ? els.lyrics : els.musicPrompt).value = undoBackup[field];
-    undoBackup[field] = null;
+    const backup = sessionUndo(activeSession, field);
+    if (backup == null) return;
+    (field === 'lyrics' ? els.lyrics : els.musicPrompt).value = backup;
+    delete activeSession.undo[field];
     (field === 'lyrics' ? els.undoLyrics : els.undoPrompt).hidden = true;
     updateEnabled();
   }
@@ -2123,7 +2130,7 @@
         feedPush({ t: 'notice', who: 'Предложение арт-директора', text: improved.trim() }, session);
         return;
       }
-      undoBackup.prompt = original;
+      sessionUndo(session, 'prompt', original);
       els.prompt.value = improved.trim();
       els.undoPhoto.hidden = false;
     } catch (error) { errorCard(error, session); }
@@ -2131,9 +2138,10 @@
   }
 
   function undoPhoto() {
-    if (undoBackup.prompt == null) return;
-    els.prompt.value = undoBackup.prompt;
-    undoBackup.prompt = null;
+    const backup = sessionUndo(activeSession, 'prompt');
+    if (backup == null) return;
+    els.prompt.value = backup;
+    delete activeSession.undo.prompt;
     els.undoPhoto.hidden = true;
     updateEnabled();
   }
@@ -2152,6 +2160,10 @@
     mode = ['chat', 'photo', 'music'].includes(draft.mode) ? draft.mode : 'chat';
     advanced = !!draft.advanced;
     els.prompt.value = drafts[mode]; els.lyrics.value = draft.lyrics || ''; els.musicPrompt.value = draft.musicPrompt || '';
+    // T-22: кнопки возврата отражают бэкапы именно этой сессии.
+    els.undoLyrics.hidden = session.undo?.lyrics == null;
+    els.undoPrompt.hidden = session.undo?.musicPrompt == null;
+    els.undoPhoto.hidden = session.undo?.prompt == null;
     renderChrome();
   }
   function ensureRoot(session) {
@@ -2866,7 +2878,9 @@
   });
   els.prepareMusic.addEventListener('click', prepareMusic);
   els.improveLyrics.addEventListener('click', () => improve('lyrics'));
-  els.improvePrompt.addEventListener('click', () => improve('prompt'));
+  // Ключ 'musicPrompt' (а не 'prompt'): undo('musicPrompt') читает тот же ключ —
+  // раньше кнопка возврата стиля была видима, но не работала (запись шла в 'prompt').
+  els.improvePrompt.addEventListener('click', () => improve('musicPrompt'));
   els.undoLyrics.addEventListener('click', () => undo('lyrics'));
   els.undoPrompt.addEventListener('click', () => undo('musicPrompt'));
   els.improvePhoto.addEventListener('click', improvePhoto);
