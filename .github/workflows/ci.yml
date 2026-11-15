@@ -42,7 +42,10 @@ jobs:
       - name: check-studio
         # Лог дублируем в файл и в артефакт: лог-эндпоинт runner'а иногда
         # недоступен снаружи, а по артефакту падение разбирается однозначно.
-        run: node tools/check-studio.cjs 2>&1 | tee /tmp/check-studio.log
+        # pipefail обязателен: без него код возврата теряется в конвейере с tee.
+        run: |
+          set -o pipefail
+          node tools/check-studio.cjs 2>&1 | tee /tmp/check-studio.log
         env:
           NODE_PATH: ./node_modules
       - name: upload check-studio log
