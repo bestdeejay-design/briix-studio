@@ -36,6 +36,14 @@ const prompts = JSON.parse(fs.readFileSync(path.join(ROOT, 'bench/prompts-12.jso
 const lyrics = JSON.parse(fs.readFileSync(path.join(ROOT, 'bench/lyrics-12.json'), 'utf8')).lyrics;
 const lyricById = new Map(lyrics.map(l => [l.id, l]));
 
+// Один seed на трек для ОБЕИХ версий: иначе A и B расходятся ещё и по шуму
+// сэмплера, и слепое сравнение меряет удачу, а не caption. Одинаковый seed
+// делает пару «x/y» парной — различие объясняется только промтом.
+function pairSeed(trackId) {
+  const h = crypto.createHash('sha1').update(SEED + ':seed:' + trackId).digest();
+  return h.readUInt32BE(0) % 4294967295;
+}
+
 // Детерминированное «бросание монеты» на каждый трек: какая версия становится x.
 function coin(trackId) {
   const h = crypto.createHash('sha1').update(SEED + ':' + trackId).digest();
@@ -47,6 +55,7 @@ const plan = prompts.tracks.map(t => {
   return {
     track: t.track,
     title: t.title,
+    seed: pairSeed(t.track),
     lyrics: lyricById.get(t.track)?.lyrics || '',
     files: {
       x: { source: aFirst ? 'A' : 'B', prompt: aFirst ? t.promptA : t.promptB },
@@ -69,7 +78,11 @@ async function generate(job, label) {
   const body = {
     type: 'music',
     prompt: job.files[label].prompt,
-    params: { model: MODEL, lyrics: job.lyrics, language: 'en', duration: DURATION, format: 'wav' }
+    params: {
+      model: MODEL, lyrics: job.lyrics, language: 'en', duration: DURATION, format: 'wav',
+      // Парный seed: тот же для x и y этого трека (server-contract: params.seed int).
+      seed: job.seed
+    }
   };
   const created = await (await bff('POST', '/jobs', body)).json();
   const id = created.id || created.job_id;
@@ -95,8 +108,8 @@ async function generate(job, label) {
   fs.mkdirSync(OUT_DIR, { recursive: true });
   if (DRY) {
     console.log('DRY-RUN: генерация не выполняется' + (BASE ? ' (нет MEDIA_BFF_TOKEN)' : ' (нет MEDIA_BFF_URL)'));
-    console.log('План: ' + plan.length + ' треков × 2 версии, последовательно, wav, model=' + MODEL + ', duration=' + DURATION + ', seed=' + SEED);
-    for (const p of plan) console.log(`  track-${p.track}: x ← ${p.files.x.source}, y ← ${p.files.y.source}  (${p.title})`);
+    console.log('План: ' + plan.length + ' треков × 2 версии, последовательно, wav, model=' + MODEL + ', duration=' + DURATION + ', парный seed на трек');
+    for (const p of plan) console.log(`  track-${p.track}: x ← ${p.files.x.source}, y ← ${p.files.y.source}  seed=${p.seed}  (${p.title})`);
     console.log('\nКлюч НЕ пишется в dry-run: bench/KEY.md появится только вместе с файлами.');
     return;
   }
@@ -117,7 +130,7 @@ async function generate(job, label) {
     '|---|---|---|---|---|',
     ...key,
     '',
-    `Генерация: model=${MODEL}, duration=${DURATION}s, wav, последовательно, seed=${SEED}.`,
+    `Генерация: model=${MODEL}, duration=${DURATION}s, wav, последовательно. Seed парный внутри трека (одинаковый у x и y), значения — в plan.`,
     'A = caption владельца (REFERENCE-ALBUM), B = caption music-brain v2 (buildCaption).',
     'VOCAL-блок у обеих версий одинаковый.'
   ].join('\n') + '\n');

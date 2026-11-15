@@ -21,6 +21,10 @@ jobs:
       - name: node --check (studio + tools)
         run: |
           for f in studio/*.js tools/*.cjs; do node --check "$f"; done
+      - name: check-bench
+        # Артефакт бенчмарка: A раскрыт констами, B не собран из A, пары
+        # помечены разными источниками. Без этого A однажды уехал обрубком.
+        run: node tools/check-bench.cjs
       - name: check-assembly
         run: node tools/check-assembly.cjs
       - name: check-music-brain

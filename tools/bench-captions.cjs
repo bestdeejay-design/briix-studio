@@ -40,7 +40,10 @@ const rows = spec.tracks.map(t => {
   // английская и указана отдельным полем.
   const body = built.caption.replace(/, English lyrics/g, '').replace(/English lyrics, /g, '');
   const captionB = (spec.vocalConst + ', ' + body.replace(new RegExp('^' + t.bpm + ' BPM, '), '')).trim();
-  const captionA = 'VOCAL-CONST, SONIC-CONST, ' + t.referenceTrackLine;
+  // A = полная строка владельца: консты ПОДСТАВЛЯЮТСЯ, а не остаются именами.
+  // Раньше здесь стояли литералы 'VOCAL-CONST, SONIC-CONST' — A уезжал в
+  // генерацию как обрубок в 120–190 символов, и сравнение было бы фальшивым.
+  const captionA = [spec.vocalConst, spec.sonicConst, t.referenceTrackLine].join(', ');
   return {
     track: t.id,
     title: t.title,
@@ -66,6 +69,14 @@ const rows = spec.tracks.map(t => {
   };
 });
 
+// Инварианты артефакта: их отсутствие уже один раз пропустило обрубленный A
+// (см. tools/check-bench.cjs — теперь это проверяется в CI).
+for (const r of rows) {
+  for (const [k, v] of [['A', r.promptA], ['B', r.promptB]]) {
+    if (/VOCAL-CONST|SONIC-CONST/.test(v)) throw new Error(`${r.track}: ${k} содержит плейсхолдер конста`);
+    if (!v.includes(spec.vocalConst)) throw new Error(`${r.track}: ${k} не содержит VOCAL-CONST целиком`);
+  }
+}
 const out = { vocalConst: spec.vocalConst, sonicConst: spec.sonicConst, tracks: rows };
 fs.mkdirSync(path.join(ROOT, 'bench'), { recursive: true });
 fs.writeFileSync(path.join(ROOT, 'bench/prompts-12.json'), JSON.stringify(out, null, 2) + '\n');
