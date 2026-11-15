@@ -135,7 +135,32 @@ const high = brain.buildTags('женский фальцет, поп', { kind: 's
 assert.match(high.tags, /falsetto/, 'явно запрошенный фальцет не подавляется');
 assert.doesNotMatch(high.tags, /register never rises/, 'страж не срабатывает на явный фальцет');
 
+// ----------------------------------- (10) полный трек: роли, микс, форма ----
+// «Полный трек со всем необходимым»: помимо трёх базовых слоёв мозг обязан
+// слышать роли инструментов, микс, форму во времени и защиту от дрейфа —
+// но только если автор об этом сказал (ничего не выдумываем).
+const full = brain.buildCaption(
+  'психоделик-соул, 96 BPM, ведущая живая бас-гитара несёт главную мелодию, Hammond фоном, '
+  + 'середина плотная, широкий стерео, вступление на помехах, нарастание к последнему припеву, '
+  + 'тихая пауза перед возвращением барабанов, тёплый аналог, без автотюна, ночной порт, мужской голос шёпотом',
+  { kind: 'song', language: 'en' });
+assert.match(full.caption, /carrying the main melody/, 'роль инструмента: бас несёт мелодию');
+assert.match(full.caption, /present midrange|wide stereo image/, 'микс: середина/стерео');
+assert.match(full.caption, /build into the last chorus|near-silent suspensions/, 'форма: нарастание и пауза');
+assert.match(full.caption, /unprocessed natural voice/, 'защита от дрейфа в позитивной форме');
+assert.ok(full.caption.length <= MAX_CAPTION, `полный трек укладывается в бюджет (${full.caption.length})`);
+assert.ok(full.caption.split(', ').length >= 12, 'полный трек не сведён к трём тегам');
+// Ничего не выдумываем: пустая задумка не получает ролей, микса и формы.
+const lean = brain.buildCaption('песня', { kind: 'song' });
+assert.equal(lean.layers.roles.length, 0, 'роли не выдумываются');
+assert.equal(lean.layers.mix.length, 0, 'микс не выдумывается');
+assert.equal(lean.layers.arrangement.length, 0, 'форма не выдумывается');
+// Короткий стем не ловится внутри слова: «широкий стерео» — не рок, «убитый» — не бит.
+const noFalseGenre = brain.buildTags('широкий стерео, тёплый аналог', { kind: 'song' });
+assert.doesNotMatch(noFalseGenre.tags, /\brock\b/, '«широкий» не превращается в жанр rock');
+assert.match(noFalseGenre.tags, /wide stereo image/, '«широкий стерео» → wide stereo image');
+
 // ------------------------------------------------------------------ вывод --
-console.log('PASS music-brain v2: слои, ритм-всегда, вокал с характером, продакшн, бюджет, негативы, self-check');
+console.log('PASS music-brain v2: слои, ритм-всегда, вокал с характером, продакшн, бюджет, негативы, self-check, полный трек (роли/микс/форма/защита)');
 console.log('20 брифов (buildTags / buildCaption, символы):');
 for (const r of rows) console.log(`  ${r.id} ${r.source.padEnd(9)} ${String(r.len).padStart(3)} / ${String(r.captionLen).padStart(3)}  ${r.tags}`);

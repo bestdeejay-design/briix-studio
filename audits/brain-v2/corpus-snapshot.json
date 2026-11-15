@@ -7,42 +7,175 @@
   "score": {
     "definition": "plays + 10 * favorites",
     "median": 5,
-    "quantiles": { "p50": 5, "p75": 25, "p90": 45, "p95": 56, "p99": 126 },
+    "quantiles": {
+      "p50": 5,
+      "p75": 25,
+      "p90": 45,
+      "p95": 56,
+      "p99": 126
+    },
     "max": 598
   },
-  "length_chars": { "all_median": 93, "top500_median": 199.5, "top100_median": 402.5, "p90": 641, "p95": 929 },
+  "length_chars": {
+    "all_median": 93,
+    "top500_median": 199.5,
+    "top100_median": 402.5,
+    "p90": 641,
+    "p95": 929
+  },
   "layer_lift": {
     "_unit": "доля промтов, где слой присутствует, %",
-    "vocal_delivery": { "top100": 62, "top500": 45.4, "corpus": 23.4, "lift_top100": 2.7 },
-    "rhythm_kit_composition": { "top100": 25, "top500": 22.0, "corpus": 14.5, "lift_top100": 1.7 },
-    "dynamics": { "top100": 29, "top500": 14.8, "corpus": 7.0, "lift_top100": 4.1 },
-    "production": { "top100": 71, "top500": 61.2, "corpus": 43.2, "lift_top100": 1.7 },
-    "concept_line": { "top100": 25, "top500": 11.4, "corpus": 8.1, "lift_top100": 3.1 },
-    "bpm_numeric": { "top100": 66, "top500": 57.2, "corpus": 40.0, "lift_top100": 1.7 },
-    "mood": { "top100": 70, "top500": 62.6, "corpus": 51.8, "lift_top100": 1.3 },
-    "era": { "top100": 31, "top500": 19.0, "corpus": 11.9, "lift_top100": 1.3 },
-    "positive_falsetto": { "top100": 5, "top500": 3.8, "corpus": 1.4, "lift_top100": 3.5 }
+    "vocal_delivery": {
+      "top100": 62,
+      "top500": 45.4,
+      "corpus": 23.4,
+      "lift_top100": 2.7
+    },
+    "rhythm_kit_composition": {
+      "top100": 25,
+      "top500": 22.0,
+      "corpus": 14.5,
+      "lift_top100": 1.7
+    },
+    "dynamics": {
+      "top100": 29,
+      "top500": 14.8,
+      "corpus": 7.0,
+      "lift_top100": 4.1
+    },
+    "production": {
+      "top100": 71,
+      "top500": 61.2,
+      "corpus": 43.2,
+      "lift_top100": 1.7
+    },
+    "concept_line": {
+      "top100": 25,
+      "top500": 11.4,
+      "corpus": 8.1,
+      "lift_top100": 3.1
+    },
+    "bpm_numeric": {
+      "top100": 66,
+      "top500": 57.2,
+      "corpus": 40.0,
+      "lift_top100": 1.7
+    },
+    "mood": {
+      "top100": 70,
+      "top500": 62.6,
+      "corpus": 51.8,
+      "lift_top100": 1.3
+    },
+    "era": {
+      "top100": 31,
+      "top500": 19.0,
+      "corpus": 11.9,
+      "lift_top100": 1.3
+    },
+    "positive_falsetto": {
+      "top100": 5,
+      "top500": 3.8,
+      "corpus": 1.4,
+      "lift_top100": 3.5
+    }
   },
   "length_vs_score": [
-    { "len": "0-60", "n": 291, "mean_score": 14.4, "p90_score": 42 },
-    { "len": "60-100", "n": 4367, "mean_score": 16.3, "p90_score": 41 },
-    { "len": "100-200", "n": 1613, "mean_score": 14.2, "p90_score": 41 },
-    { "len": "200-400", "n": 506, "mean_score": 21.3, "p90_score": 55 },
-    { "len": "400-700", "n": 738, "mean_score": 27.3, "p90_score": 70 },
-    { "len": "700+", "n": 687, "mean_score": 20.2, "p90_score": 52 }
+    {
+      "len": "0-60",
+      "n": 291,
+      "mean_score": 14.4,
+      "p90_score": 42
+    },
+    {
+      "len": "60-100",
+      "n": 4367,
+      "mean_score": 16.3,
+      "p90_score": 41
+    },
+    {
+      "len": "100-200",
+      "n": 1613,
+      "mean_score": 14.2,
+      "p90_score": 41
+    },
+    {
+      "len": "200-400",
+      "n": 506,
+      "mean_score": 21.3,
+      "p90_score": 55
+    },
+    {
+      "len": "400-700",
+      "n": 738,
+      "mean_score": 27.3,
+      "p90_score": 70
+    },
+    {
+      "len": "700+",
+      "n": 687,
+      "mean_score": 20.2,
+      "p90_score": 52
+    }
   ],
   "layers_vs_score": [
-    { "layers": 0, "n": 249, "mean_score": 15.0 },
-    { "layers": 1, "n": 920, "mean_score": 15.9 },
-    { "layers": 2, "n": 1355, "mean_score": 14.7 },
-    { "layers": 3, "n": 1159, "mean_score": 17.3 },
-    { "layers": 4, "n": 830, "mean_score": 17.5 },
-    { "layers": 5, "n": 557, "mean_score": 20.3 },
-    { "layers": 6, "n": 462, "mean_score": 24.2 },
-    { "layers": 7, "n": 286, "mean_score": 25.8 },
-    { "layers": 8, "n": 168, "mean_score": 32.0 }
+    {
+      "layers": 0,
+      "n": 249,
+      "mean_score": 15.0
+    },
+    {
+      "layers": 1,
+      "n": 920,
+      "mean_score": 15.9
+    },
+    {
+      "layers": 2,
+      "n": 1355,
+      "mean_score": 14.7
+    },
+    {
+      "layers": 3,
+      "n": 1159,
+      "mean_score": 17.3
+    },
+    {
+      "layers": 4,
+      "n": 830,
+      "mean_score": 17.5
+    },
+    {
+      "layers": 5,
+      "n": 557,
+      "mean_score": 20.3
+    },
+    {
+      "layers": 6,
+      "n": 462,
+      "mean_score": 24.2
+    },
+    {
+      "layers": 7,
+      "n": 286,
+      "mean_score": 25.8
+    },
+    {
+      "layers": 8,
+      "n": 168,
+      "mean_score": 32.0
+    }
   ],
-  "psychedelic_soul_family": { "prompts": 488, "mean_score_by_layers": { "2": 8.0, "4": 31.7, "5": 39.1, "6": 35.3, "7": 37.2, "8": 60.5 } },
+  "psychedelic_soul_family": {
+    "prompts": 488,
+    "mean_score_by_layers": {
+      "2": 8.0,
+      "4": 31.7,
+      "5": 39.1,
+      "6": 35.3,
+      "7": 37.2,
+      "8": 60.5
+    }
+  },
   "mentions": {
     "whisper": 414,
     "spoken_word": 173,
@@ -57,5 +190,91 @@
     "909": 543,
     "bass": 3390
   },
-  "caveat": "score = plays + 10*favorites, не слепой тест качества; выбросы в топе есть (Last Train, 598). Цифры — направление, арбитр — слепое прослушивание владельца (фаза 2)."
+  "caveat": "score = plays + 10*favorites, не слепой тест качества; выбросы в топе есть (Last Train, 598). Цифры — направление, арбитр — слепое прослушивание владельца (фаза 2).",
+  "layer_lift_v2_blocks": {
+    "_unit": "доля промтов с блоком, %; расширенный набор блоков (v3)",
+    "drift_guards": {
+      "top100": 56,
+      "corpus": 15,
+      "lift": 3.7
+    },
+    "vocal_delivery": {
+      "top100": 65,
+      "corpus": 23,
+      "lift": 2.9
+    },
+    "arrangement_form": {
+      "top100": 32,
+      "corpus": 14,
+      "lift": 2.3
+    },
+    "instrument_roles": {
+      "top100": 55,
+      "corpus": 28,
+      "lift": 1.9
+    },
+    "mix_roles": {
+      "top100": 39,
+      "corpus": 20,
+      "lift": 1.9
+    },
+    "production_chain": {
+      "top100": 66,
+      "corpus": 37,
+      "lift": 1.8
+    },
+    "hook_melody": {
+      "top100": 9,
+      "corpus": 6,
+      "lift": 1.5
+    },
+    "key_scale": {
+      "top100": 2,
+      "corpus": 5,
+      "lift": 0.4
+    }
+  },
+  "blocks_vs_score": [
+    {
+      "blocks": 1,
+      "n": 1767,
+      "mean_score": 15.8
+    },
+    {
+      "blocks": 2,
+      "n": 808,
+      "mean_score": 14.4
+    },
+    {
+      "blocks": 3,
+      "n": 419,
+      "mean_score": 19.9
+    },
+    {
+      "blocks": 4,
+      "n": 464,
+      "mean_score": 22.9
+    },
+    {
+      "blocks": 5,
+      "n": 322,
+      "mean_score": 30.2
+    },
+    {
+      "blocks": 6,
+      "n": 313,
+      "mean_score": 27.0
+    },
+    {
+      "blocks": 7,
+      "n": 203,
+      "mean_score": 18.7
+    },
+    {
+      "blocks": 8,
+      "n": 58,
+      "mean_score": 26.7
+    }
+  ],
+  "_note_v3": "v3: оптимум — пять ролевых блоков (mean score 30,2), после шести плато и спад; тональность/лад не различает успех (0,4×)."
 }

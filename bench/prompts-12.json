@@ -8,7 +8,7 @@
       "bpm": 72,
       "briefRu": "психоделик-соул, ведущая живая бас-гитара впереди микса, Hammond с вращающимся Leslie, ленточная сатурация, тёплый аналог, глубокий низ, волновая динамика с почти-тишиной перед возвращением барабанов, медленный плотный грув с райд-тарелкой, вступление на радиопомехах, сонный портовый город, короткий монолог диджея поверх музыки, 72 BPM",
       "promptA": "VOCAL-CONST, SONIC-CONST, 72 BPM, slow tight drum groove with ride cymbal, radio static intro, sleepy port town mood, spoken sign-on monologue over the music",
-      "promptB": "deep low male voice, hypnotic hoarse whisper flowing into melodic rasp, whisper-sung throughout, intimate confessional delivery, chest voice always, register never rises, layered whisper backing vocals in choruses, haunting and mesmerizing, psychedelic soul, slow tight drum groove (kick + snare + ride), 72 BPM, live bass guitar, organ, slow Leslie speaker, radio static, analog warmth, tight mix, AM radio broadcast texture, pirate radio studio, wave dynamics, near-silent suspensions before drums re-enter, lyrics about radio and harbour",
+      "promptB": "deep low male voice, hypnotic hoarse whisper flowing into melodic rasp, whisper-sung throughout, intimate confessional delivery, chest voice always, register never rises, layered whisper backing vocals in choruses, haunting and mesmerizing, psychedelic soul, slow tight drum groove (kick + snare + ride), 72 BPM, live bass guitar, organ, slow Leslie speaker, lead role, in front of the mix, dense mix, radio static, analog warmth, tight mix, AM radio broadcast texture, pirate radio studio, opening on texture, wave dynamics, near-silent suspensions before drums re-enter, lyrics about radio and harbour",
       "layersB": {
         "rhythm": "slow tight drum groove (kick + snare + ride)",
         "bpm": "72 BPM",
@@ -43,7 +43,7 @@
       },
       "lengths": {
         "a": 157,
-        "b": 540
+        "b": 603
       },
       "selfCheck": {
         "ok": true,
@@ -57,7 +57,7 @@
       "bpm": 76,
       "briefRu": "психоделик-соул, ведущая живая бас-гитара впереди микса, Hammond с вращающимся Leslie, ленточная сатурация, тёплый аналог, глубокий низ, волновая динамика с почти-тишиной перед возвращением барабанов, мягкий глубокий грув с метёлками, туманный, мечтательный, перечисление бессонных вещей, 76 BPM",
       "promptA": "VOCAL-CONST, SONIC-CONST, 76 BPM, soft deep drum groove, brushed percussion, mood: dreamy fog, inventory of sleepless things",
-      "promptB": "deep low male voice, hypnotic hoarse whisper flowing into melodic rasp, whisper-sung throughout, intimate confessional delivery, chest voice always, register never rises, layered whisper backing vocals in choruses, haunting and mesmerizing, psychedelic soul, soft drum groove (brushed drums, kick + snare + ride), 76 BPM, live bass guitar, organ, slow Leslie speaker, foggy room tone, analog warmth, tape saturation, wave dynamics, near-silent suspensions before drums re-enter, dreamy, lyrics about fog and dreams",
+      "promptB": "deep low male voice, hypnotic hoarse whisper flowing into melodic rasp, whisper-sung throughout, intimate confessional delivery, chest voice always, register never rises, layered whisper backing vocals in choruses, haunting and mesmerizing, psychedelic soul, soft drum groove (brushed drums, kick + snare + ride), 76 BPM, live bass guitar, organ, slow Leslie speaker, lead role, in front of the mix, foggy room tone, analog warmth, tape saturation, wave dynamics, near-silent suspensions before drums re-enter, dreamy, lyrics about fog and dreams",
       "layersB": {
         "rhythm": "soft drum groove (brushed drums, kick + snare + ride)",
         "bpm": "76 BPM",
@@ -92,7 +92,7 @@
       },
       "lengths": {
         "a": 124,
-        "b": 514
+        "b": 546
       },
       "selfCheck": {
         "ok": true,
@@ -106,7 +106,7 @@
       "bpm": 84,
       "briefRu": "психоделик-соул, ведущая живая бас-гитара впереди микса, Hammond с вращающимся Leslie, ленточная сатурация, тёплый аналог, глубокий низ, волновая динамика с почти-тишиной перед возвращением барабанов, покачивающийся гипнотичный грув, ритмичные удары органа, глиссандо на басу, электричество, изъеденное солью, дрожащее предвкушение, 84 BPM",
       "promptA": "VOCAL-CONST, SONIC-CONST, 84 BPM, rolling hypnotic drum groove, rhythmic organ stabs, glissando electric bass accents, mood: salt-corroded electricity, shivering anticipation",
-      "promptB": "deep low male voice, hypnotic hoarse whisper flowing into melodic rasp, whisper-sung throughout, intimate confessional delivery, chest voice always, register never rises, layered whisper backing vocals in choruses, haunting and mesmerizing, psychedelic soul, rolling hypnotic drum groove (kick + snare + ride), 84 BPM, live bass guitar, slow Leslie speaker, rhythmic organ stabs, analog warmth, tape saturation, wave dynamics, near-silent suspensions before drums re-enter",
+      "promptB": "deep low male voice, hypnotic hoarse whisper flowing into melodic rasp, whisper-sung throughout, intimate confessional delivery, chest voice always, register never rises, layered whisper backing vocals in choruses, haunting and mesmerizing, psychedelic soul, rolling hypnotic drum groove (kick + snare + ride), 84 BPM, live bass guitar, slow Leslie speaker, rhythmic organ stabs, lead role, in front of the mix, analog warmth, tape saturation, wave dynamics, near-silent suspensions before drums re-enter",
       "layersB": {
         "rhythm": "rolling hypnotic drum groove (kick + snare + ride)",
         "bpm": "84 BPM",
@@ -136,7 +136,7 @@
       },
       "lengths": {
         "a": 174,
-        "b": 472
+        "b": 504
       },
       "selfCheck": {
         "ok": true,
@@ -150,7 +150,7 @@
       "bpm": 90,
       "briefRu": "психоделик-соул, ведущая живая бас-гитара впереди микса, Hammond с вращающимся Leslie, ленточная сатурация, тёплый аналог, глубокий низ, волновая динамика с почти-тишиной перед возвращением барабанов, гипнотичный паттерн барабанов вопрос-ответ, гул телефонной линии, интимная тайна, слушатель звонит в студию, 90 BPM",
       "promptA": "VOCAL-CONST, SONIC-CONST, 90 BPM, hypnotic call-and-response drum pattern, telephone-line hum texture, mood: intimate mystery, a listener calls the station",
-      "promptB": "deep low male voice, hypnotic hoarse whisper flowing into melodic rasp, whisper-sung throughout, intimate confessional delivery, chest voice always, register never rises, layered whisper backing vocals in choruses, haunting and mesmerizing, psychedelic soul, hypnotic drum groove (kick + snare + ride), 90 BPM, live bass guitar, organ, slow Leslie speaker, analog warmth, tape saturation, studio room tone, wave dynamics, near-silent suspensions before drums re-enter",
+      "promptB": "deep low male voice, hypnotic hoarse whisper flowing into melodic rasp, whisper-sung throughout, intimate confessional delivery, chest voice always, register never rises, layered whisper backing vocals in choruses, haunting and mesmerizing, psychedelic soul, hypnotic drum groove (kick + snare + ride), 90 BPM, live bass guitar, organ, slow Leslie speaker, lead role, in front of the mix, analog warmth, tape saturation, studio room tone, wave dynamics, near-silent suspensions before drums re-enter",
       "layersB": {
         "rhythm": "hypnotic drum groove (kick + snare + ride)",
         "bpm": "90 BPM",
@@ -180,7 +180,7 @@
       },
       "lengths": {
         "a": 155,
-        "b": 467
+        "b": 499
       },
       "selfCheck": {
         "ok": true,
@@ -194,7 +194,7 @@
       "bpm": 96,
       "briefRu": "психоделик-соул, ведущая живая бас-гитара впереди микса, Hammond с вращающимся Leslie, ленточная сатурация, тёплый аналог, глубокий низ, волновая динамика с почти-тишиной перед возвращением барабанов, округлый глубокий гипнотичный грув, ведущая мелодичная живая бас-гитара, мягкие завихрения органа, тайный танцзал, все танцуют в тумане, 96 BPM",
       "promptA": "VOCAL-CONST, SONIC-CONST, 96 BPM, round deep hypnotic drum groove, dominant live melodic bass guitar, gentle organ swirls, mood: secret ballroom, everyone dancing in fog",
-      "promptB": "deep low male voice, hypnotic hoarse whisper flowing into melodic rasp, whisper-sung throughout, intimate confessional delivery, chest voice always, register never rises, layered whisper backing vocals in choruses, haunting and mesmerizing, psychedelic soul, soft hypnotic drum groove (kick + snare + ride), 96 BPM, live bass guitar, slow Leslie speaker, swirling organ, foggy room tone, analog warmth, tape saturation, wave dynamics, near-silent suspensions before drums re-enter, lyrics about fog",
+      "promptB": "deep low male voice, hypnotic hoarse whisper flowing into melodic rasp, whisper-sung throughout, intimate confessional delivery, chest voice always, register never rises, layered whisper backing vocals in choruses, haunting and mesmerizing, psychedelic soul, soft hypnotic drum groove (kick + snare + ride), 96 BPM, live bass guitar, slow Leslie speaker, swirling organ, lead role, in front of the mix, melodic, foggy room tone, analog warmth, tape saturation, wave dynamics, near-silent suspensions before drums re-enter, lyrics about fog",
       "layersB": {
         "rhythm": "soft hypnotic drum groove (kick + snare + ride)",
         "bpm": "96 BPM",
@@ -228,7 +228,7 @@
       },
       "lengths": {
         "a": 169,
-        "b": 498
+        "b": 539
       },
       "selfCheck": {
         "ok": true,
@@ -242,7 +242,7 @@
       "bpm": 102,
       "briefRu": "психоделик-соул, ведущая живая бас-гитара впереди микса, Hammond с вращающимся Leslie, ленточная сатурация, тёплый аналог, глубокий низ, волновая динамика с почти-тишиной перед возвращением барабанов, ведущий округлый глубокий грув, живая бас-гитара несёт главную мелодию, тёплые саб-басы накатывают, мощная гипнотичная глубина, гимн глубины, 102 BPM",
       "promptA": "VOCAL-CONST, SONIC-CONST, 102 BPM, dominant round deep drum groove, lead live bass guitar carrying the main melody, warm sub-bass swells, mood: powerful hypnotic depth, anthem of the deep",
-      "promptB": "deep low male voice, hypnotic hoarse whisper flowing into melodic rasp, whisper-sung throughout, intimate confessional delivery, chest voice always, register never rises, layered whisper backing vocals in choruses, haunting and mesmerizing, psychedelic soul, heavy hypnotic drum groove (kick + snare + ride), 102 BPM, live bass guitar, deep sub-bass, organ, slow Leslie speaker, analog warmth, tape saturation, wave dynamics, near-silent suspensions before drums re-enter",
+      "promptB": "deep low male voice, hypnotic hoarse whisper flowing into melodic rasp, whisper-sung throughout, intimate confessional delivery, chest voice always, register never rises, layered whisper backing vocals in choruses, haunting and mesmerizing, psychedelic soul, heavy hypnotic drum groove (kick + snare + ride), 102 BPM, live bass guitar, deep sub-bass, organ, slow Leslie speaker, in front of the mix, carrying the main melody, front-to-back depth, analog warmth, tape saturation, wave dynamics, near-silent suspensions before drums re-enter",
       "layersB": {
         "rhythm": "heavy hypnotic drum groove (kick + snare + ride)",
         "bpm": "102 BPM",
@@ -273,7 +273,7 @@
       },
       "lengths": {
         "a": 187,
-        "b": 471
+        "b": 539
       },
       "selfCheck": {
         "ok": true,
@@ -287,7 +287,7 @@
       "bpm": 88,
       "briefRu": "психоделик-соул, ведущая живая бас-гитара впереди микса, Hammond с вращающимся Leslie, ленточная сатурация, тёплый аналог, глубокий низ, волновая динамика с почти-тишиной перед возвращением барабанов, мягкий покачивающийся грув, орган ведёт гипнотичный поток, исповедь сквозь помехи, нежно и священно, 88 BPM",
       "promptA": "VOCAL-CONST, SONIC-CONST, 88 BPM, soft rolling groove, organ-driven hypnotic flow, mood: confession over interference, gentle and sacred",
-      "promptB": "deep low male voice, hypnotic hoarse whisper flowing into melodic rasp, whisper-sung throughout, intimate confessional delivery, chest voice always, register never rises, layered whisper backing vocals in choruses, haunting and mesmerizing, psychedelic soul, soft rolling drum groove (kick + snare + ride), 88 BPM, live bass guitar, slow Leslie speaker, organ, radio static, analog warmth, tape saturation, wave dynamics, near-silent suspensions before drums re-enter, hypnotic",
+      "promptB": "deep low male voice, hypnotic hoarse whisper flowing into melodic rasp, whisper-sung throughout, intimate confessional delivery, chest voice always, register never rises, layered whisper backing vocals in choruses, haunting and mesmerizing, psychedelic soul, soft rolling drum groove (kick + snare + ride), 88 BPM, live bass guitar, slow Leslie speaker, organ, lead role, in front of the mix, radio static, analog warmth, tape saturation, wave dynamics, near-silent suspensions before drums re-enter, hypnotic",
       "layersB": {
         "rhythm": "soft rolling drum groove (kick + snare + ride)",
         "bpm": "88 BPM",
@@ -319,7 +319,7 @@
       },
       "lengths": {
         "a": 136,
-        "b": 477
+        "b": 509
       },
       "selfCheck": {
         "ok": true,
@@ -333,7 +333,7 @@
       "bpm": 84,
       "briefRu": "психоделик-соул, ведущая живая бас-гитара впереди микса, Hammond с вращающимся Leslie, ленточная сатурация, тёплый аналог, глубокий низ, волновая динамика с почти-тишиной перед возвращением барабанов, интимный разреженный грув, тёплый близкий микрофон, комната диджея над студией, бессонница, ставшая нежной, 84 BPM",
       "promptA": "VOCAL-CONST, SONIC-CONST, 84 BPM, intimate sparse groove, close-mic warmth, mood: the DJ's room, insomnia made tender",
-      "promptB": "deep low male voice, hypnotic hoarse whisper flowing into melodic rasp, whisper-sung throughout, intimate confessional delivery, chest voice always, register never rises, layered whisper backing vocals in choruses, haunting and mesmerizing, psychedelic soul, sparse drum groove (kick + snare + ride), 84 BPM, live bass guitar, organ, slow Leslie speaker, analog warmth, tape saturation, studio room tone, wave dynamics, near-silent suspensions before drums re-enter, emotional",
+      "promptB": "deep low male voice, hypnotic hoarse whisper flowing into melodic rasp, whisper-sung throughout, intimate confessional delivery, chest voice always, register never rises, layered whisper backing vocals in choruses, haunting and mesmerizing, psychedelic soul, sparse drum groove (kick + snare + ride), 84 BPM, live bass guitar, organ, slow Leslie speaker, lead role, in front of the mix, analog warmth, tape saturation, studio room tone, wave dynamics, near-silent suspensions before drums re-enter, emotional",
       "layersB": {
         "rhythm": "sparse drum groove (kick + snare + ride)",
         "bpm": "84 BPM",
@@ -363,7 +363,7 @@
       },
       "lengths": {
         "a": 117,
-        "b": 476
+        "b": 508
       },
       "selfCheck": {
         "ok": true,
@@ -377,7 +377,7 @@
       "bpm": 78,
       "briefRu": "психоделик-соул, ведущая живая бас-гитара впереди микса, Hammond с вращающимся Leslie, ленточная сатурация, тёплый аналог, глубокий низ, волновая динамика с почти-тишиной перед возвращением барабанов, медленный гипнотичный грув, многослойные шёпот-хоры низко в миксе, далёкий гудок в тумане, призрачная нежность, поют морские призраки, 78 BPM",
       "promptA": "VOCAL-CONST, SONIC-CONST, 78 BPM, slow hypnotic groove, layered whisper choirs low in the mix, distant foghorn texture, mood: haunted tender, sea ghosts sing",
-      "promptB": "deep low male voice, hypnotic hoarse whisper flowing into melodic rasp, whisper-sung throughout, intimate confessional delivery, chest voice always, register never rises, layered whisper backing vocals in choruses, haunting and mesmerizing, psychedelic soul, slow hypnotic drum groove (kick + snare + ride), 78 BPM, live bass guitar, deep low end, organ, slow Leslie speaker, foggy room tone, analog warmth, tape saturation, wave dynamics, near-silent suspensions before drums re-enter, lyrics about fog",
+      "promptB": "deep low male voice, hypnotic hoarse whisper flowing into melodic rasp, whisper-sung throughout, intimate confessional delivery, chest voice always, register never rises, layered whisper backing vocals in choruses, haunting and mesmerizing, psychedelic soul, slow hypnotic drum groove (kick + snare + ride), 78 BPM, live bass guitar, deep low end, organ, slow Leslie speaker, lead role, in front of the mix, low in the mix, foggy room tone, analog warmth, tape saturation, wave dynamics, near-silent suspensions before drums re-enter, lyrics about fog",
       "layersB": {
         "rhythm": "slow hypnotic drum groove (kick + snare + ride)",
         "bpm": "78 BPM",
@@ -412,7 +412,7 @@
       },
       "lengths": {
         "a": 157,
-        "b": 503
+        "b": 551
       },
       "selfCheck": {
         "ok": true,
@@ -426,7 +426,7 @@
       "bpm": 72,
       "briefRu": "психоделик-соул, ведущая живая бас-гитара впереди микса, Hammond с вращающимся Leslie, ленточная сатурация, тёплый аналог, глубокий низ, волновая динамика с почти-тишиной перед возвращением барабанов, медленный плотный грув, ответы лентой с эхо-задержкой, нежелание заканчивать, финал откладывается, 72 BPM",
       "promptA": "VOCAL-CONST, SONIC-CONST, 72 BPM, slow tight groove with tape-echo delay answers, mood: reluctance, ending postponed",
-      "promptB": "deep low male voice, hypnotic hoarse whisper flowing into melodic rasp, whisper-sung throughout, intimate confessional delivery, chest voice always, register never rises, layered whisper backing vocals in choruses, haunting and mesmerizing, psychedelic soul, slow tight drum groove (kick + snare + ride), 72 BPM, live bass guitar, organ, slow Leslie speaker, analog warmth, tight mix, tape echo delay, wave dynamics, near-silent suspensions before drums re-enter",
+      "promptB": "deep low male voice, hypnotic hoarse whisper flowing into melodic rasp, whisper-sung throughout, intimate confessional delivery, chest voice always, register never rises, layered whisper backing vocals in choruses, haunting and mesmerizing, psychedelic soul, slow tight drum groove (kick + snare + ride), 72 BPM, live bass guitar, organ, slow Leslie speaker, lead role, in front of the mix, dense mix, analog warmth, tight mix, tape echo delay, wave dynamics, near-silent suspensions before drums re-enter",
       "layersB": {
         "rhythm": "slow tight drum groove (kick + snare + ride)",
         "bpm": "72 BPM",
@@ -456,7 +456,7 @@
       },
       "lengths": {
         "a": 116,
-        "b": 462
+        "b": 505
       },
       "selfCheck": {
         "ok": true,
@@ -470,7 +470,7 @@
       "bpm": 66,
       "briefRu": "психоделик-соул, ведущая живая бас-гитара впереди микса, Hammond с вращающимся Leslie, ленточная сатурация, тёплый аналог, глубокий низ, волновая динамика с почти-тишиной перед возвращением барабанов, очень медленный глубокий грув, реверс-плёнка, мягкое дрожание скорости, завещание, нежно и вечно, 66 BPM",
       "promptA": "VOCAL-CONST, SONIC-CONST, 66 BPM, very slow deep groove, reverse-tape textures, gentle wow and flutter, mood: testament, tender and eternal",
-      "promptB": "deep low male voice, hypnotic hoarse whisper flowing into melodic rasp, whisper-sung throughout, intimate confessional delivery, chest voice always, register never rises, layered whisper backing vocals in choruses, haunting and mesmerizing, psychedelic soul, slow soft drum groove (kick + snare + ride), 66 BPM, live bass guitar, organ, slow Leslie speaker, analog warmth, reverse tape textures, tape saturation, wave dynamics, near-silent suspensions before drums re-enter, emotional, lyrics about tape",
+      "promptB": "deep low male voice, hypnotic hoarse whisper flowing into melodic rasp, whisper-sung throughout, intimate confessional delivery, chest voice always, register never rises, layered whisper backing vocals in choruses, haunting and mesmerizing, psychedelic soul, slow soft drum groove (kick + snare + ride), 66 BPM, live bass guitar, organ, slow Leslie speaker, lead role, in front of the mix, analog warmth, reverse tape textures, tape saturation, wave dynamics, near-silent suspensions before drums re-enter, emotional, lyrics about tape",
       "layersB": {
         "rhythm": "slow soft drum groove (kick + snare + ride)",
         "bpm": "66 BPM",
@@ -503,7 +503,7 @@
       },
       "lengths": {
         "a": 139,
-        "b": 503
+        "b": 535
       },
       "selfCheck": {
         "ok": true,
@@ -517,7 +517,7 @@
       "bpm": 60,
       "briefRu": "психоделик-соул, ведущая живая бас-гитара впереди микса, Hammond с вращающимся Leslie, ленточная сатурация, тёплый аналог, глубокий низ, волновая динамика с почти-тишиной перед возвращением барабанов, самый медленный глубокий грув, растворяющийся в нарастании органа, тема закрытия на помехах, покой, прилив вернулся, частота засыпает, 60 BPM",
       "promptA": "VOCAL-CONST, SONIC-CONST, 60 BPM, slowest deep groove dissolving into organ swell, static closing theme, mood: peace, tide returns, the frequency sleeps",
-      "promptB": "deep low male voice, hypnotic hoarse whisper flowing into melodic rasp, whisper-sung throughout, intimate confessional delivery, chest voice always, register never rises, layered whisper backing vocals in choruses, haunting and mesmerizing, psychedelic soul, slow drum groove (kick + snare + ride), 60 BPM, live bass guitar, slow Leslie speaker, organ, radio static, analog warmth, tape saturation, wave dynamics, near-silent suspensions before drums re-enter",
+      "promptB": "deep low male voice, hypnotic hoarse whisper flowing into melodic rasp, whisper-sung throughout, intimate confessional delivery, chest voice always, register never rises, layered whisper backing vocals in choruses, haunting and mesmerizing, psychedelic soul, slow drum groove (kick + snare + ride), 60 BPM, live bass guitar, slow Leslie speaker, organ, lead role, in front of the mix, radio static, analog warmth, tape saturation, build into the last chorus, wave dynamics, near-silent suspensions before drums re-enter",
       "layersB": {
         "rhythm": "slow drum groove (kick + snare + ride)",
         "bpm": "60 BPM",
@@ -548,7 +548,7 @@
       },
       "lengths": {
         "a": 152,
-        "b": 459
+        "b": 519
       },
       "selfCheck": {
         "ok": true,

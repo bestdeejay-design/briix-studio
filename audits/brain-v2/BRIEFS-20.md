@@ -43,14 +43,20 @@
 | s15 | synthetic | только фактура | 98 / 98 | ok | `vocals, hoarse rasp, English lyrics, steady drum groove (kick + snare), analog warmth, atmospheric` |
 | s16 | synthetic | только темп | 104 / 104 | ok | `vocals, intimate delivery, English lyrics, steady drum groove (kick + snare), analog warmth, atmospheric` |
 | s17 | synthetic | только ритм-слова | 110 / 110 | ok | `vocals, intimate delivery, English lyrics, steady drum groove (kick + snare), bass, analog warmth, atmospheric` |
-| s18 | synthetic | перегруз: 600+ символов разнородных тегов | 221 / 521 | ok | `psychedelic soul, trip-hop, deep bass voice, whispered delivery, spoken word, hoarse rasp, falsetto, English lyrics, slow live percussion groove (congas, kick + snare + ride), tape saturation, analog warmth, vinyl crackle` |
+| s18 | synthetic | перегруз: 600+ символов разнородных тегов | 221 / 548 | ok | `psychedelic soul, trip-hop, deep bass voice, whispered delivery, spoken word, hoarse rasp, falsetto, English lyrics, slow live percussion groove (congas, kick + snare + ride), tape saturation, analog warmth, vinyl crackle` |
 | s19 | synthetic | трэп | 159 / 159 | ok | `trap, vocals, intimate delivery, English lyrics, sparse hi-hat pattern (808 kick, triplet hi-hats), 808 sub bass, clean modern production, punchy low end, dark` |
 | s20 | synthetic | негатив «без ударных» | 127 / 127 | ok | `orchestral, vocals, intimate delivery, English lyrics, beatless drift, low strings and room tone only, analog warmth, cinematic` |
+
 ## Разбор
 
 **Слоевой чек-лист исполнен на 20/20.** Ни один бриф — включая пустой (s11),
 одно слово (s12) и перегруз 600+ символов (s18) — не остаётся без ритм-слоя,
-без характера вокала (кроме инструментала s?b07) и без продакшн-цепочки.
+без характера вокала (кроме инструментала b07) и без продакшн-цепочки.
+
+**v3 — «полный трек, а не три тега».** Помимо трёх базовых слоёв мозг слышит
+роли инструментов, микс, форму во времени и защиту от дрейфа — но только если
+автор об этом сказал. Это проверяется тестом «ничего не выдумываем»: на брифе
+«песня» блоки ролей, микса и формы пусты. Обоснование — RESEARCH_PACK, вопрос 1.
 
 **Где v2 сознательно расходится с топ-промтами корпуса:**
 

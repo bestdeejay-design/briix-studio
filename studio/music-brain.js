@@ -12,11 +12,20 @@
  *   из плоского списка тегов, а из ТРЁХ СЛОЁВ + ХВОСТА, каждый слой = роль в
  *   миксе и одно решающее указание:
  *
- *     ANCHOR  жанр (+ эпоха, если задана)      — рамка, не слой
- *     L3 VOICE   голос: пол + подача + фактура  — кто поёт и как
- *     L2 RHYTHM  темп + грув + состав кита + низ — что качает
- *     L1 SPACE   инструменты + продакшн-цепочка — где и как записано
- *     TAIL       динамика + настроение + концепт — куда едет трек
+ *     ANCHOR  жанр (+ эпоха, если задана)         — рамка, не слой
+ *     L3 VOICE   пол/регистр + подача + фактура   — кто поёт и как
+ *     L2 RHYTHM  темп + грув + состав кита + низ  — что качает
+ *     L1 SPACE   инструменты и их роли + микс +
+ *                продакшн-цепочка + место         — из чего и как записано
+ *     L4 ARRANGEMENT  форма и энергия во времени  — что происходит по ходу
+ *     TAIL       динамика + настроение + концепт  — куда едет трек
+ *   плюс блок GUARDS — защита от дрейфа в позитивной форме (без негативов).
+ *
+ *   Число блоков — не догма: это эмпирика корпуса. Средний score растёт до
+ *   пяти «ролевых» блоков (30,2 при 5 против 15,8 при 1), после шести — плато
+ *   и спад. Поэтому «полный трек» = 5 ролей + якорь + хвост, а не 3 и не 12:
+ *   три роли (голос/ритм/пространство) различают звук, но не описывают форму
+ *   (32 % топ-100 против 13,7 %) и роли инструментов (55 % против 28 %).
  *
  *   Порядок блоков в строке caption — как в топ-промтах корпуса (score 407–448):
  *   жанр → вокал → BPM → ритм-секция → инструменты → продакшн → настроение →
@@ -160,7 +169,7 @@
     ['декламац', 'spoken word'], ['скандир', 'chanted delivery'],
     ['крик', 'screamed delivery'], ['кричит', 'screamed delivery'],
     ['подвыва', 'crooned delivery'], ['в полный голос', 'full-voice delivery'],
-    ['тих', 'intimate delivery'], ['интимн', 'intimate delivery'],
+    ['тихий голос', 'intimate delivery'], ['интимн', 'intimate delivery'],
     ['исповедальн', 'confessional delivery'], ['отстранён', 'detached delivery'],
     ['нежн', 'tender delivery']
   ];
@@ -240,6 +249,60 @@
     ['порт ', 'harbour studio'], ['порт,', 'harbour studio'], ['в порту', 'harbour studio']
   ];
 
+  /* L4 ARRANGEMENT — форма и энергия во времени (корпус: 32 % топ-100 против
+     13,7 %; lift 2,3×). Слой отвечает на вопрос «что происходит по ходу трека»,
+     а не «из чего он сделан». */
+  const ARRANGEMENT_WORDS = [
+    ['холодн вступл', 'cold open on the groove'], ['без вступл', 'cold open on the groove'],
+    ['вступление на', 'opening on texture'], ['вступленье на', 'opening on texture'],
+    ['вступление с', 'opening on texture'], ['вступл', 'intro'],
+    ['первый куплет', 'sparse first verse'], ['второй припев', 'fuller second chorus'],
+    ['после второго припев', 'breakdown after the second chorus'],
+    ['бридж', 'bridge'], ['кода', 'coda'], ['аутро', 'outro'],
+    ['затуха', 'fading outro'], ['нарастан', 'build into the last chorus'],
+    ['дроп', 'drop'], ['брейкдаун', 'breakdown'],
+    ['без припев', 'through-composed, no repeated chorus'],
+    ['без повтор', 'through-composed, evolving each section']
+  ];
+
+  /* L1 SPACE — роли инструментов и микс. В корпусе роли встречаются чаще, чем
+     сами инструменты (55 % топ-100 против 28 %): «live bass carrying the main
+     melody» сильнее, чем «bass». */
+  const ROLE_WORDS = [
+    ['ведущ', 'lead role'], ['ведет главн', 'carrying the main melody'],
+    ['несет главн', 'carrying the main melody'],
+    ['главн мелоди', 'carrying the main melody'], ['мелоди', 'melodic'],
+    ['соло', 'solo'], ['рифф', 'riff'], ['аккорд', 'chords'],
+    ['подложк', 'as a bed'], ['фоном', 'in the background'],
+    ['низко в микс', 'low in the mix'], ['впереди микс', 'in front of the mix'],
+    ['текстур', 'texture layer'], ['стаккато', 'staccato']
+  ];
+  const MIX_WORDS = [
+    ['середин', 'present midrange'], ['верхн', 'open top end'],
+    ['широк', 'wide stereo image'], ['глубин', 'front-to-back depth'],
+    ['панч', 'punchy transients'], ['плотн', 'dense mix'],
+    ['воздух', 'airy space around instruments'], ['сух', 'dry room']
+  ];
+
+  /* Защита от дрейфа — самый сильный признак корпуса (56 % топ-100 против 15 %,
+     lift 3,7×), но у ACE-Step нет негативного поля: всё формулируется как
+     утверждение о желаемом звуке. */
+  const GUARD_WORDS = [
+    ['без автотюн', 'unprocessed natural voice'],
+    ['без вокалодер', 'unprocessed natural voice'],
+    ['без дисторшн', 'clean tones'], ['без перегруз', 'clean tones'],
+    ['без вибрато', 'straight-tone delivery'],
+    ['без цифр', 'fully analog signal path'],
+    ['без снейр', 'kick and hats only'],
+    ['без хлопк', 'kick and snare only'],
+    ['без ударн', 'beatless drift'],
+    ['без климакс', 'flat dynamics, loop-like'],
+    ['без реверб', 'dry close-mic production'],
+    ['без фальцет', 'full-voice delivery'],
+    ['только мужск', 'male vocals only'], ['только женск', 'female vocals only'],
+    ['только живой', 'live instruments only'], ['только аналог', 'analog only']
+  ];
+
   // TAIL — динамика, настроение, концепт.
   const DYNAMICS_WORDS = [
     ['волн', 'wave dynamics'], ['нарастан', 'slow build'], ['разгон', 'build'],
@@ -317,10 +380,24 @@
   // Скан словаря: совпадения возвращаются в порядке ПОЯВЛЕНИЯ В ТЕКСТЕ, а не в
   // порядке словаря. Так режется по max именно то, что автор сказал раньше
   // (его акцент), а не то, что случайно выше лежит в словаре.
+  /* Короткий русский стем (≤3 букв) ищем только на границе слова: иначе «рок»
+     ловится в «широкий», «поп» — в «попытка», «бит» — в «убитый». */
+  const CYR = /[а-я0-9]/;
+  function shortStem(text, w, from) {
+    if (w.length > 3 || !/[а-я]/.test(w)) return text.indexOf(w, from);
+    let idx = text.indexOf(w, from);
+    while (idx >= 0) {
+      const before = idx > 0 ? text[idx - 1] : '';
+      if (!CYR.test(before)) return idx;
+      idx = text.indexOf(w, idx + 1);
+    }
+    return -1;
+  }
+
   function scan(text, pairs, max) {
     const found = [];
     for (const [word, tag] of pairs) {
-      const pos = text.indexOf(norm(word));
+      const pos = shortStem(text, norm(word), 0);
       if (pos < 0 || negated(text, word)) continue;
       if (found.some(h => h.tag === tag)) continue;
       found.push({ from: word, tag, pos });
@@ -453,12 +530,24 @@
     // Негативы задумки → позитивные теги (model-acestep.md). Живут отдельным
     // блоком: это прямые требования автора, их срезает бюджет последними.
     const positives = uniq(POSITIVE.filter(([re]) => re.test(brief || '')).map(([, tag]) => tag));
+    // Роли инструментов, микс, форма и защита от дрейфа — блоки «полного трека».
+    let roles = uniq(scan(text, ROLE_WORDS, 3).map(r => r.tag));
+    // «carrying the main melody» уже содержит роль лида — общие слова лишние.
+    if (roles.includes('carrying the main melody')) {
+      roles = roles.filter(t => t !== 'lead role' && t !== 'melodic');
+    }
+    const mix = uniq(scan(text, MIX_WORDS, 2).map(m => m.tag));
+    const arrangement = uniq(scan(text, ARRANGEMENT_WORDS, 3).map(a => a.tag))
+      // «opening on texture» точнее, чем общее «intro»: общее убираем.
+      .filter(t => t !== 'intro' || !/opening/.test(uniq(scan(text, ARRANGEMENT_WORDS, 4).map(a => a.tag)).join(' ')));
+    const guards = uniq(scan(text, GUARD_WORDS, 2).map(g => g.tag));
 
     return {
       anchor: { genre: uniq(genreTags), era },
       voice: isSong ? pickVoice(text, options) : { tags: [], character: [], from: {} },
       rhythm: Object.assign(pickRhythm(text, primaryGenre, options), { bpm, bass }),
       space: pickSpace(text, primaryGenre),
+      roles, mix, arrangement, guards,
       positives,
       tail: { dynamics, mood: uniq(mood), concept },
       instrumental: !isSong
@@ -493,7 +582,7 @@
 
   function renderCaption(layers, options = {}) {
     const budget = options.budget || MAX_CAPTION;
-    const { anchor, voice, rhythm, space, tail } = layers;
+    const { anchor, voice, rhythm, space, tail, roles, mix } = layers;
     const units = [];   // {block, text, priority}
     const seen = new Set(); // теги уже прозвучали — второй раз не повторяем
     // Убираем повторы тегов между блоками («flat dynamics» из динамики и из
@@ -529,11 +618,15 @@
     add('rhythm.bass', rhythm.bass, 3);
     // generic-инструменты «drums»/«bass» не нужны: их роль уже описана слоями.
     add('space.instruments', space.instruments.filter(t => t !== 'drums'), 3);
+    add('space.roles', roles || [], 3);
+    add('space.mix', mix || [], 3);
     add('space.atmosphere', (space.atmosphere || []).slice(0, 2), 3);
     add('space.production', space.production.slice(0, 3), 1);
+    add('guards', layers.guards || [], 1);
     add('positives', layers.positives || [], 1);
     add('space.place', space.place.slice(0, 1), 4);
     add('anchor.era', anchor.era, 4);
+    add('arrangement', (layers.arrangement || []), 3);
     add('tail.dynamics', tail.dynamics, 3);
     add('tail.mood', tail.mood.slice(0, 2), 3);
     add('tail.concept', tail.concept.length ? ['lyrics about ' + tail.concept.join(' and ')] : [], 5);
@@ -554,7 +647,8 @@
     // Второй рубеж: снимаем блоки по одному в порядке «сначала самое необязательное».
     // Ритм (rhythm.groove/bpm) и голос не снимаются никогда — это ядро.
     const sacrifice = ['space.place', 'anchor.era', 'tail.concept', 'space.atmosphere',
-      'space.instruments', 'rhythm.bass', 'tail.dynamics', 'tail.mood', 'positives'];
+      'space.mix', 'space.roles', 'space.instruments', 'arrangement', 'rhythm.bass',
+      'tail.dynamics', 'tail.mood', 'positives', 'guards'];
     for (const block of sacrifice) {
       if (fits(kept).length <= budget) break;
       let idx = kept.map(u => u.block).lastIndexOf(block);
@@ -725,7 +819,7 @@
     return n >= 30 && n <= 300 ? n : null;
   }
 
-  const VERSION = '2026-11-15-studio-2';
+  const VERSION = '2026-11-15-studio-3';
 
   globalThis.BRIIX_MUSIC_BRAIN = {
     version: VERSION,
@@ -740,13 +834,15 @@
     // словари и слои открыты для проверок и отладки
     rules: {
       MAX_TAGS, MAX_CAPTION, POSITIVE, LANG_TAGS,
-      layerOrder: ['anchor', 'voice', 'rhythm', 'space', 'tail'],
-      captionOrder: ['genre', 'vocals', 'bpm', 'rhythm-section', 'instruments', 'production', 'mood', 'concept'],
+      layerOrder: ['anchor', 'voice', 'rhythm', 'space', 'arrangement', 'tail', 'guards'],
+      captionOrder: ['genre', 'vocals', 'bpm', 'rhythm-section', 'instruments-roles', 'mix',
+        'production', 'arrangement', 'dynamics', 'mood', 'concept', 'guards'],
       tagOrder: ['genre', 'instruments', 'vocals', 'bpm', 'mood', 'era', 'production'],
       dictionaries: {
         GENRE_WORDS, RHYTHM_CHAR, RHYTHM_GROOVE, RHYTHM_KIT, RHYTHM_BY_GENRE, BASS_WORDS,
         VOCAL_GENDER, VOCAL_DELIVERY, VOCAL_TEXTURE, INSTRUMENT_WORDS, PROD_WORDS,
-        PROD_BY_GENRE, PLACE_WORDS, DYNAMICS_WORDS, MOOD_WORDS, ERA_WORDS, CONCEPT_WORDS
+        PROD_BY_GENRE, PLACE_WORDS, DYNAMICS_WORDS, MOOD_WORDS, ERA_WORDS, CONCEPT_WORDS,
+        ROLE_WORDS, MIX_WORDS, ARRANGEMENT_WORDS, GUARD_WORDS
       }
     }
   };
