@@ -73,7 +73,10 @@
     const { type = 'music' } = options || {};
     const pool = poolFor(options);
     if (!pool.list.length) return '';
-    const seen = new Set((recent[type] || []).slice(-NO_REPEAT));
+    // Окно анти-повтора не шире пула: иначе маленький пул (model-warmup — 10 фраз)
+    // всегда «исчерпан» и фразы начинают повторяться подряд (F-60).
+    const window = Math.min(NO_REPEAT, Math.max(1, pool.list.length - 1));
+    const seen = new Set((recent[type] || []).slice(-window));
     let candidates = pool.list.filter(x => !seen.has(x));
     if (!candidates.length) candidates = pool.list.slice();   // пул исчерпан — окно не должно вешать ожидание
     let from = candidates;

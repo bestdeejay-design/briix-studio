@@ -35,7 +35,7 @@ let state;
 function resetBff() {
   state = {
     chatPosts: [], chatBlocked: false, chatImproveText: 'УЛУЧШЕННЫЙ ТЕКСТ', chatSlow: false, improveDelay: 0, favoriteFail: false, coverRateLimit: 0, coverRequests: 0, audioRequests: 0, photoRequests: 0, fileOrder: [], fileDelay: 0, activeFiles: 0, maxActiveFiles: 0,
-    jobPosts: [], jobBlock: false, pollFailures: [], pollAttempts: 0, polls: 0, deleted: {}, favs: {}, jobSeq: 1, pollsOf: {}
+    jobPosts: [], jobBlock: false, pollFailures: [], pollAttempts: 0, polls: 0, deleted: {}, favs: {}, jobSeq: 1, pollsOf: {}, cancels: []
   };
 }
 resetBff();
@@ -140,6 +140,14 @@ function bffServer(port) {
         readBody(body => { if (typeof body.favorite !== 'boolean') return send(400, { error: { code: 'bad_schema', message: 'bad' } }); state.favs[favM[1]] = body.favorite; send(200, { id: favM[1], favorite: body.favorite }); });
         return;
       }
+      // T-05: у реального bff есть POST /jobs/{id}/cancel — мок обязан отвечать на него.
+      const cancelM = req.url.match(/^\/jobs\/([^/]+)\/cancel$/);
+      if (cancelM && req.method === 'POST') {
+        state.cancels.push(cancelM[1]);
+        const post = state.jobPosts.find(p => p.id === cancelM[1]);
+        send(200, { id: cancelM[1], status: post ? 'cancelled' : 'job_not_found' });
+        return;
+      }
       const delM = req.url.match(/^\/jobs\/([^/]+)$/);
       if (delM && req.method === 'DELETE') {
         state.deleted[delM[1]] = true;
@@ -159,7 +167,12 @@ function bffServer(port) {
         if (!post || state.deleted[post.id]) { send(404, { error: { code: 'job_not_found', message: 'deleted' } }); return; }
         if ((state.pollsOf[post.id] || 0) < 2) {
           state.pollsOf[post.id] = (state.pollsOf[post.id] || 0) + 1;
-          const stage = post.type === 'music' ? (state.pollsOf[post.id] === 1 ? 'writing-lyrics' : 'synthesizing') : 'generating';
+          // Стадии по контракту bff: vocal — writing-lyrics → synthesizing,
+          // instrumental — model-warmup → generating (T-02).
+          let stage;
+          if (post.type === 'music' && post.params?.instrumental) stage = state.pollsOf[post.id] === 1 ? 'model-warmup' : 'generating';
+          else if (post.type === 'music') stage = state.pollsOf[post.id] === 1 ? 'writing-lyrics' : 'synthesizing';
+          else stage = 'generating';
           send(200, { id: post.id, type: post.type, status: 'running', stage });
           return;
         }
@@ -171,8 +184,11 @@ function bffServer(port) {
       if (peaksM && req.method === 'GET') {
         if (peaksM[1].includes('nopeaks')) { res.writeHead(404, { 'Content-Type': 'application/json', ...cors }); res.end(JSON.stringify({ error: { code: 'not_found' } })); return; }
         const peaks = Array.from({ length: 160 }, (_, i) => 0.2 + 0.6 * Math.abs(Math.sin(i / 9)));
+        // Контракт server-contract/README: объект {id, duration, peaks}; голый массив —
+        // только для legacy-джоб: клиент обязан принимать обе формы (T-01).
+        const body = peaksM[1].includes('legacy') ? peaks : { id: peaksM[1], duration: 187.4, peaks };
         res.writeHead(200, { 'Content-Type': 'application/json', ...cors });
-        res.end(JSON.stringify(peaks));
+        res.end(JSON.stringify(body));
         return;
       }
       if (req.url.startsWith('/files/') && (req.url.includes('.m4a') || req.url.includes('.png') || req.url.includes('.wav'))) {
@@ -370,6 +386,8 @@ function bffServer(port) {
   await p.waitForSelector('.stage-progress-label', { timeout: 5000 });
   assert.match(await p.locator('.stage-progress-label').innerText(), /этап:/i, 'progress bar label present');
   await p.waitForSelector('.card.assistant audio', { timeout: 20000 });
+  // T-01: мок отдаёт пики объектом {id,duration,peaks} — волна обязана нарисоваться.
+  await p.waitForSelector('.card.assistant .waveform-canvas', { timeout: 10000 });
   const seen = await p.evaluate(() => window.__stageSeen);
   assert.ok(seen.length >= 1, 'polling stages were shown: ' + seen.join(','));
   const musicPost = state.jobPosts.at(-1);
@@ -380,6 +398,10 @@ function bffServer(port) {
   assert.equal(musicPost.params.duration, undefined, 'duration must NOT be sent (infra#93: length follows lyrics)');
   assert.equal(musicPost.params.duration_seconds, undefined, 'legacy key must not be sent');
   assert.equal(musicPost.params.instrumental, undefined);
+  // T-03: кириллическая лирика => params.language = ru (иначе bff поёт по-английски).
+  assert.equal(musicPost.params.language, 'ru', 'cyrillic lyrics => params.language ru');
+  // T-53: название — первая содержательная строка, а не структурный тег [Verse].
+  assert.equal(musicPost.params.title, 'Город спит', 'title comes from a lyric line, not a [Verse] tag');
   // Pro через чип модели + снова инструментал (режим «Инструментал» выбран явно).
   await p.locator('.seg-btn[data-vocal="1"]').click();
   assert.equal(await p.locator('.seg-btn[data-vocal="1"]').getAttribute('aria-pressed'), 'true', 'instrumental mode explicitly selected');
@@ -391,7 +413,21 @@ function bffServer(port) {
   await p.waitForFunction(() => document.querySelectorAll('audio').length >= 2, {}, { timeout: 20000 });
   assert.equal(state.jobPosts.at(-1).params.model, 'ace-step-pro');
   assert.equal(state.jobPosts.at(-1).params.instrumental, true, 'instrumental mode adds the flag');
-  ok('music job: lyrics + style + instrumental/pro chips, stages, audio player', {});
+  assert.equal(state.jobPosts.at(-1).params.language, undefined, 'instrumental: no language field (no vocals)');
+  const instSeen = await p.evaluate(() => window.__stageSeen);
+  assert.ok(instSeen.includes('model-warmup') && instSeen.includes('generating'), 'instrumental stages model-warmup -> generating are shown (T-02)');
+  // Вокал с английской лирикой: language=en по умолчанию (T-03).
+  await p.locator('.seg-btn[data-vocal="0"]').click();
+  await p.locator('#lyrics').fill('[Verse]\nCity sleeps\n[Chorus]\nSo do I');
+  await p.locator('#musicPrompt').fill('dream pop, 90 BPM');
+  await p.locator('#send').click();
+  await p.waitForFunction(() => document.querySelectorAll('audio').length >= 3, {}, { timeout: 25000 });
+  assert.equal(state.jobPosts.at(-1).params.language, 'en', 'ASCII lyrics => params.language en (default)');
+  assert.equal(state.jobPosts.at(-1).params.title, 'City sleeps', 'title from the first meaningful line');
+  // T-51: эксклюзивный транспорт — одновременно играет не больше одного трека.
+  const playing = await p.evaluate(() => [...document.querySelectorAll('audio')].filter(a => !a.paused).length);
+  assert.ok(playing <= 1, 'exclusive audio transport: at most one track plays, got ' + playing);
+  ok('music job: lyrics + style + instrumental/pro chips, stages, language/title params, exclusive player', {});
 
   // 8. Фото-джоба: превью в ленту.
   await p.locator('.mode[data-mode="photo"]').click();
@@ -463,12 +499,18 @@ function bffServer(port) {
   p = await page();
   await p.locator('.mode[data-mode="photo"]').click();
   await p.locator('#prompt').fill('стоп-маяк');
+  // Джоба уже отправлена (jobId присвоен) — ✕ обязан отменить её и на сервере (T-05).
+  const jobPosted = p.waitForResponse(r => r.request().method() === 'POST' && new URL(r.url()).pathname === '/jobs', { timeout: 10000 });
   await p.locator('#send').click();
   await p.waitForSelector('.card.stage .stage-stop', { timeout: 10000 });
+  await jobPosted;
+  const cancelSent = p.waitForRequest(r => r.method() === 'POST' && /\/jobs\/[^/]+\/cancel$/.test(new URL(r.url()).pathname), { timeout: 10000 });
   await p.locator('.card.stage .stage-stop').click();
   await p.waitForSelector('.card.notice', { timeout: 10000 });
   assert.match(await p.locator('.card.notice').last().innerText(), /ожидание остановлено/i);
-  ok('job polling stop via in-card ✕ shows a notice and frees the composer', {});
+  await cancelSent;
+  assert.ok(state.cancels.length >= 1, '✕ sends POST /jobs/{id}/cancel to the server (T-05)');
+  ok('job polling stop via in-card ✕ cancels the job on the server, shows a notice, frees the composer', {});
 
   // 12. Новый чат сохраняет старый; его можно открыть через историю.
   await p.locator('.mode[data-mode="chat"]').click();
@@ -804,7 +846,8 @@ function bffServer(port) {
   await p.evaluate(async () => {
     const { profile, backend } = await BriixSessionStore.open('tester');
     profile.sessions[0].feed = Array.from({ length: 100 }, (_, i) => ({
-      t: 'media', who: 'Трек ' + i, kind: 'music', file: '/files/shared.m4a'
+      // legacy-джобы: мок отдаёт им пики ГОЛЫМ МАССИВОМ — обе формы контракта должны работать (T-01).
+      t: 'media', who: 'Трек ' + i, kind: 'music', job: 'legacy-' + i, file: '/files/shared.m4a'
     }));
     await BriixSessionStore.save(profile, profile.revision, backend);
   });

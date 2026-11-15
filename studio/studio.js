@@ -81,7 +81,17 @@
       error.retryAfter = response.headers.get('Retry-After');
       throw error;
     }
-    if (!response.ok) throw new BusError('http', 'Сервер ответил ' + response.status + '.', response.status);
+    if (!response.ok) {
+      // T-09: сервер отдаёт конверт {error:{code,message,request_id}} и для 404/5xx —
+      // показываем его, а не голый статус; код запроса идёт в карточку ошибки.
+      let payload = null;
+      try { payload = await response.json(); } catch { /* пустое тело */ }
+      const code = payload?.error?.code || 'http';
+      const message = payload?.error?.message || ('Сервер ответил ' + response.status + '.');
+      const error = new BusError(code, message, response.status);
+      if (payload?.error?.request_id) error.requestId = payload.error.request_id;
+      throw error;
+    }
     return response;
   }
 
@@ -142,7 +152,7 @@
   }
 
   let activePolls = 0;
-  async function pollJob(id, { onStatus, intervalMs = 2000, timeoutMs = 40 * 60000, shouldStop }) {
+  async function pollJob(id, { onStatus, intervalMs = 2000, timeoutMs = 40 * 60000, shouldStop, onRetry }) {
     const started = Date.now();
     let failures = 0, retryWait = 0;
     activePolls++;
@@ -154,13 +164,20 @@
         let response;
         try { response = await request('/jobs/' + encodeURIComponent(id), { headers: headers() }); }
         catch (error) {
-          if (![429, 503].includes(error.status) || failures >= 3) throw error;
-          const fakeResponse = { headers: { get: () => error.retryAfter } };
-          retryWait = retryDelay(fakeResponse, failures++);
+          // 404 — задача исчезла (retention/перезапуск): ретраить бессмысленно (T-14).
+          if (error.status === 404) throw new BusError('job_gone', 'Задача исчезла на сервере (404) — возможно, истёк срок хранения.', 404);
+          // 401 ретраить нет смысла; остальное (сеть, 5xx, очередь) — транзиентное:
+          // держим удар до 5 сбоев подряд с бэкоффом (T-14: один потерянный пакет
+          // больше не рвёт 10-минутную pro-генерацию).
+          if (error.status === 401 || error.name === 'AbortError') throw error;
+          failures++;
+          if (failures >= 5) throw error;
+          retryWait = retryDelay({ headers: { get: () => error.retryAfter } }, failures - 1);
           if (retryWait > 30000) throw error;
+          onRetry?.(failures);
           continue;
         }
-        failures = 0; retryWait = 0;
+        if (failures) { failures = 0; retryWait = 0; onRetry?.(0); }
         const data = await response.json();
         onStatus?.(data);
         if (data.status === 'ready') {
@@ -256,6 +273,19 @@
     return url;
   }
 
+  // T-51: один активный звук в студии — новое воспроизведение ставит на паузу
+  // предыдущее. Лента, библиотека и restore создают аудио в двух местах, но
+  // проходят через один реестр, поэтому двух одновременных треков больше нет.
+  const liveAudios = new Set();
+  function claimAudio(audio) {
+    for (const a of [...liveAudios]) if (!a.isConnected) liveAudios.delete(a);
+    if (liveAudios.has(audio)) return;
+    liveAudios.add(audio);
+    audio.addEventListener('play', () => {
+      for (const other of liveAudios) if (other !== audio && !other.paused) other.pause();
+    });
+  }
+
   function warnStorage(error) {
     storageDirty = true;
     els.storageWarning.hidden = false;
@@ -299,6 +329,14 @@
     session.jobs.push({ job, kind, input, createdAt: Date.now() });
     session.updatedAt = Date.now();
     persistSessions();
+  }
+  // T-52: выполненная джоба покидает session.jobs — результат уже в ленте (feed),
+  // повторный рендер при следующей загрузке не нужен.
+  function settleSessionJob(session, jobId) {
+    if (!session?.jobs?.length) return;
+    const before = session.jobs.length;
+    session.jobs = session.jobs.filter(x => x.job !== jobId);
+    if (session.jobs.length !== before) { session.updatedAt = Date.now(); persistSessions(); }
   }
   function feedPush(d, session = activeSession) {
     if (!session) return;
@@ -359,11 +397,113 @@
   const assistantId = { chat: 'mentor', photo: 'art-dir', music: 'producer' };
   const undoBackup = { lyrics: null, musicPrompt: null };
 
+  // ---- T-52: ожидание переживает перезагрузку -------------------------------
+  // session.jobs пишется при отправке (recordSessionJob). На старте сессии
+  // спрашиваем сервер о судьбе каждой джобы: готовая — карточка результата,
+  // живая — карточка ожидания с поллингом, умершая — заметка. Мёртвые записи
+  // вычищаются, чтобы следующий reload не рисовал их заново.
+  async function resumeSessionJobs(session) {
+    if (!session || session !== activeSession) return;
+    const jobs = Array.isArray(session.jobs) ? session.jobs.slice() : [];
+    for (const rec of jobs) {
+      if (!rec?.job || (rec.kind !== 'music' && rec.kind !== 'photo')) continue;
+      try {
+        const response = await request('/jobs/' + encodeURIComponent(rec.job), { headers: headers() });
+        const data = await response.json();
+        if (data.status === 'ready' && data.result_url) {
+          settleSessionJob(session, rec.job);
+          await finishResumedJob(session, rec, data);
+        } else if (['error', 'failed', 'cancelled', 'expired'].includes(data.status)) {
+          settleSessionJob(session, rec.job);
+          card('notice', 'Генерация не завершена', 'Задача из прошлой сессии завершилась со статусом «' + data.status + '» — результат не сохранён.', session);
+        } else {
+          resumeWaitingJob(session, rec);
+        }
+      } catch (error) {
+        if (error.status === 404) {
+          settleSessionJob(session, rec.job);
+          card('notice', 'Задача исчезла', 'Задача прошлой сессии не найдена на сервере — срок хранения мог истечь.', session);
+        }
+        // транзиентные ошибки: запись остаётся в session.jobs — попробуем при следующей загрузке
+      }
+    }
+  }
+  async function finishResumedJob(session, rec, data) {
+    if (rec.kind === 'music') {
+      renderTrackCard(session, { who: 'Трек готов', job: rec.job, cover: data.cover_url, input: rec.input || {},
+        file: data.result_url, loadBlob: () => fileBlob(data.result_url, 0) });
+      feedPush({ t: 'media', who: 'Трек готов', kind: 'music', file: data.result_url, job: rec.job, cover: data.cover_url || '', input: rec.input || {} }, session);
+      if (!libEntry(rec.job)) libAdd({ job: rec.job, sessionId: session.id, kind: 'music', prompt: rec.input?.prompt || '',
+        lyrics: rec.input?.lyrics || '', instrumental: rec.input?.instrumental, inputComplete: true, title: rec.input?.title || '',
+        model: rec.input?.model || '', file: data.result_url, cover: data.cover_url || '', created: Date.now(), fav: false });
+    } else {
+      const body = card('assistant', 'Фото готово', '', session);
+      body.textContent = '';
+      const slot = document.createElement('div');
+      body.append(slot);
+      slot.textContent = 'Загружаем файл…';
+      try {
+        const blob = await fileBlob(data.result_url, 1);
+        if (!slot.isConnected || session !== activeSession) return;
+        slot.textContent = '';
+        const img = new Image(); img.alt = 'Результат'; img.src = feedObjectURL(blob); slot.append(img);
+        addDownloadAction(body.closest('.card'), blob, 'briix-photo');
+      } catch (error) { if (slot.isConnected) slot.textContent = 'Файл недоступен. ' + (error.message || ''); }
+      feedPush({ t: 'media', who: 'Фото готово', kind: 'photo', file: data.result_url, job: rec.job }, session);
+      if (!libEntry(rec.job)) libAdd({ job: rec.job, sessionId: session.id, kind: 'photo', prompt: rec.input?.prompt || '', file: data.result_url, created: Date.now(), fav: false });
+    }
+  }
+  function resumeWaitingJob(session, rec) {
+    if (session !== activeSession) return;
+    const stageBody = card('stage', rec.kind === 'music' ? 'Музыка (продолжение)' : 'Фото (продолжение)', '', session);
+    const wait = waitRow(rec.kind === 'music' ? 'music' : 'image', rec.kind === 'music' ? 'synthesizing' : 'generating');
+    const handle = makeCancelHandle();
+    handle.jobId = rec.job;
+    appendStop(wait.row, handle);
+    stageBody.append(wait.row);
+    (async () => {
+      try {
+        const result = await pollJob(rec.job, { shouldStop: () => handle.cancelled, onStatus: d => {
+          if (d.stage) stageBody.querySelector('[data-wait]')?.setAttribute('data-wait-stage', d.stage);
+        }, onRetry: n => setStatus(n ? ('Связь прерывается, пробуем снова (' + n + '/5)…') : 'Работаем…', true) });
+        settleSessionJob(session, rec.job);
+        wait.stop();
+        stageBody.closest('.card').remove();
+        await finishResumedJob(session, rec, result);
+      } catch (error) {
+        wait.stop();
+        stageBody.closest('.card').remove();
+        if (error.name === 'AbortError' || error.code === 'cancelled') {
+          const note = card('notice', 'Ожидание остановлено', 'Отменяем задачу на сервере…', session);
+          const applyCancelNote = ok => {
+            if (ok) settleSessionJob(session, rec.job);
+            if (note?.isConnected) note.textContent = ok
+              ? 'Задача отменена на сервере — очередь и GPU освобождены.'
+              : 'Отменить задачу на сервере не удалось. Проверьте результат в библиотеке.';
+          };
+          if (handle.serverCancelled === null) handle.onServerCancel = applyCancelNote; else applyCancelNote(handle.serverCancelled);
+        } else {
+          card('error', 'Ошибка', error.message || 'Неизвестная ошибка.', session);
+        }
+      }
+    })();
+  }
+
   // Каждая генерация — независимая: свой контроллер отмены и свой ✕ в карточке.
   // Параллельно можно: писать в чат, запускать новые генерации, менять режимы/модели.
   function makeCancelHandle() {
-    const h = { cancelled: false, controller: new AbortController(), stopBtn: null };
-    h.stop = () => { h.cancelled = true; h.controller.abort(); };
+    const h = { cancelled: false, controller: new AbortController(), stopBtn: null, jobId: null, serverCancelled: null, onServerCancel: null };
+    h.stop = () => {
+      h.cancelled = true;
+      h.controller.abort();
+      // T-05: ✕ гасит не только ожидание, но и саму джобу на сервере, иначе
+      // стенд дожёвывает GPU вхолостую (POST /jobs/{id}/cancel, есть в bff.py).
+      if (h.jobId) {
+        request('/jobs/' + encodeURIComponent(h.jobId) + '/cancel', { method: 'POST', headers: headers() })
+          .then(() => { h.serverCancelled = true; h.onServerCancel?.(true); })
+          .catch(() => { h.serverCancelled = false; h.onServerCancel?.(false); });
+      }
+    };
     return h;
   }
   // ✕ в строке ожидания: гасит только свою генерацию.
@@ -475,6 +615,7 @@
   function card(kind, who, text, session = activeSession) {
     const div = document.createElement('div');
     div.className = 'card ' + kind;
+    if (kind === 'stage') div.setAttribute('role', 'status'); // F-50: карточка ожидания объявляется скринридеру
     const whoEl = document.createElement('div');
     whoEl.className = 'who';
     whoEl.textContent = who;
@@ -532,7 +673,8 @@
       return;
     }
     if (error.code === 'unauthorized' && session === activeSession) { els.keyCard.hidden = false; els.keyInput.focus(); }
-    card('error', 'Ошибка', error.message || 'Неизвестная ошибка.', session);
+    const support = error.requestId ? ' Код запроса для поддержки: ' + error.requestId + '.' : '';
+    card('error', 'Ошибка', (error.message || 'Неизвестная ошибка.') + support, session);
   }
 
   let pendingMusicSource = null;
@@ -566,8 +708,11 @@
   function fetchPeaks(job) {
     return request('/files/' + encodeURIComponent(job) + '-peaks.json', { headers: headers() })
       .then(r => r.json())
-      .then(peaks => {
-        if (!Array.isArray(peaks) || !peaks.length) throw new Error('Пики недоступны.');
+      .then(raw => {
+        // Контракт server-contract/README: пики приходят объектом с полем peaks;
+        // ранние стенды отдавали голый массив — принимаем обе формы (T-01).
+        const peaks = Array.isArray(raw) ? raw : (raw && Array.isArray(raw.peaks) ? raw.peaks : null);
+        if (!peaks || !peaks.length) throw new Error('Пики недоступны.');
         return peaks;
       });
   }
@@ -658,6 +803,7 @@
         placeholder.remove();
         if (wave) wave.setAudio(audio);
         state.audio = audio;
+        claimAudio(audio); // T-51: эксклюзивное воспроизведение
         audio.addEventListener('play', () => { frame.classList.add('playing'); frame.setAttribute('aria-label', 'Пауза'); });
         audio.addEventListener('pause', () => { frame.classList.remove('playing'); frame.setAttribute('aria-label', 'Слушать трек'); });
         return audio;
@@ -1236,10 +1382,12 @@
     stageBody.append(wait.row);
     try {
       const id = await submitJob({ type: 'image', prompt: text });
+      handle.jobId = id; // ✕ после отправки отменяет джобу и на сервере (T-05)
       recordSessionJob(session, id, 'photo', { prompt: text });
       const result = await pollJob(id, { shouldStop: () => handle.cancelled, onStatus: d => {
         if (d.stage) stageBody.querySelector('[data-wait]')?.setAttribute('data-wait-stage', d.stage);
-      } });
+      }, onRetry: n => setStatus(n ? ('Связь прерывается, пробуем снова (' + n + '/5)…') : 'Работаем…', true) });
+      settleSessionJob(session, id);
       wait.stop();
       stageBody.closest('.card').remove();
       const item = document.createElement('img');
@@ -1258,7 +1406,19 @@
       wait.stop();
       stageBody.closest('.card').remove();
       if (error.name === 'AbortError' || error.code === 'cancelled') {
-        card('notice', 'Ожидание остановлено', 'Задача может продолжаться на сервере. Проверьте результат в библиотеке.', session);
+        let stoppedNote;
+        if (!handle.jobId) {
+          stoppedNote = card('notice', 'Ожидание остановлено', 'Генерация остановлена до отправки задачи на сервер.', session);
+        } else {
+          stoppedNote = card('notice', 'Ожидание остановлено', 'Отменяем задачу на сервере…', session);
+          const applyCancelNote = ok => {
+            if (ok) settleSessionJob(session, handle.jobId);
+            if (stoppedNote?.isConnected) stoppedNote.textContent = ok
+              ? 'Задача отменена на сервере — очередь и GPU освобождены.'
+              : 'Отменить задачу на сервере не удалось (она могла уже завершиться). Проверьте результат в библиотеке.';
+          };
+          if (handle.serverCancelled === null) handle.onServerCancel = applyCancelNote; else applyCancelNote(handle.serverCancelled);
+        }
       } else {
         if (session === activeSession && mode === 'photo' && !els.prompt.value.trim()) els.prompt.value = text;
         else if (session === activeSession && mode !== 'photo' && !drafts.photo.trim()) drafts.photo = text;
@@ -1345,13 +1505,15 @@
     card('user', 'Вы', requestText, session);
     feedPush({ t: 'user', who: 'Вы', text: requestText }, session);
     const stageBody = card('stage', 'Музыка', '', session); // мгновенно, включая фазу автолирики
-    const wait = waitRow('music', vocal && !lyrics ? 'writing-lyrics' : 'synthesizing');
+    const wait = waitRow('music', !vocal ? 'model-warmup' : (vocal && !lyrics ? 'writing-lyrics' : 'synthesizing'));
     const handle = makeCancelHandle(); // ✕ гасит автолирику и поллинг этой джобы
     appendStop(wait.row, handle);
     stageBody.append(wait.row);
     // Индикатор стадий показывает серверный этап, а не выдуманный процент.
-    const stages = ['writing-lyrics', 'synthesizing', 'album-cover'];
-    const stageNames = { 'writing-lyrics': 'лирика', 'synthesizing': 'синтез', 'album-cover': 'обложка' };
+    // Словари по контракту bff: vocal — writing-lyrics → synthesizing → album-cover,
+    // instrumental — model-warmup → generating → album-cover (T-02).
+    const stages = vocal ? ['writing-lyrics', 'synthesizing', 'album-cover'] : ['model-warmup', 'generating', 'album-cover'];
+    const stageNames = { 'writing-lyrics': 'лирика', 'synthesizing': 'синтез', 'model-warmup': 'разогрев модели', 'generating': 'генерация', 'album-cover': 'обложка' };
     let curStage = stageBody.querySelector('[data-wait]')?.getAttribute('data-wait-stage') || stages[0];
     const bar = document.createElement('div');
     bar.className = 'stage-progress';
@@ -1437,10 +1599,23 @@
       // наставника или первой осмысленной строки лирики, fallback по дате.
       // Сервер (параллельная INFRA-задача) пишет params.title/artist в теги M4A
       // и Content-Disposition — контрактное ожидание, см. server-contract/README.md.
-      const titleSource = (lyrics || style || '').split('\n').map(s => s.trim()).find(s => s.length > 2) || '';
+      // Структурный тег ([Intro]/[Verse 1]/…) — не название песни: в пути автолирики
+      // первая строка лирики — это [Intro], и имя файла не должно становиться
+      // «[Intro] - ник.m4a» (T-53).
+      const isSectionTag = s => /^\[[^\]\n]{1,32}\]$/.test(s);
+      const titleSource = (lyrics || style || '').split('\n').map(s => s.trim()).find(s => s.length > 2 && !isSectionTag(s)) || '';
       const trackTitle = BriixProducer.sanitize(draftTitle || titleSource).slice(0, BriixProducer.MAX_TITLE) || ('BRIIX track ' + new Date().toISOString().slice(0, 10));
       const params = { model: MUSIC_MODELS[snapshot.quality], title: trackTitle, artist: currentUser() };
       if (snapshot.instrumental) params.instrumental = true;
+      else {
+        // T-03: bff ждёт params.language (ru|en) — без поля русский вокал уходит в
+        // модель английским. Явная просьба («на русском») или кириллическая лирика
+        // (осознанный выбор автора) = ru; французский bff не валидирует — не шлём.
+        const explicit = BriixProducer.detectExplicitLanguage(rawIdea) || BriixProducer.detectExplicitLanguage(lyrics || '');
+        if (explicit === 'ru' || explicit === 'en') params.language = explicit;
+        else if (!explicit && lyrics && /[\u0400-\u04FF]/.test(lyrics)) params.language = 'ru';
+        else if (!explicit) params.language = 'en';
+      }
       if (lyrics) params.lyrics = lyrics;
       // В карточку/сессию — исходная идея без изменений (правило #109),
       // promptSent — ровно то, что ушло в модель; повтор подставляет исходную идею.
@@ -1449,10 +1624,12 @@
         title: trackTitle, artist: currentUser(),
         lyricsSource: draftSource || (snapshot.advanced ? 'написал пользователь' : (vocal && !lyrics ? 'автолирика (автор песен)' : 'написал пользователь')) };
       const id = await submitJob({ type: 'music', prompt: finalPrompt, params });
+      handle.jobId = id; // ✕ после отправки отменяет джобу и на сервере (T-05)
       recordSessionJob(session, id, 'music', input);
       const result = await pollJob(id, { shouldStop: () => handle.cancelled, onStatus: d => {
         if (d.stage) stageBody.querySelector('[data-wait]')?.setAttribute('data-wait-stage', d.stage);
-      } });
+      }, onRetry: n => setStatus(n ? ('Связь прерывается, пробуем снова (' + n + '/5)…') : 'Работаем…', true) });
+      settleSessionJob(session, id);
       wait.stop();
       watchStage.disconnect();
       stageBody.closest('.card').remove();
@@ -1475,7 +1652,19 @@
       wait.stop(); watchStage.disconnect();
       stageBody.closest('.card').remove();
       if (error.name === 'AbortError' || error.code === 'cancelled') {
-        card('notice', 'Ожидание остановлено', 'Задача может продолжаться на сервере. Проверьте результат в библиотеке.', session);
+        let stoppedNote;
+        if (!handle.jobId) {
+          stoppedNote = card('notice', 'Ожидание остановлено', 'Генерация остановлена до отправки задачи на сервер.', session);
+        } else {
+          stoppedNote = card('notice', 'Ожидание остановлено', 'Отменяем задачу на сервере…', session);
+          const applyCancelNote = ok => {
+            if (ok) settleSessionJob(session, handle.jobId);
+            if (stoppedNote?.isConnected) stoppedNote.textContent = ok
+              ? 'Задача отменена на сервере — очередь и GPU освобождены.'
+              : 'Отменить задачу на сервере не удалось (она могла уже завершиться). Проверьте результат в библиотеке.';
+          };
+          if (handle.serverCancelled === null) handle.onServerCancel = applyCancelNote; else applyCancelNote(handle.serverCancelled);
+        }
       } else {
         // текст остаётся в полях для правки (в т.ч. после 422)
         restoreMusicDraft();
@@ -1814,6 +2003,7 @@
     setView('chat');
     closeSessions();
     persistSessions();
+    resumeSessionJobs(session); // T-52: незакрытые генерации сессии продолжают ждать
   }
   async function selectSession(session) {
     if (!session || storageBlocked || sessionTransition) return;
@@ -1951,6 +2141,7 @@
       els.storageWarning.textContent = 'Не удалось открыть сессии: ' + (error.message || 'ошибка хранилища') + ' Старые данные не удалены. Обновите страницу или освободите место.';
     }
     updateEnabled(); renderKeyChip();
+    resumeSessionJobs(activeSession); // T-52: судьба джоб прошлой сессии — в ленту
   }
 
   async function logout() {
@@ -2372,6 +2563,7 @@
     audio.preload = 'metadata';
     audio.src = url;
     container.append(audio);
+    claimAudio(audio); // T-51: эксклюзивное воспроизведение
     return audio;
   }
 

@@ -42,9 +42,8 @@ jobs:
         env:
           NODE_PATH: ./node_modules
       - name: check-wait-phrases
-        # Сюита поднимает свой сервер на 127.0.0.1 — локально детерминирована;
-        # continue-on-error как страховка на случай окружения runner'а, ассерты не глушатся.
-        continue-on-error: true
+        # Сюита детерминирована (свой сервер на 127.0.0.1 + мини-mock bff);
+        # continue-on-error снят: половина регрессионной сетки больше не глушится (T-50).
         run: node tools/check-wait-phrases.cjs
         env:
           NODE_PATH: ./node_modules
