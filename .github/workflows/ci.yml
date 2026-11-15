@@ -48,6 +48,13 @@ jobs:
           node tools/check-studio.cjs 2>&1 | tee /tmp/check-studio.log
         env:
           NODE_PATH: ./node_modules
+      - name: annotate check-studio failure
+        # Аннотация видна через Checks API — единственный канал разбора, когда
+        # лог-эндпоинт runner'а и артефакты недоступны снаружи.
+        if: failure()
+        run: |
+          msg=$(tail -c 1500 /tmp/check-studio.log | tr '\n' ' ' | sed 's/%/%25/g')
+          echo "::error title=check-studio::$msg"
       - name: upload check-studio log
         if: always()
         uses: actions/upload-artifact@v4
