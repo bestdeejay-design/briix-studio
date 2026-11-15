@@ -518,6 +518,7 @@ button:disabled { cursor: not-allowed; opacity: .4; }
 .session-item time { color: var(--muted); font-size: 12px; }
 .storage-warning { color: var(--danger); background: var(--danger-soft); border: 1px solid var(--danger); border-radius: 8px; padding: 8px; font-size: 13px; }
 .track-details { margin-top: 8px; color: var(--muted); font-size: 13px; }
+.track-title { margin-top: 8px; font-weight: 600; overflow-wrap: anywhere; } /* F-18: название трека — заголовок карточки */
 .track-details summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; }
 .track-details div { white-space: pre-wrap; overflow-wrap: anywhere; padding: 8px; background: var(--surface-2); border-radius: 8px; }
 .cover-retry { min-width: 44px; min-height: 44px; color: var(--ink); }

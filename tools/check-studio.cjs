@@ -643,7 +643,8 @@ function bffServer(port) {
   const musicItem = p.locator('.lib-item', { hasText: /Музыка/i }).first();
   await musicItem.locator('.lib-cover img').waitFor({ state: 'visible', timeout: 10000 }); // обложка-миниатюра (infra#77)
   const musicWho = await musicItem.locator('.who').innerText();
-  assert.match(musicWho, /ace-step/i, 'music .who carries the model');
+  assert.match(musicWho, /flash/i, 'music .who carries the human model name (F-19)');
+  assert.ok(!/ace-step/i.test(musicWho), 'no raw model ids in the library (F-19)');
   assert.ok(await musicItem.locator('.track-card').count() >= 1, 'library music card is the unified render (.track-card)');
   assert.ok(!(await musicItem.innerText()).includes('Слушать'), 'no Listen anywhere in the library card');
   assert.ok(!(await p.locator('#lib').innerText()).includes('Сессия неизвестна'), 'no unknown-session line');
@@ -655,6 +656,9 @@ function bffServer(port) {
   const lyricsBlock = musicItem.locator('.lib-lyrics.open .lib-lyrics-text');
   assert.equal(await lyricsBlock.isVisible(), true, 'lyrics block opens from the menu');
   assert.match(await lyricsBlock.innerText(), /Город спит/, 'lyrics block carries the lyrics text');
+  // F-18: название трека — видимый заголовок карточки (в ленте и в Библиотеке).
+  assert.match(await musicItem.locator('.track-title').innerText(), /Город спит/, 'library card shows the track title as a heading (F-18)');
+  assert.ok(await p.locator('.lib-item .photo-card').count() >= 1, 'library photo uses the unified photo card (R2/T-18)');
   // Единый рендер: каждая музыкальная карточка библиотеки — .track-card, старых строк нет.
   const libCheck = await p.evaluate(() => {
     const lib = document.getElementById('lib');
@@ -798,6 +802,7 @@ function bffServer(port) {
   await p.locator('.track-menu:not([hidden]) button', { hasText: 'Скачать' }).first().click();
   const downloaded = await downloadPromise;
   assert.match(downloaded.suggestedFilename(), /\.m4a$/);
+  assert.match(downloaded.suggestedFilename(), / - tester\.m4a$/, 'library download uses the unified «Title - Artist» name (F-22)');
   ok('merged library, artwork and actual file download');
 
 
@@ -1379,6 +1384,7 @@ function bffServer(port) {
   // R1 (player.js): таймкоды под волной (F-25) и MediaSession-метаданные.
   const timecodes = await p.locator('#feed .waveform-time').innerText();
   assert.match(timecodes, /^\d+:\d\d \/ \d+:\d\d$/, 'timecodes rendered under the wave: ' + JSON.stringify(timecodes));
+  assert.match(await p.locator('#feed .track-title').innerText(), /Тест: Трек/, 'feed card shows the track title as a heading (F-18)');
   const media = await p.evaluate(() => ({ calls: window.__metaCalls, state: navigator.mediaSession.playbackState, actions: window.__mediaActions }));
   assert.equal(media.state, 'paused', 'playbackState follows the audio (paused now)');
   assert.ok(media.calls.length >= 1, 'MediaMetadata is set on play');

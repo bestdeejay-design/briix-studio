@@ -353,31 +353,9 @@
         } else {
           const body = card('assistant', d.who, '', session);
           body.textContent = '';
-          const slot = document.createElement('div');
-          body.append(slot);
+          // R2/T-18: фото-restore — тот же компонент, что fresh и Библиотека.
+          body.append(photoCard({ loadBlob: () => fileBlob(d.file, 1) }).body);
           if (d.track) addMakeTrackAction(body.closest('.card'), d.track);
-          const owner = sessionProfile.nick;
-          const load = async () => {
-            slot.textContent = 'Загружаем файл…';
-            try {
-              const blob = await fileBlob(d.file, 1);
-              if (!slot.isConnected || currentUser() !== owner) return;
-              slot.textContent = '';
-              const img = new Image(); img.alt = 'Результат'; img.src = feedObjectURL(blob); slot.append(img);
-              addDownloadAction(body.closest('.card'), blob, 'briix-photo', '⬇ Скачать');
-            } catch (error) {
-              if (!slot.isConnected || currentUser() !== owner) return;
-              slot.textContent = 'Файл недоступен. ' + (error.message || '') + ' ';
-              const retry = document.createElement('button'); retry.type = 'button'; retry.className = 'action';
-              retry.textContent = 'Повторить'; retry.addEventListener('click', load); slot.append(retry);
-            }
-          };
-          slot.textContent = 'Изображение готово';
-          const observer = new IntersectionObserver((records, obs) => {
-            if (!slot.isConnected) { obs.disconnect(); return; }
-            if (records.some(record => record.isIntersecting)) { obs.disconnect(); load(); }
-          }, { rootMargin: '150px' });
-          observer.observe(slot);
         }
       } else {
         const body = card(d.t, d.who, d.text, session);
@@ -429,17 +407,14 @@
         model: rec.input?.model || '', file: data.result_url, cover: data.cover_url || '', created: Date.now(), fav: false });
     } else {
       const body = card('assistant', 'Фото готово', '', session);
-      body.textContent = '';
-      const slot = document.createElement('div');
-      body.append(slot);
-      slot.textContent = 'Загружаем файл…';
+      body.textContent = 'Загружаем файл…';
       try {
         const blob = await fileBlob(data.result_url, 1);
-        if (!slot.isConnected || session !== activeSession) return;
-        slot.textContent = '';
-        const img = new Image(); img.alt = 'Результат'; img.src = feedObjectURL(blob); slot.append(img);
-        addDownloadAction(body.closest('.card'), blob, 'briix-photo');
-      } catch (error) { if (slot.isConnected) slot.textContent = 'Файл недоступен. ' + (error.message || ''); }
+        if (session !== activeSession || !body.isConnected) return;
+        body.textContent = '';
+        // R2/T-18: восстановление готовой джобы — единая фото-карточка.
+        body.append(photoCard({ eagerBlob: blob }).body);
+      } catch (error) { if (body.isConnected) body.textContent = 'Файл недоступен. ' + (error.message || ''); }
       feedPush({ t: 'media', who: 'Фото готово', kind: 'photo', file: data.result_url, job: rec.job }, session);
       if (!libEntry(rec.job)) libAdd({ job: rec.job, sessionId: session.id, kind: 'photo', prompt: rec.input?.prompt || '', file: data.result_url, created: Date.now(), fav: false });
     }
@@ -735,8 +710,9 @@
   }
 
   // Единый рендер трек-карточки (лента fresh/restore и Библиотека — один компонент,
-  // класс-маркер .track-card): обложка (или внешняя мини-обложка), волна из серверных
-  // пиков (сразу, до загрузки аудио), аудио-фолбэк, transparency, меню «⋯».
+  // класс-маркер .track-card): обложка (или внешняя мини-обложка), название трека
+  // заголовком (F-18), волна из серверных пиков (сразу, до загрузки аудио),
+  // аудио-фолбэк, transparency, меню «⋯».
   function buildTrackCard({ job, cover, input = {}, file, loadBlob, coverFrame, menuItems }) {
     const wrap = document.createElement('div');
     wrap.className = 'track-card';
@@ -744,6 +720,15 @@
     if (!frame) {
       addTrackCover(wrap, job, cover);
       frame = wrap.querySelector('.track-cover');
+    }
+    // F-18: название трека видно сразу — раньше его не было в интерфейсе вовсе
+    // (только внутри свёрнутого transparency-блока).
+    const trackTitle = String(input.title || input.prompt || '').slice(0, 120).trim();
+    if (trackTitle) {
+      const titleEl = document.createElement('div');
+      titleEl.className = 'track-title';
+      titleEl.textContent = trackTitle;
+      wrap.append(titleEl);
     }
     const waveSlot = document.createElement('div');
     waveSlot.className = 'waveform-track';
@@ -850,6 +835,16 @@
     return (safe || 'briix-track-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')) + '.' + ext;
   }
 
+  // F-22: единое правило имени файла для ленты и Библиотеки — «что скачано»
+  // не зависит от того, из какой части интерфейса нажали «Скачать».
+  function mediaFileName(kind, meta, blob) {
+    if (kind === 'music') {
+      const title = String(meta.title || meta.prompt || '').trim();
+      return safeFileName(title.length > 2 ? title : 'BRIIX track', meta.artist || currentUser(), extOf(blob));
+    }
+    return 'briix-photo-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.' + extOf(blob);
+  }
+
   async function copyText(value, label) {
     if (!value) return;
     try { await navigator.clipboard.writeText(value); setStatus('Скопировано: ' + label); }
@@ -888,9 +883,10 @@
     const download = async () => {
       try {
         const blob = ctx.blob || await fileBlob(ctx.file || input.file);
+        const name = mediaFileName('music', input, blob); // F-22: единое правило имени
         const link = document.createElement('a');
         link.href = feedObjectURL(blob);
-        link.download = safeFileName(input.title, input.artist || currentUser(), extOf(blob));
+        link.download = name;
         document.body.append(link); link.click(); link.remove();
       } catch (error) { errorCard(error); }
     };
@@ -1007,16 +1003,60 @@
     if (t.includes('mpeg')) return 'mp3';
     return 'm4a'; // audio/mp4 и дефолт
   }
-  function addDownloadAction(container, blob, name, label) {
+  function addDownloadAction(container, blob, fileName, label) {
     const row = document.createElement('div');
     row.className = 'actions';
     const link = document.createElement('a');
     link.className = 'action';
     link.href = feedObjectURL(blob);
-    link.download = name + '-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.' + extOf(blob);
+    link.download = fileName;
+    link.title = fileName; // F-21: видно, что именно будет сохранено
     link.textContent = label || '⬇ Скачать';
     row.append(link);
     container.append(row);
+  }
+
+  // Единая фото-карточка (R2/T-18): fresh в ленте, restore после перезагрузки,
+  // Библиотека и восстановление готовой джобы — один код: слот, ленивая загрузка
+  // по observer, повтор при ошибке, «Скачать» с датой в имени. Прежде тут было
+  // четыре почти одинаковых рендера с разным поведением.
+  function photoCard({ eagerBlob = null, loadBlob = null }) {
+    const owner = currentUser();
+    const wrap = document.createElement('div');
+    wrap.className = 'photo-card';
+    const slot = document.createElement('div');
+    wrap.append(slot);
+    const load = async () => {
+      slot.textContent = 'Загружаем файл…';
+      try {
+        const blob = eagerBlob || await loadBlob();
+        if (!slot.isConnected || currentUser() !== owner) return;
+        slot.textContent = '';
+        const img = new Image();
+        img.alt = 'Результат';
+        img.className = 'media-in';
+        img.src = feedObjectURL(blob);
+        requestAnimationFrame(() => img.classList.add('loaded'));
+        slot.append(img);
+        addDownloadAction(wrap, blob, mediaFileName('photo', {}, blob));
+      } catch (error) {
+        if (!slot.isConnected || currentUser() !== owner) return;
+        slot.textContent = 'Файл недоступен. ' + (error.message || '') + ' ';
+        const retry = document.createElement('button');
+        retry.type = 'button'; retry.className = 'action';
+        retry.textContent = 'Повторить';
+        retry.addEventListener('click', load); slot.append(retry);
+      }
+    };
+    // Оба пути через observer: он срабатывает только когда карточка уже в DOM
+    // (eager-вызов до подключения молча умирал на isConnected-гарде).
+    if (!eagerBlob) slot.textContent = 'Изображение готово';
+    const observer = new IntersectionObserver((records, obs) => {
+      if (!slot.isConnected) { obs.disconnect(); return; }
+      if (records.some(r => r.isIntersecting)) { obs.disconnect(); load(); }
+    }, { rootMargin: '150px' });
+    observer.observe(slot);
+    return { body: wrap };
   }
 
   // ---- режим/состояния ---------------------------------------------------------
@@ -1400,16 +1440,11 @@
       settleSessionJob(session, id);
       wait.stop();
       stageBody.closest('.card').remove();
-      const item = document.createElement('img');
-      item.alt = 'Результат';
       const blob = await fileBlob(result.result_url);
-      item.src = feedObjectURL(blob);
-      item.className = 'media-in';
-      requestAnimationFrame(() => item.classList.add('loaded'));
+      // R2/T-18: единая фото-карточка (fresh = restore = Библиотека).
       const wrap = card('assistant', 'Фото готово', '', session);
       wrap.textContent = '';
-      wrap.append(item);
-      addDownloadAction(wrap.closest('.card'), blob, 'briix-photo');
+      wrap.append(photoCard({ eagerBlob: blob }).body);
       feedPush({ t: 'media', who: 'Фото готово', kind: 'photo', file: result.result_url, job: id }, session);
       libAdd({ job: id, sessionId: session.id, kind: 'photo', prompt: text, file: result.result_url, created: Date.now(), fav: false });
     } catch (error) {
@@ -2388,7 +2423,11 @@
     const who = document.createElement('div');
     who.className = 'who';
     let whoText = KIND_LABELS[entry.kind] || entry.kind;
-    if (entry.kind === 'music' && entry.model) whoText += ' · ' + entry.model;
+    // F-19: человекое имя модели (Flash/Pro), а не сырой id из контракта.
+    if (entry.kind === 'music' && entry.model) {
+      const modelKey = Object.keys(MUSIC_MODELS).find(key => MUSIC_MODELS[key] === entry.model);
+      whoText += ' · ' + (MODEL_LABELS[modelKey] || entry.model);
+    }
     whoText += ' · ' + new Date(entry.created).toLocaleString('ru-RU');
     who.textContent = whoText;
     const row = document.createElement('div');
@@ -2399,21 +2438,26 @@
     download.href = '#';
     download.addEventListener('click', async e => {
       e.preventDefault();
+      if (download.classList.contains('busy')) return;
       try {
         let url = blobCache.get(entry.job);
         if (!url) {
-          const blob = await fileBlob(entry.file);
-          if (currentUser() !== owner) return;
-          url = URL.createObjectURL(blob);
-          blobCache.set(entry.job, url); blobTypes.set(entry.job, blob.type); blobBytes.set(entry.job, blob);
+          // F-21: честное «Загружаем…» вместо молчаливого ожидания очереди файлов.
+          download.classList.add('busy');
+          const idleLabel = download.textContent;
+          download.textContent = '⬇ Загружаем…';
+          try {
+            const blob = await fileBlob(entry.file);
+            if (currentUser() !== owner) return;
+            url = URL.createObjectURL(blob);
+            blobCache.set(entry.job, url); blobTypes.set(entry.job, blob.type); blobBytes.set(entry.job, blob);
+          } finally { download.classList.remove('busy'); download.textContent = idleLabel; }
         }
         const link = document.createElement('a');
         link.href = url;
-        // Имя файла: «Название - Исполнитель» для треков (кириллица сохраняется),
-        // fallback — прежняя схема briix-<kind>-<date>.
-        link.download = entry.kind === 'music' && (entry.title || entry.prompt)
-          ? safeFileName(entry.title || entry.prompt, currentUser(), extOf({ type: blobTypes.get(entry.job) || '' }))
-          : 'briix-' + entry.kind + '-' + new Date(entry.created).toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.' + extOf({ type: blobTypes.get(entry.job) || '' });
+        // F-22: единое правило имени — как из ленты: «Название - Исполнитель.ext».
+        link.download = mediaFileName(entry.kind, entry, { type: blobTypes.get(entry.job) || '' });
+        link.title = link.download;
         document.body.append(link); link.click(); link.remove();
       } catch { showLibError(div, 'Не удалось скачать файл. Проверьте подключение и попробуйте снова.'); }
     });
@@ -2462,7 +2506,14 @@
       promptEl.textContent = entry.prompt || '';
       const media = document.createElement('div');
       media.className = 'lib-media';
-      libMedia(entry, media);
+      // R2/T-18: фото Библиотеки — та же единая фото-карточка, что в ленте;
+      // скачанный однажды файл не качается повторно (blobBytes).
+      const cachedPhoto = blobBytes.get(entry.job);
+      media.append(photoCard({
+        loadBlob: cachedPhoto
+          ? () => Promise.resolve(cachedPhoto)
+          : () => fileBlob(entry.file, 1).then(blob => { blobBytes.set(entry.job, blob); blobTypes.set(entry.job, blob.type); return blob; })
+      }).body);
       row.append(download, fav, del);
       main.append(who, promptEl, media, row);
       div.append(main);
@@ -2536,37 +2587,6 @@
       task().finally(() => { libActive--; libPump(); });
     }
   }
-  function libMedia(entry, container) {
-    const owner = currentUser();
-    const cached = blobCache.get(entry.job);
-    if (cached) return renderMedia(entry, container, cached);
-    const load = async () => {
-      container.textContent = 'Загружаем…';
-      try {
-        const blob = await fileBlob(entry.file, entry.kind === 'music' ? 0 : 1);
-        if (currentUser() !== owner || !container.isConnected) return;
-        let url = blobCache.get(entry.job);
-        if (!url) {
-          url = URL.createObjectURL(blob);
-          blobCache.set(entry.job, url); blobTypes.set(entry.job, blob.type); blobBytes.set(entry.job, blob);
-        }
-        const audio = renderMedia(entry, container, url);
-        if (audio) tryPlay(audio, container);
-      } catch (error) {
-        if (currentUser() !== owner || !container.isConnected) return;
-        container.textContent = (error.message || 'Файл недоступен.') + ' ';
-        const retry = document.createElement('button'); retry.type = 'button'; retry.className = 'action';
-        retry.textContent = 'Повторить'; retry.addEventListener('click', load); container.append(retry);
-      }
-    };
-    if (entry.kind === 'music') return;
-    container.textContent = 'Изображение готово';
-    const observer = new IntersectionObserver((records, obs) => {
-      if (!container.isConnected) { obs.disconnect(); return; }
-      if (records.some(r => r.isIntersecting)) { obs.disconnect(); load(); }
-    }, { rootMargin: '150px' });
-    observer.observe(container);
-  }
 
   function tryPlay(audio, container) {
     if (!audio.isConnected || audio.closest('[hidden]')) return;
@@ -2577,24 +2597,6 @@
       hint.textContent = 'Аудио загружено. Нажмите воспроизведение в плеере.';
       container.append(hint);
     });
-  }
-  function renderMedia(entry, container, url) {
-    container.textContent = '';
-    if (entry.kind === 'photo') {
-      const img = new Image();
-      img.alt = 'Результат';
-      img.src = url;
-      container.append(img);
-      return null;
-    }
-    const audio = document.createElement('audio');
-    audio.controls = true;
-    audio.controlsList = 'nodownload';
-    audio.preload = 'metadata';
-    audio.src = url;
-    container.append(audio);
-    BriixPlayer.claim(audio); // T-51: эксклюзивное воспроизведение
-    return audio;
   }
 
   // ---- вкладки: Чат / Библиотека -------------------------------------------------
