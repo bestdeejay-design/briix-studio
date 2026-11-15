@@ -47,6 +47,12 @@ jobs:
         run: node tools/check-wait-phrases.cjs
         env:
           NODE_PATH: ./node_modules
+      - name: check-a11y (axe, T-45)
+        # Гейт/композер/Библиотека: serious/critical = 0 (F-48 контраст, F-02 гейт,
+        # F-15 progressbar). Включён ПОСЛЕ точечных фиксов доступности (3.4).
+        run: node tools/check-a11y.cjs
+        env:
+          NODE_PATH: ./node_modules
 
   deploy-stand:
     # Единственный писец /home/badai/briix-demo/studio (briix.ru#107): briix.ru больше не деплоит studio/.

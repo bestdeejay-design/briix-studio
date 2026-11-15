@@ -18,26 +18,27 @@ if (location.hostname === 'briix.ru' || location.hostname === 'www.briix.ru') {
 <!-- Вход: ник + PIN-пад (клиентский; переезд на серверную auth — INFRA #78) -->
 <div id="gate" class="gate" hidden>
   <div class="gate-card">
-    <div class="gate-title">BRIIX Студия</div>
+    <!-- F-02: гейт объявляет себя скринридеру — заголовок документа и роли состояний -->
+    <h1 class="gate-title">BRIIX Студия</h1>
     <p class="gate-sub">Вход по нику и PIN-коду</p>
     <input id="nickInput" class="nick" aria-label="Ник" maxlength="24" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Ник">
-    <div id="pinDots" class="pin-dots" aria-label="PIN"></div>
+    <div id="pinDots" class="pin-dots" role="status" aria-live="polite"></div>
     <div class="pinpad" id="pinpad" aria-label="Пин-пад">
-      <button class="pk" data-digit="1">1</button>
-      <button class="pk" data-digit="2">2</button>
-      <button class="pk" data-digit="3">3</button>
-      <button class="pk" data-digit="4">4</button>
-      <button class="pk" data-digit="5">5</button>
-      <button class="pk" data-digit="6">6</button>
-      <button class="pk" data-digit="7">7</button>
-      <button class="pk" data-digit="8">8</button>
-      <button class="pk" data-digit="9">9</button>
+      <button class="pk" data-digit="1" aria-label="Цифра 1">1</button>
+      <button class="pk" data-digit="2" aria-label="Цифра 2">2</button>
+      <button class="pk" data-digit="3" aria-label="Цифра 3">3</button>
+      <button class="pk" data-digit="4" aria-label="Цифра 4">4</button>
+      <button class="pk" data-digit="5" aria-label="Цифра 5">5</button>
+      <button class="pk" data-digit="6" aria-label="Цифра 6">6</button>
+      <button class="pk" data-digit="7" aria-label="Цифра 7">7</button>
+      <button class="pk" data-digit="8" aria-label="Цифра 8">8</button>
+      <button class="pk" data-digit="9" aria-label="Цифра 9">9</button>
       <button class="pk ghost" hidden></button>
-      <button class="pk" data-digit="0">0</button>
+      <button class="pk" data-digit="0" aria-label="Цифра 0">0</button>
       <button class="pk ghost" data-action="back" aria-label="Стереть">⌫</button>
     </div>
     <button id="enterBtn" class="save gate-enter">Войти</button>
-    <p id="gateHint" class="hint">PIN — 4–6 цифр. Новый ник регистрируется при первом входе.</p>
+    <p id="gateHint" class="hint" role="status">PIN — 4–6 цифр. Новый ник регистрируется при первом входе.</p>
   </div>
 </div>
 
@@ -78,7 +79,9 @@ if (location.hostname === 'briix.ru' || location.hostname === 'www.briix.ru') {
   </div>
 
   <!-- Лента: чат-стрим, фото, треки — скроллится над композером -->
-  <section id="feed" class="feed" aria-live="polite"></section>
+  <!-- F-49: aria-live убран с ленты (речевой шторм при стриминге);
+   * стримящаяся карточка помечается aria-busy, объявления — через status-регионы. -->
+  <section id="feed" class="feed" aria-label="Лента диалога"></section>
 
   <!-- Библиотека: все генерации — скачать / в избранное / удалить -->
   <section id="lib" class="feed lib" hidden></section>
@@ -138,6 +141,8 @@ if (location.hostname === 'briix.ru' || location.hostname === 'www.briix.ru') {
       </div>
 
       <p id="chatPending" class="composer-hint" role="status" hidden>Дождитесь ответа или остановите его, чтобы отправить следующий вопрос.</p>
+      <!-- F-50: единое поведение Enter во всех режимах — и видимая подсказка о нём -->
+      <p class="composer-hint enter-hint">Enter — отправить · Shift+Enter — новая строка</p>
       <div class="producer-entry music-only" hidden>
         <button id="prepareMusic" class="tool chip producer-button" type="button" disabled>✦ Подготовить песню</button>
         <span>Продюсер предложит черновик без запуска генерации</span>
@@ -180,7 +185,7 @@ if (location.hostname === 'briix.ru' || location.hostname === 'www.briix.ru') {
       <!-- Мета-полоса -->
       <div class="meta">
         <span id="metaLeft">briix.ru · Чат · Наставник</span>
-        <span id="status" class="status">готов</span>
+        <span id="status" class="status" role="status">готов</span>
       </div>
     </div>
 

@@ -440,7 +440,7 @@
           const body = card('assistant', d.who, '', session);
           body.textContent = '';
           // R2/T-18: фото-restore — тот же компонент, что fresh и Библиотека.
-          body.append(photoCard({ loadBlob: () => fileBlob(d.file, 1) }).body);
+          body.append(photoCard({ loadBlob: () => fileBlob(d.file, 1), alt: d.prompt || '' }).body);
           if (d.track) addMakeTrackAction(body.closest('.card'), trackBriefOf(d));
         }
       } else {
@@ -1239,8 +1239,9 @@
   // Библиотека и восстановление готовой джобы — один код: слот, ленивая загрузка
   // по observer, повтор при ошибке, «Скачать» с датой в имени. Прежде тут было
   // четыре почти одинаковых рендера с разным поведением.
-  function photoCard({ eagerBlob = null, loadBlob = null }) {
+  function photoCard({ eagerBlob = null, loadBlob = null, alt = '' }) {
     const owner = currentUser();
+    const photoAltText = alt;
     const wrap = document.createElement('div');
     wrap.className = 'photo-card';
     const slot = document.createElement('div');
@@ -1252,7 +1253,7 @@
         if (!slot.isConnected || currentUser() !== owner) return;
         slot.textContent = '';
         const img = new Image();
-        img.alt = 'Результат';
+        img.alt = 'Фото: ' + (photoAltText || 'результат генерации'); // F-51: не безликое «Результат»
         img.className = 'media-in';
         img.src = feedObjectURL(blob);
         requestAnimationFrame(() => img.classList.add('loaded'));
@@ -1409,6 +1410,7 @@
     appendStop(stopRow, handle);
     body.append(textSpan, stopRow);
     body.classList.add('streaming');
+    body.closest('.card')?.setAttribute('aria-busy', 'true'); // F-49: лента молчит, карточка занята
     setBusy(true, who + ' печатает…');
     try {
       const messages = [{ role: 'system', content: assistant.system }, ...session.history.filter(m => m && ['user', 'assistant'].includes(m.role) && typeof m.content === 'string').slice(-80), turn];
@@ -1441,7 +1443,9 @@
     } finally {
       sessionBusy.delete(session.id);
       handle.unregister?.();
-      body.classList.remove('streaming'); setBusy(false); updateEnabled();
+      body.classList.remove('streaming');
+      body.closest('.card')?.removeAttribute('aria-busy');
+      setBusy(false); updateEnabled();
     }
   }
 
@@ -1516,6 +1520,7 @@
     appendStop(stopRow, handle);
     body.append(textSpan, stopRow);
     body.classList.add('streaming');
+    body.closest('.card')?.setAttribute('aria-busy', 'true'); // F-49
     setBusy(true, who + ' печатает…');
     try {
       const messages = [
@@ -1556,6 +1561,8 @@
     } finally {
       sessionBusy.delete(session.id);
       handle.unregister?.();
+      body.classList.remove('streaming');
+      body.closest('.card')?.removeAttribute('aria-busy'); // F-49
       setBusy(false); updateEnabled();
     }
   }
@@ -1714,8 +1721,8 @@
       // R2/T-18: единая фото-карточка (fresh = restore = Библиотека).
       const wrap = card('assistant', 'Фото готово', '', session);
       wrap.textContent = '';
-      wrap.append(photoCard({ eagerBlob: blob }).body);
-      feedPush({ t: 'media', who: 'Фото готово', kind: 'photo', file: result.result_url, job: id }, session);
+      wrap.append(photoCard({ eagerBlob: blob, alt: text }).body);
+      feedPush({ t: 'media', who: 'Фото готово', kind: 'photo', file: result.result_url, job: id, prompt: text }, session); // prompt → alt при restore (F-51)
       libAdd({ job: id, sessionId: session.id, kind: 'photo', prompt: text, file: result.result_url, created: Date.now(), fav: false });
     } catch (error) {
       wait.stop();
@@ -1839,6 +1846,11 @@
     let curStage = stageBody.querySelector('[data-wait]')?.getAttribute('data-wait-stage') || stages[0];
     const bar = document.createElement('div');
     bar.className = 'stage-progress';
+    // F-15: полоса — настоящий progressbar; объявляется этап и время, а не проценты.
+    bar.setAttribute('role', 'progressbar');
+    bar.setAttribute('aria-label', 'Генерация трека');
+    bar.setAttribute('aria-valuemin', '0');
+    bar.setAttribute('aria-valuemax', String(stages.length));
     const segs = stages.map(s => {
       const seg = document.createElement('div');
       seg.className = 'sp-seg';
@@ -1851,6 +1863,7 @@
     });
     const barLabel = document.createElement('div');
     barLabel.className = 'stage-progress-label';
+    barLabel.setAttribute('role', 'status'); // F-15: озвучивается только смена этапа
     const paint = () => {
       const idx = stages.indexOf(curStage);
       segs.forEach((s, i) => {
@@ -1858,7 +1871,10 @@
         s.el.classList.toggle('active', i === idx);
         s.fill.style.width = i <= idx ? '100%' : '0%';
       });
-      barLabel.textContent = stageNames[curStage] ? 'Этап: ' + stageNames[curStage] : 'Задача выполняется';
+      const label = stageNames[curStage] ? 'Этап: ' + stageNames[curStage] : 'Задача выполняется';
+      barLabel.textContent = label;
+      bar.setAttribute('aria-valuenow', String(Math.max(0, idx)));
+      bar.setAttribute('aria-valuetext', label);
     };
     paint();
     stageBody.append(bar, barLabel, eta.el);
@@ -2436,7 +2452,13 @@
       dot.className = 'pd' + (i < pinBuf.length ? ' on' : '');
       els.pinDots.append(dot);
     }
+    // F-02: состояние PIN озвучивается — role=status читает эту строку.
+    const announce = document.createElement('span');
+    announce.className = 'sr-only';
+    announce.textContent = pinBuf.length ? 'Введено ' + pinBuf.length + ' ' + pinDigitsWord(pinBuf.length) : 'PIN не начат';
+    els.pinDots.append(announce);
   }
+  function pinDigitsWord(n) { return n % 10 === 1 && n % 100 !== 11 ? 'цифра' : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? 'цифры' : 'цифр'); }
   function gateHint(text) { els.gateHint.textContent = text; }
 
   async function enterGate() {
@@ -2768,7 +2790,7 @@
   }
 
   // Обложки и медиа используют общую ограниченную очередь; ошибку 429 повторяет fileBlob.
-  function addTrackCover(container, job, cover, miniature = false) {
+  function addTrackCover(container, job, cover, miniature = false, coverTitle = '') {
     const frame = document.createElement('div');
     const owner = currentUser();
     frame.className = miniature ? 'lib-cover' : 'track-cover';
@@ -2793,7 +2815,7 @@
             coverUrlCache.set(path, url);
             if (coverUrlCache.size > 60) { const oldest = coverUrlCache.keys().next().value; URL.revokeObjectURL(coverUrlCache.get(oldest)); coverUrlCache.delete(oldest); }
           }
-          const image = new Image(); image.alt = 'Обложка трека';
+          const image = new Image(); image.alt = coverTitle ? 'Обложка трека «' + coverTitle + '»' : 'Обложка трека'; // F-51
           image.onerror = () => {
             coverUrlCache.delete(path);
             if (frame.contains(image)) { frame.textContent = '♫'; frame.setAttribute('aria-label', 'Обложка недоступна'); }
@@ -2944,7 +2966,7 @@
     }
     // Музыкальная карточка библиотеки = тот же единый компонент, что и в ленте
     // (.track-card): обложка-мини = PLAY, волна из пиков, lazy-загрузка по клику.
-    addTrackCover(div, entry.job, entry.cover, true);
+    addTrackCover(div, entry.job, entry.cover, true, entry.title || entry.prompt || '');
     const sourceInput = sourceSession?.feed.find(item => item && item.job === entry.job)?.input || sourceSession?.jobs?.find(item => item.job === entry.job)?.input || {};
     const input = {
       ...sourceInput,
@@ -3148,8 +3170,9 @@
   });
 
   // Enter отправляет в чате, Shift+Enter — перенос строки (как в обычном мессенджере).
+  // F-50: единое поведение во всех режимах (раньше в фото/музыке Enter молча делал перенос).
   els.prompt.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && mode === 'chat') {
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
       e.preventDefault();
       create();
     }

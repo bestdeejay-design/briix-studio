@@ -306,6 +306,14 @@ function bffServer(port) {
   // Серверная стадия generating приходит первым поллингом (интервал 2,5 с).
   await p.waitForFunction(() => document.querySelector('.card.stage [data-wait]')?.dataset.waitStage === 'generating', {}, { timeout: 15000 });
   assert.match(await p.locator('.stage-progress-label').innerText(), /генерация/i, 'подпись этапа — «генерация» (T-02)');
+  // F-15: полоса стадий — настоящий progressbar с текстовым значением этапа.
+  const barRole = await p.evaluate(() => {
+    const bar = document.querySelector('.stage-progress');
+    return { role: bar?.getAttribute('role'), valuetext: bar?.getAttribute('aria-valuetext'), label: bar?.getAttribute('aria-label') };
+  });
+  assert.equal(barRole.role, 'progressbar', 'F-15: stage-progress имеет роль progressbar');
+  assert.match(barRole.valuetext || '', /генерация/i, 'F-15: aria-valuetext называет этап');
+  assert.equal(barRole.label, 'Генерация трека');
   ok('live music job shows the wait line under the progress with the server stage', hook);
   // ✕ отменяет джобу на сервере (T-05).
   const cancelSent = p.waitForRequest(r => r.method() === 'POST' && /\/jobs\/[^/]+\/cancel$/.test(new URL(r.url()).pathname), { timeout: 10000 });
