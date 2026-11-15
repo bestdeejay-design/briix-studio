@@ -3,3 +3,7 @@ playwright-report/
 test-results/
 /package.json
 /package-lock.json
+
+# Бенчмарк мозга v2: аудио и ключ слепого прослушивания не коммитим (#20)
+bench/out/
+bench/KEY.md

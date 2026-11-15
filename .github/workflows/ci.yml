@@ -25,8 +25,14 @@ jobs:
         # ?v= в index.html/wait-ui.js = контент-хэш файла; ручные версии
         # рассинхронизировались и могли подать несовместимую пару из кэша.
         run: node tools/asset-versions.cjs
+      - name: check-bench
+        # Артефакт бенчмарка: A раскрыт констами, B не собран из A, пары
+        # помечены разными источниками. Без этого A однажды уехал обрубком.
+        run: node tools/check-bench.cjs
       - name: check-assembly
         run: node tools/check-assembly.cjs
+      - name: check-music-brain
+        run: node tools/check-music-brain.cjs
       - name: check-producer
         run: node tools/check-producer.cjs
       - name: check-session-store
@@ -42,9 +48,28 @@ jobs:
         env:
           NODE_PATH: ./node_modules
       - name: check-studio
-        run: node tools/check-studio.cjs
+        # Лог дублируем в файл и в артефакт: лог-эндпоинт runner'а иногда
+        # недоступен снаружи, а по артефакту падение разбирается однозначно.
+        # pipefail обязателен: без него код возврата теряется в конвейере с tee.
+        run: |
+          set -o pipefail
+          node tools/check-studio.cjs 2>&1 | tee /tmp/check-studio.log
         env:
           NODE_PATH: ./node_modules
+      - name: annotate check-studio failure
+        # Аннотация видна через Checks API — единственный канал разбора, когда
+        # лог-эндпоинт runner'а и артефакты недоступны снаружи.
+        if: failure()
+        run: |
+          msg=$(tail -c 1500 /tmp/check-studio.log | tr '\n' ' ' | sed 's/%/%25/g')
+          echo "::error title=check-studio::$msg"
+      - name: upload check-studio log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: check-studio-log
+          path: /tmp/check-studio.log
+          if-no-files-found: ignore
       - name: check-wait-phrases
         # Сюита детерминирована (свой сервер на 127.0.0.1 + мини-mock bff);
         # continue-on-error снят: половина регрессионной сетки больше не глушится (T-50).
