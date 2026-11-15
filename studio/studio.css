@@ -657,5 +657,9 @@ button:disabled { cursor: not-allowed; opacity: .4; }
 .producer-warning { color: var(--amber); font-size: 13px; margin: 0; }
 .producer-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .producer-actions .action { min-height: 44px; }
+/* F-12: подсветка полей после «Принять в поля» — видно, куда попал черновик */
+@keyframes field-flash { 0% { box-shadow: 0 0 0 2px var(--accent); } 100% { box-shadow: 0 0 0 2px transparent; } }
+.field-flash { animation: field-flash 1.5s ease-out 2; }
+@media (prefers-reduced-motion: reduce) { .field-flash { animation: none; box-shadow: 0 0 0 2px var(--accent); } }
 @media (max-width: 480px) { .producer-entry span { display: none; } }
 .producer-raw { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }

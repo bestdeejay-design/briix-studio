@@ -1440,8 +1440,22 @@
     }
   }
 
+  // F-12: после «Принять в поля» — автопереход в advanced и подсветка полей,
+  // куда попал черновик (вместо подсказки «показать: Тонко настроить»).
+  function flashDraftFields() {
+    for (const el of [els.musicPrompt, els.lyrics]) {
+      el.classList.remove('field-flash');
+      void el.offsetWidth; // перезапуск анимации
+      el.classList.add('field-flash');
+      setTimeout(() => el.classList.remove('field-flash'), 3400);
+    }
+    els.musicPrompt.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    els.musicPrompt.focus({ preventScroll: true });
+  }
+
   // Draft-блок наставника: компактные поля + «Принять в поля» (с бэкапом/откатом,
   // паттерн renderProducerDraft) + «Сгенерировать трек» (явная генерация).
+  // F-11: формулировки и набор действий совпадают с продюсерским черновиком.
   function renderMusicDraftContent(body, entry, session) {
     body.classList.add('producer-draft', 'music-draft');
     const note = document.createElement('p'); note.className = 'producer-note';
@@ -1469,7 +1483,7 @@
     body.append(state);
     const actions = document.createElement('div'); actions.className = 'producer-actions';
     const apply = document.createElement('button'); apply.type = 'button'; apply.className = 'action'; apply.textContent = 'Принять в поля';
-    const revert = document.createElement('button'); revert.type = 'button'; revert.className = 'action'; revert.textContent = 'Вернуть поля';
+    const revert = document.createElement('button'); revert.type = 'button'; revert.className = 'action'; revert.textContent = 'Вернуть как было';
     revert.hidden = !entry.beforeApply;
     const generate = document.createElement('button'); generate.type = 'button'; generate.className = 'action'; generate.textContent = 'Сгенерировать трек';
     let running = false;
@@ -1504,9 +1518,18 @@
       // T-21: название черновика — на сессии, не в глобале: переживёт смену
       // сессии и не перехватывается параллельной генерацией из другой сессии.
       session.pendingDraftTitle = titleField.value.trim() || null;
+      saveDraft(session);
       await persistSessions();
       revert.hidden = false;
-      state.textContent = 'Поля заполнены (показать: «Тонко настроить»). Генерация запускается отдельно.';
+      state.textContent = 'Поля заполнены.';
+      // F-12: автопереход в advanced ломал бы диалог с наставником (второй ход
+      // «поправь припев» превратился бы в генерацию) — вместо него карточка
+      // с явной кнопкой «Показать поля».
+      const showNote = card('notice', 'Черновик принят', 'Поля заполнены. Следующий ход диалога можно продолжать здесь, а генерация — кнопкой «Сгенерировать трек».', session);
+      const showBtn = document.createElement('button');
+      showBtn.type = 'button'; showBtn.className = 'action'; showBtn.textContent = 'Показать поля';
+      showBtn.addEventListener('click', () => { advanced = true; renderChrome(); flashDraftFields(); showBtn.closest('.card')?.remove(); });
+      showNote.append(showBtn);
     }));
     revert.addEventListener('click', runOnce(async () => {
       if (storageBlocked || activeSession !== session || mode !== 'music' || !entry.beforeApply) { state.textContent = 'Откройте эту сессию и режим «Музыка».'; return; }
@@ -2026,17 +2049,20 @@
       body.append(brainNote);
     }
     const state = document.createElement('p'); state.className = 'producer-note'; state.setAttribute('role', 'status');
-    state.textContent = entry.applied ? 'Черновик был принят. Генерация запускается отдельно.' : 'Пока ничего не изменено в полях генерации.';
+    state.textContent = entry.applied ? 'Поля заполнены из черновика.' : 'Пока ничего не изменено в полях генерации.';
     body.append(state);
     const actions = document.createElement('div'); actions.className = 'producer-actions';
-    const apply = document.createElement('button'); apply.type = 'button'; apply.className = 'action'; apply.textContent = 'Принять в поля студии';
-    const revert = document.createElement('button'); revert.type = 'button'; revert.className = 'action'; revert.textContent = 'Вернуть поля до принятия';
+    // F-11: тот же набор действий и формулировки, что у черновика наставника —
+    // включая кнопку генерации (раньше её не было и путь лежал через композер).
+    const apply = document.createElement('button'); apply.type = 'button'; apply.className = 'action'; apply.textContent = 'Принять в поля';
+    const revert = document.createElement('button'); revert.type = 'button'; revert.className = 'action'; revert.textContent = 'Вернуть как было';
+    const generate = document.createElement('button'); generate.type = 'button'; generate.className = 'action'; generate.textContent = 'Сгенерировать трек';
     revert.hidden = !entry.beforeApply;
     let applying = false;
     const runOnce = action => async () => {
       if (applying) return;
-      applying = true; apply.disabled = true; revert.disabled = true;
-      try { await action(); } finally { applying = false; apply.disabled = false; revert.disabled = false; }
+      applying = true; apply.disabled = true; revert.disabled = true; generate.disabled = true;
+      try { await action(); } finally { applying = false; apply.disabled = false; revert.disabled = false; generate.disabled = false; }
     };
     apply.addEventListener('click', runOnce(async () => {
       if (storageBlocked || activeSession !== session || mode !== 'music') { state.textContent = 'Откройте эту сессию и режим «Музыка», чтобы принять черновик.'; return; }
@@ -2056,8 +2082,8 @@
       els.musicPrompt.value = style.value;
       if (lyrics) els.lyrics.value = lyrics.value;
       advanced = true; renderChrome(); saveDraft(session); await persistSessions();
-      revert.hidden = false; state.textContent = 'Поля заполнены. Проверьте их и отдельно нажмите «Создать».';
-      els.musicPrompt.focus();
+      revert.hidden = false; state.textContent = 'Поля заполнены — проверьте их в композере.';
+      flashDraftFields(); // F-12
     }));
     revert.addEventListener('click', runOnce(async () => {
       if (storageBlocked || activeSession !== session || mode !== 'music' || !entry.beforeApply) { state.textContent = 'Откройте эту сессию и режим «Музыка».'; return; }
@@ -2073,7 +2099,26 @@
       advanced = entry.beforeApply.advanced; entry.applied = false; renderChrome(); saveDraft(session); await persistSessions();
       state.textContent = 'Поля восстановлены. Подготовленный черновик остался в этой карточке.';
     }));
-    actions.append(apply, revert); body.append(actions);
+    // F-11: генерация прямо из продюсерского черновика — тот же контракт ctx (T-21),
+    // что и у черновика наставника.
+    generate.addEventListener('click', runOnce(async () => {
+      if (storageBlocked || activeSession !== session || mode !== 'music' || !needKey()) return;
+      if (instrumental !== entry.snapshot.instrumental) { state.textContent = 'Режим трека изменился. Верните исходный режим, чтобы сгенерировать черновик.'; return; }
+      if (!style.value.trim() && !(lyrics && lyrics.value.trim())) { state.textContent = 'Черновик пуст.'; return; }
+      if (!entry.applied) {
+        entry.beforeApply = { quick: els.prompt.value, style: els.musicPrompt.value, lyrics: els.lyrics.value, advanced };
+        (entry.backups ||= []).push(entry.beforeApply); refreshBackups();
+        if (!(await persistSessions())) { state.textContent = 'Не удалось сохранить резервную копию; генерация не запущена.'; return; }
+      }
+      entry.applied = true;
+      els.musicPrompt.value = style.value;
+      if (lyrics) els.lyrics.value = lyrics.value;
+      advanced = true; renderChrome(); saveDraft(session);
+      await persistSessions();
+      revert.hidden = false;
+      await createMusic(els.musicPrompt.value, { title: title.value.trim() || null, lyricsSource: 'продюсер' });
+    }));
+    actions.append(apply, revert, generate); body.append(actions);
   }
 
   async function improve(field) {

@@ -1285,16 +1285,17 @@ function bffServer(port) {
   const review = p.locator('.producer-draft').first();
   await review.locator('[data-producer-field="title"]').fill('Новые огни');
   await review.locator('[data-producer-field="lyrics"]').fill('[Verse]\nMa propre chanson');
-  await review.getByRole('button', { name: 'Принять в поля студии' }).click();
+  await review.getByRole('button', { name: 'Принять в поля' }).click();
   await p.waitForFunction(() => document.querySelector('#musicPrompt').value === 'dream pop, 72 BPM, no guitar');
   assert.equal(await p.locator('#lyrics').inputValue(), '[Verse]\nMa propre chanson');
   assert.equal(state.jobPosts.length, 0, 'accepting does not start audio generation');
+  assert.ok(await review.getByRole('button', { name: 'Сгенерировать трек' }).isVisible(), 'producer draft has the same Generate action as the mentor draft (F-11)');
   await p.reload();
   await p.locator('.producer-draft').first().waitFor();
   assert.equal(await p.locator('[data-producer-field="title"]').first().inputValue(), 'Новые огни');
   assert.equal(await p.locator('#musicPrompt').inputValue(), 'dream pop, 72 BPM, no guitar');
   p.once('dialog', dialog => dialog.accept());
-  await p.getByRole('button', { name: 'Вернуть поля до принятия' }).first().click();
+  await p.getByRole('button', { name: 'Вернуть как было' }).first().click();
   await p.waitForFunction(() => !document.querySelector('#prompt').hidden);
   assert.equal(await p.locator('#prompt').inputValue(), idea);
   assert.equal(state.jobPosts.length, 0);
@@ -1310,10 +1311,10 @@ function bffServer(port) {
   assert.match(state.chatPosts[0].messages[1].content, /Моя собственная строка/);
   await p.locator('#lyrics').fill('Новая правка в ожидании');
   p.once('dialog', dialog => dialog.dismiss());
-  await p.getByRole('button', { name: 'Принять в поля студии' }).click();
+  await p.getByRole('button', { name: 'Принять в поля' }).click();
   assert.equal(await p.locator('#lyrics').inputValue(), 'Новая правка в ожидании');
   p.once('dialog', dialog => dialog.accept());
-  await p.getByRole('button', { name: 'Принять в поля студии' }).click();
+  await p.getByRole('button', { name: 'Принять в поля' }).click();
   await p.waitForFunction(() => document.querySelector('#lyrics').value === 'Моя собственная строка');
   await p.locator('.producer-idea summary').click();
   assert.match(await p.locator('.producer-idea').innerText(), /Новая правка в ожидании/);
@@ -1325,7 +1326,7 @@ function bffServer(port) {
   await p.locator('#prompt').fill('инструментал без вокала'); await p.locator('#prepareMusic').click();
   await p.locator('.producer-draft').waitFor();
   assert.equal(await p.locator('[data-producer-field="lyrics"]').count(), 0);
-  await p.getByRole('button', { name: 'Принять в поля студии' }).click();
+  await p.getByRole('button', { name: 'Принять в поля' }).click();
   await p.waitForFunction(() => document.querySelector('#musicPrompt').value === 'ambient synth');
   await p.locator('#genTrack').click(); await p.waitForSelector('#feed audio', { timeout: 25000 });
   assert.equal(state.jobPosts[0].params.instrumental, true);
@@ -1409,6 +1410,16 @@ function bffServer(port) {
   await draftCard.getByRole('button', { name: 'Принять в поля' }).click();
   await p.waitForFunction(() => document.getElementById('musicPrompt').value === 'dream pop, 90 BPM, warm female vocals');
   assert.equal(state.jobPosts.length, 0, 'accepting the draft does not generate');
+  // F-12: вместо автоперехода (он ломал бы второй ход диалога) — карточка
+  // «Черновик принят» с явной кнопкой «Показать поля».
+  const showBtn = p.getByRole('button', { name: 'Показать поля' });
+  assert.ok(await showBtn.isVisible(), 'accept shows a «Показать поля» affordance (F-12)');
+  assert.equal(await p.locator('#prompt').isHidden(), false, 'диалоговое поле остаётся для следующего хода наставника');
+  await showBtn.click();
+  await p.waitForFunction(() => !document.getElementById('advanced').hidden);
+  assert.ok((await p.locator('#musicPrompt.field-flash').count()) >= 1, 'поля подсвечены после перехода (F-12)');
+  await p.locator('#tuneToggle').click(); // обратно в Simple — второй ход диалога
+  await p.waitForFunction(() => !document.getElementById('prompt').hidden);
   // Self-refine: второй ход сохраняет историю диалога.
   await p.locator('#prompt').fill('поправь припев');
   await p.locator('#send').click();
