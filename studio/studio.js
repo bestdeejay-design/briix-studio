@@ -9,6 +9,7 @@
   const DEFAULT_SERVER = 'http://127.0.0.1:8300';
   const SERVER_KEY = 'briix-media-live-server';
   const TOKEN_KEY = 'briix-media-live-token';
+  const TOKEN_SESSION_KEY = 'briix-media-live-token-session'; // T-42: ключ до закрытия вкладки
   const MUSIC_MODELS = { flash: 'ace-step-flash', pro: 'ace-step-pro' };
   const MODEL_LABELS = { flash: 'Flash', pro: 'Pro' };
   const MODE_LABELS = { chat: 'Чат', photo: 'Фото', music: 'Музыка' };
@@ -46,12 +47,27 @@
     if (host !== '127.0.0.1' && host !== 'localhost') return location.origin + '/api';
     try { return JSON.parse(localStorage.getItem(SERVER_KEY)) || DEFAULT_SERVER; } catch { return DEFAULT_SERVER; }
   };
-  const token = () => localStorage.getItem(TOKEN_KEY) || '';
-  const setToken = v => { const s = String(v || '').trim(); if (s) localStorage.setItem(TOKEN_KEY, s); else localStorage.removeItem(TOKEN_KEY); };
-  // Ключ из ссылки (?key=...) — для показов: открыл ссылку с ключом, ключ сохранился сам
+  const token = () => sessionStorage.getItem(TOKEN_SESSION_KEY) || localStorage.getItem(TOKEN_KEY) || '';
+  // T-42: по умолчанию ключ живёт в sessionStorage (до закрытия вкладки);
+  // в localStorage — только явное «запомнить на этом устройстве». Ранее
+  // сохранённые localStorage-ключи продолжают работать (миграция безболезненна).
+  const setToken = (v, { remember = false } = {}) => {
+    const s = String(v || '').trim();
+    sessionStorage.removeItem(TOKEN_SESSION_KEY);
+    if (remember) localStorage.setItem(TOKEN_KEY, s); else localStorage.removeItem(TOKEN_KEY);
+    if (s && !remember) sessionStorage.setItem(TOKEN_SESSION_KEY, s);
+    else if (!s) sessionStorage.removeItem(TOKEN_SESSION_KEY);
+  };
+  const tokenRemembered = () => Boolean(localStorage.getItem(TOKEN_KEY));
+  // Ключ из ссылки (?key=...) — для показов: открыл ссылку с ключом, ключ
+  // сохранился сам. T-42: только на сессию вкладки, и URL чистится сразу —
+  // ключ не остаётся в адресной строке, истории, закладках и логах прокси.
   try {
     const urlKey = new URLSearchParams(location.search).get('key');
-    if (urlKey && urlKey.trim()) setToken(urlKey);
+    if (urlKey && urlKey.trim()) {
+      setToken(urlKey);
+      history.replaceState(null, '', location.pathname + location.hash);
+    }
   } catch { /* ignore */ }
   const headers = () => ({ Authorization: 'Bearer ' + token(), 'Content-Type': 'application/json' });
 
@@ -252,7 +268,8 @@
     sessionsDialog: $('sessionsDialog'), sessionsClose: $('sessionsClose'), sessionsNew: $('sessionsNew'),
     sessionsList: $('sessionsList'), storageWarning: $('storageWarning'),
     opsOverlay: $('opsOverlay'), opsText: $('opsText'), opsStopLogout: $('opsStopLogout'),
-    opsStay: $('opsStay'), opsCancel: $('opsCancel'), opsBadge: $('opsBadge')
+    opsStay: $('opsStay'), opsCancel: $('opsCancel'), opsBadge: $('opsBadge'),
+    keyRemember: $('keyRemember'), profileWipeBtn: $('profileWipeBtn')
   };
 
   let mode = 'chat';
@@ -1372,7 +1389,9 @@
     // статус ключа виден всегда: в пункте меню и внутри карточки ключа
     els.profileKeyBtn.textContent = has ? 'Ключ стенда ✓' : 'Ключ стенда…';
     if (els.keyStatus) els.keyStatus.textContent = has
-      ? 'Ключ сохранён ✓ — хранится только в этом браузере.'
+      ? (tokenRemembered()
+        ? 'Ключ сохранён ✓ — запомнен в этом браузере.'
+        : 'Ключ сохранён ✓ — до закрытия вкладки.')
       : 'Ключ ещё не задан.';
   }
 
@@ -3116,12 +3135,28 @@
   els.lyrics.addEventListener('input', updateEnabled);
   els.musicPrompt.addEventListener('input', updateEnabled);
 
-  els.keySave.addEventListener('click', () => {
-    setToken(els.keyInput.value);
+  els.keySave.addEventListener('click', async () => {
+    const value = els.keyInput.value.trim();
+    if (!value) {
+      // F-43: пустое поле — это удаление ключа, а не «сохранение пустоты».
+      if (!token()) { els.keyCard.hidden = true; return; }
+      const ok = await BRIIX_TOASTS.confirmDialog({
+        title: 'Удалить сохранённый ключ?',
+        body: 'Запросы к серверу перестанут проходить, пока не введёте новый ключ. Сессии и библиотека останутся.',
+        confirmLabel: 'Удалить', danger: true
+      });
+      if (!ok) return;
+      setToken('');
+      BRIIX_TOASTS.toast('Ключ удалён.', { kind: 'info' });
+    } else {
+      setToken(value, { remember: els.keyRemember.checked });
+      BRIIX_TOASTS.toast(els.keyRemember.checked
+        ? 'Ключ сохранён — запомнен в этом браузере.'
+        : 'Ключ сохранён — до закрытия этой вкладки.', { kind: 'done' });
+    }
     els.keyInput.value = '';
     els.keyCard.hidden = true;
     renderKeyChip();
-    card('notice', 'Ключ', 'Ключ сохранён в этом браузере.');
   });
 
   // Профиль-меню в панели вкладок: пункты статичные, меню руками (не attachMenu).
@@ -3147,6 +3182,38 @@
       body: 'Профиль «' + currentUser() + '» останется в этом браузере вместе с сессиями и библиотекой; ключ стенда не удаляется. Идущие генерации можно остановить на следующем шаге.',
       confirmLabel: 'Выйти', danger: true
     })) logout();
+  });
+  // T-43: «Выйти и очистить это устройство» — для общих устройств: удаляет
+  // ключ, профили, сессии (IndexedDB), библиотеки и настройки. Файлы на
+  // сервере не трогаем (их всё равно удаляет retention).
+  els.profileWipeBtn.addEventListener('click', async () => {
+    closeMenus();
+    const ok = await BRIIX_TOASTS.confirmDialog({
+      title: 'Выйти и очистить это устройство?',
+      body: 'Будут удалены: ключ стенда, все профили и PIN, сессии и история диалогов, библиотеки и настройки. Отменить будет нельзя — скачайте нужное заранее. Файлы на сервере не трогаем.',
+      confirmLabel: 'Очистить и выйти', danger: true
+    });
+    if (!ok) return;
+    BRIIX_OPS.stopAll();
+    els.opsOverlay.hidden = true;
+    try { await BriixSessionStore.wipe(); } catch { /* даже если база занята — локальное чистим */ }
+    for (const key of Object.keys(localStorage)) {
+      if (/^briix-/.test(key)) localStorage.removeItem(key);
+    }
+    sessionStorage.removeItem(TOKEN_SESSION_KEY);
+    sessionProfile = null; activeSession = null; storageBlocked = true; sessionRoots.clear();
+    els.feed.textContent = ''; els.lib.textContent = '';
+    els.prompt.value = ''; els.lyrics.value = ''; els.musicPrompt.value = '';
+    Object.keys(drafts).forEach(k => { drafts[k] = ''; });
+    sessionBusy.clear();
+    blobCache.forEach(url => URL.revokeObjectURL(url)); blobCache.clear(); blobTypes.clear(); blobBytes.clear();
+    coverUrlCache.forEach(url => URL.revokeObjectURL(url)); coverUrlCache.clear();
+    feedObjectUrls.forEach(url => URL.revokeObjectURL(url)); feedObjectUrls.clear();
+    renderOpsBadge();
+    els.studio.hidden = true; els.gate.hidden = false;
+    els.nickInput.value = '';
+    pinBuf = ''; renderDots(); gateHint('PIN — 4–6 цифр. Общее устройство? После работы используйте «Выйти и очистить это устройство».');
+    els.nickInput.focus();
   });
 
   // пин-пад: цифры и backspace

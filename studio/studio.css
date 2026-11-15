@@ -486,6 +486,10 @@ button:disabled { cursor: not-allowed; opacity: .4; }
 .mini-player button.mp-toggle { min-width: 44px; min-height: 32px; border-radius: 8px; color: var(--ink); }
 /* F-02/F-51: экран-ридер текст — визуально скрыт, но озвучивается */
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+/* T-42/T-43: ключ и очистка устройства */
+.key-remember { display: flex; align-items: center; gap: 8px; min-height: 32px; margin: 8px 0 0; color: var(--muted); font-size: 13px; }
+.key-remember input { accent-color: var(--accent); }
+#profileMenu .danger { color: var(--danger); }
 .studio-header {
   flex: 0 0 auto; min-height: 56px; display: flex; align-items: center;
   justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line);

@@ -197,7 +197,9 @@ if (location.hostname === 'briix.ru' || location.hostname === 'www.briix.ru') {
         <button id="keySave" class="save">Сохранить</button>
       </div>
       <p id="keyStatus" class="hint" aria-live="polite"></p>
-      <p class="hint">Тот же ключ, что в Настройках демо. Хранится только в этом браузере.</p>
+      <!-- T-42: ключ живёт до закрытия вкладки, если явно не попросить запомнить -->
+      <label class="key-remember"><input type="checkbox" id="keyRemember"> Запомнить на этом устройстве</label>
+      <p class="hint">Тот же ключ, что в Настройках демо. По умолчанию — до закрытия вкладки; файлы на сервере ограничены сроком хранения.</p>
     </div>
   </section>
 
@@ -213,6 +215,7 @@ if (location.hostname === 'briix.ru' || location.hostname === 'www.briix.ru') {
         <span id="profileNick" class="menu-nick"></span>
         <button type="button" role="menuitem" id="profileKeyBtn">Ключ стенда…</button>
         <button type="button" role="menuitem" id="profileLogoutBtn">Выйти</button>
+        <button type="button" role="menuitem" id="profileWipeBtn" class="danger">Выйти и очистить это устройство</button>
       </div>
     </div>
   </nav>

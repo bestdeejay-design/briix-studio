@@ -309,7 +309,8 @@ function bffServer(port) {
   await p.locator('#prompt').fill('');
   ok('loads clean, 3 modes, assistant chip menus per mode, music toolbar', {});
 
-  // 2. Инлайн-ввод ключа, когда localStorage пуст.
+  // 2. Инлайн-ввод ключа, когда хранилище пусто: по умолчанию — до закрытия
+  //    вкладки (sessionStorage), чекбокс «запомнить» — в localStorage (T-42).
   p = await page({ token: '' });
   await p.locator('.mode[data-mode="chat"]').click();
   await p.locator('#prompt').fill('привет');
@@ -317,9 +318,20 @@ function bffServer(port) {
   await p.waitForSelector('#keyCard:not([hidden])');
   await p.locator('#keyInput').fill(TOKEN);
   await p.locator('#keySave').click();
-  const stored = await p.evaluate(() => localStorage.getItem('briix-media-live-token'));
-  assert.equal(stored, TOKEN);
-  ok('missing key shows inline card, saved to localStorage', {});
+  const stored = await p.evaluate(() => ({
+    session: sessionStorage.getItem('briix-media-live-token-session'),
+    local: localStorage.getItem('briix-media-live-token')
+  }));
+  assert.equal(stored.session, TOKEN, 'по умолчанию ключ — в sessionStorage (T-42)');
+  assert.equal(stored.local, null, 'localStorage по умолчанию не трогаем');
+  // «Запомнить на этом устройстве» — localStorage-путь.
+  await p.locator('#profileBtn').click();
+  await p.locator('#profileKeyBtn').click();
+  await p.locator('#keyInput').fill(TOKEN);
+  await p.locator('#keyRemember').check();
+  await p.locator('#keySave').click();
+  assert.equal(await p.evaluate(() => localStorage.getItem('briix-media-live-token')), TOKEN, 'чекбокс «запомнить» кладёт ключ в localStorage');
+  ok('missing key shows inline card; sessionStorage by default, remember → localStorage (T-42)', {});
 
   // 3. Чат-стрим + inline-кнопка «Сделать из этого трек».
   p = await page();
@@ -1737,6 +1749,68 @@ function bffServer(port) {
   await p.locator('#mpToggle').click();
   await p.waitForFunction(() => window.BriixPlayer.current.paused, {}, { timeout: 5000 });
   ok('R6: toasts over library tab, notice dedupe, mini-player with timecode', mpState);
+
+  // T-42: ключ из ?key= живёт в sessionStorage и НЕ остаётся в URL.
+  resetBff();
+  {
+    const context = await browser.newContext();
+    const kp = await context.newPage();
+    kp.on('pageerror', e => errors.push(e.message));
+    await kp.addInitScript(({ port }) => {
+      localStorage.setItem('briix-media-live-server', JSON.stringify('http://127.0.0.1:' + port));
+    }, { port: BFF_PORT });
+    await kp.goto(`http://127.0.0.1:${STATIC_PORT}/studio/index.html?key=${TOKEN}`);
+    await kp.waitForSelector('#gate:not([hidden])'); // первый визит без профиля — гейт
+    assert.equal(await kp.evaluate(() => location.search), '', 'T-42: ?key= вычищен из URL (replaceState)');
+    assert.equal(await kp.evaluate(() => sessionStorage.getItem('briix-media-live-token-session')), TOKEN, 'ключ живёт в sessionStorage');
+    assert.equal(await kp.evaluate(() => localStorage.getItem('briix-media-live-token')), null, 'в localStorage ключ НЕ попал');
+    // запрос с этим ключом проходит авторизацию мока
+    await kp.evaluate(() => fetch(JSON.parse(localStorage.getItem('briix-media-live-server')) + '/jobs?limit=1', { headers: { Authorization: 'Bearer ' + sessionStorage.getItem('briix-media-live-token-session') } }).then(r => r.status)).then(status => assert.equal(status, 200));
+    await kp.close();
+  }
+
+  // F-43 + T-43: пустой ключ — честное удаление; «Очистить устройство» — тотальное.
+  resetBff();
+  p = await page();
+  await p.locator('.mode[data-mode="photo"]').click();
+  await p.locator('#prompt').fill('маяк для очистки');
+  await p.locator('#send').click();
+  await p.waitForSelector('#feed img.media-in', { timeout: 25000 });
+  // F-43: пустое сохранение = удаление ключа (подтверждение), а не «сохранено».
+  await p.locator('#profileBtn').click();
+  await p.locator('#profileKeyBtn').click();
+  await p.locator('#keyInput').fill('');
+  await p.locator('#keySave').click();
+  await p.waitForSelector('.confirm-overlay');
+  assert.match(await p.locator('.confirm-dialog').innerText(), /Удалить сохранённый ключ\?/, 'F-43: пустой ключ спрашивает удаление');
+  await p.getByRole('button', { name: 'Удалить', exact: true }).click();
+  await p.waitForFunction(() => !sessionStorage.getItem('briix-media-live-token-session') && !localStorage.getItem('briix-media-live-token'));
+  // T-43: «Выйти и очистить это устройство» — профиль, сессии, библиотека, ключ.
+  await p.locator('#profileBtn').click();
+  await p.locator('#profileKeyBtn').click();
+  await p.locator('#keyInput').fill(TOKEN);
+  await p.locator('#keyRemember').check(); // localStorage-путь тоже проверим
+  await p.locator('#keySave').click();
+  await p.waitForSelector('.toast.done');
+  assert.equal(await p.evaluate(() => localStorage.getItem('briix-media-live-token')), TOKEN, '«запомнить» кладёт ключ в localStorage');
+  await p.locator('#profileBtn').click();
+  await p.locator('#profileWipeBtn').click();
+  await p.waitForSelector('.confirm-overlay');
+  assert.match(await p.locator('.confirm-dialog').innerText(), /ключ стенда, все профили и PIN/, 'T-43: диалог перечисляет, что будет удалено');
+  await p.getByRole('button', { name: 'Очистить и выйти' }).click();
+  await p.waitForSelector('#gate:not([hidden])', { timeout: 10000 });
+  const wiped = await p.evaluate(async () => {
+    const leftovers = Object.keys(localStorage).filter(k => /^briix-/.test(k));
+    let idbFresh = null;
+    try { const { profile } = await BriixSessionStore.open('tester'); idbFresh = profile.sessions.length === 0; }
+    catch { idbFresh = 'error'; }
+    return { leftovers, idbFresh, token: localStorage.getItem('briix-media-live-token'), session: sessionStorage.getItem('briix-media-live-token-session') };
+  });
+  assert.deepEqual(wiped.leftovers, [], 'T-43: в localStorage не осталось briix-* ключей');
+  assert.equal(wiped.token, null, 'ключ удалён');
+  assert.equal(wiped.session, null, 'сессионный ключ удалён');
+  assert.equal(wiped.idbFresh, true, 'IndexedDB пересоздана пустой');
+  ok('login privacy: ?key= cleaned+sessionStorage, honest empty key, full device wipe (T-42/F-43/T-43)');
   await p.close();
 
   assert.deepEqual(errors, [], 'no page errors anywhere');

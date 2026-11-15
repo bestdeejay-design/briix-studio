@@ -232,5 +232,28 @@
     }, options);
   }
 
-  globalThis.BriixSessionStore = Object.freeze({ open, save, openProfile, saveProfile, SessionStoreError });
+  // T-43: полное стирание сессий с устройства: закрыть общее соединение
+  // (иначе deleteDatabase заблокирован) и удалить базу. Локальные ключи —
+  // на вызывающем (студия знает весь свой префикс).
+  async function wipe(options = {}) {
+    const idb = options.indexedDB === undefined ? globalThis.indexedDB : options.indexedDB;
+    const cached = dbCache.get(idb);
+    if (cached) {
+      try { (await cached).close(); } catch { /* уже закрыто */ }
+      dbCache.delete(idb);
+    }
+    if (!idb) return false;
+    await new Promise(resolve => {
+      let settled = false;
+      const done = () => { if (!settled) { settled = true; resolve(); } };
+      try {
+        const request = idb.deleteDatabase(DB_NAME);
+        request.onsuccess = request.onerror = request.onblocked = done;
+        setTimeout(done, 2000); // блокировка чужой вкладкой не должна вешать выход
+      } catch { done(); }
+    });
+    return true;
+  }
+
+  globalThis.BriixSessionStore = Object.freeze({ open, save, openProfile, saveProfile, wipe, SessionStoreError });
 })();
