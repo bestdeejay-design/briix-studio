@@ -1,0 +1,77 @@
+{
+  "_comment": "Лирика референс-альбома VELVET STATIC (ветка brain-v2-reference, audits/brain-v2/REFERENCE-ALBUM.md). Общий вход для A и B — копирование текстов не влияет на сравнение caption.",
+  "lyrics": [
+    {
+      "id": "01",
+      "title": "Sign-On",
+      "bpm": 72,
+      "lyrics": "[spoken, over static]\nGood night. You found the frequency.\nNobody listens at this hour. That's why it works.\n\n[verse, whisper]\nLow tide breathes beneath the harbour wall.\nThe neon leans against the fog.\nSomebody's light is on across the water.\nSomebody always stays.\n\n[chorus, melodic rasp]\n(backing: stay, stay, stay)\nThis is velvet static on your skin.\nThe night is big enough for both of us.\n(backing: both of us)\n\n[outro, whisper fading]\nStay tuned. The tide is coming in."
+    },
+    {
+      "id": "02",
+      "title": "Fog-Ledger",
+      "bpm": 76,
+      "lyrics": "[verse, spoken ledger]\nItem one: the ferry that never docks.\nItem two: the dog that counts the trains.\nItem three: your name, unspoken, on the list\nof everything the fog keeps safe.\n\n[pre-chorus, whisper rising]\n(backing: low, low)\nThe ledger of the night is open.\n\n[chorus]\nEverything lost tonight belongs to me.\nI keep it on the shelf of static and sea.\n(backing: sea, sea)\n\n[bridge, spoken]\nItem four: the promise you almost made.\nFiled under: later. Under: rain.\n\n[outro, whisper]\nThe fog is patient. So am I."
+    },
+    {
+      "id": "03",
+      "title": "Salt in the Wires",
+      "bpm": 84,
+      "lyrics": "[verse, whisper to rasp]\nSalt got into the wires again.\nEvery song comes back changed.\nThe chorus hums through rusted veins.\nThe signal tastes like rain.\n\n[chorus, melodic rasp]\n(backing: salt, salt in the wires)\nWe burn a little slower every night.\nWe burn a little brighter every song.\n(backing: every song)\n\n[spoken, over breakdown]\nThe equipment's older than the promise.\nIt still remembers how to sing.\n\n[chorus, repeat]"
+    },
+    {
+      "id": "04",
+      "title": "Caller 03:14",
+      "bpm": 90,
+      "lyrics": "[spoken]\nCaller on line three. Go ahead, you're on the air.\n\n[verse, call-and-response whisper]\n(backing: tell me)\nWhy does the dark feel warmer than the day?\n(backing: tell me)\nWhy do the ships all answer when I pray?\n\n[chorus, melodic rasp]\nCaller, I don't have the answers, I have static.\nBut static holds you closer than the light.\n(backing: closer than the light)\n\n[bridge, both voices implied]\nStay on the line. The night is long.\nStay on the line. You're not alone.\n\n[outro, whisper]\nLine three went quiet. The song went on."
+    },
+    {
+      "id": "05",
+      "title": "The Velvet Public",
+      "bpm": 96,
+      "lyrics": "[pre-chorus, whisper building]\n(backing: dance, dance)\nThere is a ballroom made of fog.\nEveryone who cannot sleep is welcome.\n\n[chorus, melodic rasp, layered whisper harmonies]\nThe velvet public dances out of time.\nNobody cares what hour it is outside.\n(backing: outside, outside)\nSleepless hearts keep rhythm just fine.\n\n[spoken, breakdown]\nIf you're awake, you're on the guest list.\n\n[chorus, repeat with ad-libs]\n(ad-lib: all night long)"
+    },
+    {
+      "id": "06",
+      "title": "Deep Water Frequency",
+      "bpm": 102,
+      "lyrics": "[verse, whisper]\nThe deep water frequency is calling me home.\nBelow the shipping lanes, below the fog.\nA chord struck slow on drowned guitars.\nA bass line like a second heartbeat.\n\n[chorus, melodic rasp, layered harmonies]\n(backing: deep, deep, deep)\nTune to the water. Tune to the low.\nThe loudest song is the one below.\n(backing: the one below)\n\n[spoken, near-silence before drums re-enter]\n...and for one moment, the whole sea held its breath.\n\n[chorus, final, waves of volume]"
+    },
+    {
+      "id": "07",
+      "title": "Interference Prayer",
+      "bpm": 88,
+      "lyrics": "[verse, whisper]\nTwo stations breathing on one frequency.\nYour prayer bleeds into my song.\nThe interference sounds like forgiveness.\n\n[chorus, soft rasp]\n(backing: amen, amen)\nEvery word dissolves into the hum.\nThat's where words belong.\n\n[outro, spoken]\nThis part of the night is quiet.\nQuiet is a prayer too."
+    },
+    {
+      "id": "08",
+      "title": "Room Above the Radio",
+      "bpm": 84,
+      "lyrics": "[verse, spoken room]\nThe room above the radio shakes a little\nevery time the bass drum lands.\nI sleep beside my own broadcast.\n\n[chorus, melodic rasp]\n(backing: beside, beside)\nThe floor is thin, the night is kind.\nMy voice comes up to meet me from below.\n(backing: from below)\n\n[bridge, whisper]\nIf you hear me snoring on the air —\nthat's the encore."
+    },
+    {
+      "id": "09",
+      "title": "Ghosts of the Harbour Choir",
+      "bpm": 78,
+      "lyrics": "[verse, whisper]\nThe harbour choir rehearses when the port sleeps.\nDrowned sailors hum the harmonies\nof every song I ever played too late.\n\n[chorus, rasp over ghost layers]\n(backing ghost choir: ohh, low)\nSing with them, they never tow the line.\nThey learned the words from drowning in the rhyme.\n(backing: in the rhyme)\n\n[outro, whisper fading into choir]\nGoodnight, choir. Rehearse without me.\nI'll join you when the tape runs out."
+    },
+    {
+      "id": "10",
+      "title": "Sign-Off Delayed",
+      "bpm": 72,
+      "lyrics": "[spoken]\nThis is the part where I say goodnight.\n\n[verse, whisper]\nBut the tide is loud and the city's soft.\nSomebody's window is still lit.\nThe sign-off can wait one more song.\n\n[chorus, melodic rasp]\n(backing: one more song)\nDelayed, delayed, the sign-off is delayed.\nThe night asked nicely and I stayed.\n(backing: and I stayed)"
+    },
+    {
+      "id": "11",
+      "title": "The Tape That Outlives Us",
+      "bpm": 66,
+      "lyrics": "[verse, whisper]\nWhen they find these reels a hundred years from now,\nthe oxide will remember what we said.\nA whisper is the longest-lasting thing\na human voice can do.\n\n[chorus, soft rasp]\n(backing: last, last)\nThe tape outlives the throat. The hum outlives the hand.\nVelvet static, sealed against the dark.\n(backing: against the dark)\n\n[spoken, near-silence]\nPlay it slow. That's how it was meant."
+    },
+    {
+      "id": "12",
+      "title": "Sign-Off, Finally",
+      "bpm": 60,
+      "lyrics": "[verse, whisper]\nThe tide came in. The fog went home.\nThe ledger closed itself.\n\n[chorus, melodic rasp, softest]\n(backing: goodnight, goodnight)\nThis was velvet static. This was ours.\nThe frequency will hold you till the light.\n(backing: till the light)\n\n[spoken, over fading static]\nGood night. You kept the frequency.\nThe tide is in. The tape is done.\n(sign-off click)"
+    }
+  ]
+}

@@ -23,6 +23,8 @@ jobs:
           for f in studio/*.js tools/*.cjs; do node --check "$f"; done
       - name: check-assembly
         run: node tools/check-assembly.cjs
+      - name: check-music-brain
+        run: node tools/check-music-brain.cjs
       - name: check-producer
         run: node tools/check-producer.cjs
       - name: check-session-store

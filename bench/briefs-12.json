@@ -1,0 +1,91 @@
+{
+  "_comment": "Фаза 2 бенчмарка (issue #20, §7): 12 треков референс-альбома VELVET STATIC. referencePrompt — промт владельца из audits/brain-v2/REFERENCE-ALBUM.md (ветка brain-v2-reference), VOCAL-CONST и SONIC-CONST раскрыты в полные строки дословно. ruBrief — МОЯ русская задумка на те же лирики: вход для buildCaption; английские формулировки владельца сюда не переносились.",
+  "vocalConst": "deep low male voice, hypnotic hoarse whisper flowing into melodic rasp, whisper-sung throughout, intimate confessional delivery, chest voice always, register never rises, layered whisper backing vocals in choruses, haunting and mesmerizing",
+  "sonicConst": "hypnotic psychedelic soul, prominent live bass guitar, warm organic analog bass tone in front of the mix, vintage Hammond organ with slow Leslie speaker, tape saturation, analog warmth, vinyl crackle, deep sub-bass frequencies, warm rounded low end, soft dynamics with near-silent suspensions before drums re-enter, dry close-mic production, 1970s coastal basement radio studio",
+  "tracks": [
+    {
+      "id": "01",
+      "title": "Sign-On",
+      "bpm": 72,
+      "referenceTrackLine": "72 BPM, slow tight drum groove with ride cymbal, radio static intro, sleepy port town mood, spoken sign-on monologue over the music",
+      "ruBrief": "психоделик-соул, ведущая живая бас-гитара впереди микса, Hammond с вращающимся Leslie, ленточная сатурация, тёплый аналог, глубокий низ, волновая динамика с почти-тишиной перед возвращением барабанов, медленный плотный грув с райд-тарелкой, вступление на радиопомехах, сонный портовый город, короткий монолог диджея поверх музыки, 72 BPM"
+    },
+    {
+      "id": "02",
+      "title": "Fog-Ledger",
+      "bpm": 76,
+      "referenceTrackLine": "76 BPM, soft deep drum groove, brushed percussion, mood: dreamy fog, inventory of sleepless things",
+      "ruBrief": "психоделик-соул, ведущая живая бас-гитара впереди микса, Hammond с вращающимся Leslie, ленточная сатурация, тёплый аналог, глубокий низ, волновая динамика с почти-тишиной перед возвращением барабанов, мягкий глубокий грув с метёлками, туманный, мечтательный, перечисление бессонных вещей, 76 BPM"
+    },
+    {
+      "id": "03",
+      "title": "Salt in the Wires",
+      "bpm": 84,
+      "referenceTrackLine": "84 BPM, rolling hypnotic drum groove, rhythmic organ stabs, glissando electric bass accents, mood: salt-corroded electricity, shivering anticipation",
+      "ruBrief": "психоделик-соул, ведущая живая бас-гитара впереди микса, Hammond с вращающимся Leslie, ленточная сатурация, тёплый аналог, глубокий низ, волновая динамика с почти-тишиной перед возвращением барабанов, покачивающийся гипнотичный грув, ритмичные удары органа, глиссандо на басу, электричество, изъеденное солью, дрожащее предвкушение, 84 BPM"
+    },
+    {
+      "id": "04",
+      "title": "Caller 03:14",
+      "bpm": 90,
+      "referenceTrackLine": "90 BPM, hypnotic call-and-response drum pattern, telephone-line hum texture, mood: intimate mystery, a listener calls the station",
+      "ruBrief": "психоделик-соул, ведущая живая бас-гитара впереди микса, Hammond с вращающимся Leslie, ленточная сатурация, тёплый аналог, глубокий низ, волновая динамика с почти-тишиной перед возвращением барабанов, гипнотичный паттерн барабанов вопрос-ответ, гул телефонной линии, интимная тайна, слушатель звонит в студию, 90 BPM"
+    },
+    {
+      "id": "05",
+      "title": "The Velvet Public",
+      "bpm": 96,
+      "referenceTrackLine": "96 BPM, round deep hypnotic drum groove, dominant live melodic bass guitar, gentle organ swirls, mood: secret ballroom, everyone dancing in fog",
+      "ruBrief": "психоделик-соул, ведущая живая бас-гитара впереди микса, Hammond с вращающимся Leslie, ленточная сатурация, тёплый аналог, глубокий низ, волновая динамика с почти-тишиной перед возвращением барабанов, округлый глубокий гипнотичный грув, ведущая мелодичная живая бас-гитара, мягкие завихрения органа, тайный танцзал, все танцуют в тумане, 96 BPM"
+    },
+    {
+      "id": "06",
+      "title": "Deep Water Frequency",
+      "bpm": 102,
+      "referenceTrackLine": "102 BPM, dominant round deep drum groove, lead live bass guitar carrying the main melody, warm sub-bass swells, mood: powerful hypnotic depth, anthem of the deep",
+      "ruBrief": "психоделик-соул, ведущая живая бас-гитара впереди микса, Hammond с вращающимся Leslie, ленточная сатурация, тёплый аналог, глубокий низ, волновая динамика с почти-тишиной перед возвращением барабанов, ведущий округлый глубокий грув, живая бас-гитара несёт главную мелодию, тёплые саб-басы накатывают, мощная гипнотичная глубина, гимн глубины, 102 BPM"
+    },
+    {
+      "id": "07",
+      "title": "Interference Prayer",
+      "bpm": 88,
+      "referenceTrackLine": "88 BPM, soft rolling groove, organ-driven hypnotic flow, mood: confession over interference, gentle and sacred",
+      "ruBrief": "психоделик-соул, ведущая живая бас-гитара впереди микса, Hammond с вращающимся Leslie, ленточная сатурация, тёплый аналог, глубокий низ, волновая динамика с почти-тишиной перед возвращением барабанов, мягкий покачивающийся грув, орган ведёт гипнотичный поток, исповедь сквозь помехи, нежно и священно, 88 BPM"
+    },
+    {
+      "id": "08",
+      "title": "Room Above the Radio",
+      "bpm": 84,
+      "referenceTrackLine": "84 BPM, intimate sparse groove, close-mic warmth, mood: the DJ's room, insomnia made tender",
+      "ruBrief": "психоделик-соул, ведущая живая бас-гитара впереди микса, Hammond с вращающимся Leslie, ленточная сатурация, тёплый аналог, глубокий низ, волновая динамика с почти-тишиной перед возвращением барабанов, интимный разреженный грув, тёплый близкий микрофон, комната диджея над студией, бессонница, ставшая нежной, 84 BPM"
+    },
+    {
+      "id": "09",
+      "title": "Ghosts of the Harbour Choir",
+      "bpm": 78,
+      "referenceTrackLine": "78 BPM, slow hypnotic groove, layered whisper choirs low in the mix, distant foghorn texture, mood: haunted tender, sea ghosts sing",
+      "ruBrief": "психоделик-соул, ведущая живая бас-гитара впереди микса, Hammond с вращающимся Leslie, ленточная сатурация, тёплый аналог, глубокий низ, волновая динамика с почти-тишиной перед возвращением барабанов, медленный гипнотичный грув, многослойные шёпот-хоры низко в миксе, далёкий гудок в тумане, призрачная нежность, поют морские призраки, 78 BPM"
+    },
+    {
+      "id": "10",
+      "title": "Sign-Off Delayed",
+      "bpm": 72,
+      "referenceTrackLine": "72 BPM, slow tight groove with tape-echo delay answers, mood: reluctance, ending postponed",
+      "ruBrief": "психоделик-соул, ведущая живая бас-гитара впереди микса, Hammond с вращающимся Leslie, ленточная сатурация, тёплый аналог, глубокий низ, волновая динамика с почти-тишиной перед возвращением барабанов, медленный плотный грув, ответы лентой с эхо-задержкой, нежелание заканчивать, финал откладывается, 72 BPM"
+    },
+    {
+      "id": "11",
+      "title": "The Tape That Outlives Us",
+      "bpm": 66,
+      "referenceTrackLine": "66 BPM, very slow deep groove, reverse-tape textures, gentle wow and flutter, mood: testament, tender and eternal",
+      "ruBrief": "психоделик-соул, ведущая живая бас-гитара впереди микса, Hammond с вращающимся Leslie, ленточная сатурация, тёплый аналог, глубокий низ, волновая динамика с почти-тишиной перед возвращением барабанов, очень медленный глубокий грув, реверс-плёнка, мягкое дрожание скорости, завещание, нежно и вечно, 66 BPM"
+    },
+    {
+      "id": "12",
+      "title": "Sign-Off, Finally",
+      "bpm": 60,
+      "referenceTrackLine": "60 BPM, slowest deep groove dissolving into organ swell, static closing theme, mood: peace, tide returns, the frequency sleeps",
+      "ruBrief": "психоделик-соул, ведущая живая бас-гитара впереди микса, Hammond с вращающимся Leslie, ленточная сатурация, тёплый аналог, глубокий низ, волновая динамика с почти-тишиной перед возвращением барабанов, самый медленный глубокий грув, растворяющийся в нарастании органа, тема закрытия на помехах, покой, прилив вернулся, частота засыпает, 60 BPM"
+    }
+  ]
+}

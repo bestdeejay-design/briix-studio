@@ -1,0 +1,103 @@
+# МОЗГУ v2 — почтовое отправление
+
+**Кому:** владельцу (bestdeejay-design), координатору, коллегии `agents`.
+**От:** executor (clean-room), канон `bestdeejay-design/agents`.
+**Ветка поставки:** `arena/a5a51eed-briix-studio` (от `main@68a751e`).
+**Issue:** [briix-studio#20](https://github.com/bestdeejay-design/briix-studio/issues/20).
+**Дата:** 15.11.2026.
+
+---
+
+## 📬 DELIVERED
+
+Что в посылке:
+
+### 1. Ресерч и аудит (до кода, как требует §3)
+
+| Файл | Что внутри |
+|---|---|
+| `audits/brain-v2/RESEARCH_PACK.md` | 8 источников (ACE-Step arXiv + код, README, Udio, Suno, Riffusion, корпус 8202, внутренний канон), ответы на 5 вопросов §3, утверждённая слоевая схема |
+| `audits/brain-v2/AUDIT_PACK.md` | аудит v1: замер v1 vs v2 на 20 брифах (ритм 2/20 → 20/20, характер вокала 4/20 → 19/20, продакшн 6/20 → 20/20), три дыры + 8 второстепенных находок |
+| `audits/brain-v2/REVIEWER_KICK.md` | 5 Pre-Mortem ловушек и их статус (4 закрыты, 1 — подготовка закрыта, генерация за владельцем) |
+| `audits/brain-v2/corpus-snapshot.json` | снимок цифр корпуса с commit-хэшем dj1 (воспроизводимость) |
+| `audits/brain-v2/BRIEFS-20.md` | 20 брифов, слоевой чек-лист против топ-промтов корпуса, известные ограничения |
+
+### 2. Код
+
+`studio/music-brain.js` → версия `2026-11-15-studio-2`:
+
+- **три слоя + якорь + хвост** вместо плоского списка тегов:
+  `VOICE (пол/регистр + подача + фактура)`, `RHYTHM (характер + состав кита + BPM + низ)`,
+  `SPACE (инструменты + атмосфера + продакшн-цепочка + место)`,
+  `TAIL (динамика + настроение + концепт)`, `ANCHOR (жанр/эпоха)`;
+- **новые словари**: `RHYTHM_CHAR / RHYTHM_GROOVE / RHYTHM_KIT / RHYTHM_BY_GENRE` (20 жанровых
+  профилей), `VOCAL_GENDER / VOCAL_DELIVERY / VOCAL_TEXTURE`, `BASS_WORDS`,
+  `ATMOS_WORDS`, `PLACE_WORDS`, `DYNAMICS_WORDS`, `CONCEPT_WORDS`;
+- **ритм-слой в caption есть всегда** (приёмка #20), с жанровым характером и составом кита;
+- **антифальцетный страж**: `chest voice, register never rises` для низкого голоса,
+  с позитивной переформулировкой (негативов в caption нет);
+- **`negated()`**: «без фальцета» не превращается в `falsetto`;
+- **два бюджета**: `buildTags` — 240 символов (обратная совместимость #109, существующие
+  vm-тесты), `buildCaption` — 640 символов (полный продюсерский caption; внутри
+  технического потолка ACE-Step — umT5 `text_max_length=256, truncation=True`);
+- **self-check**: если слоя физически нет или бюджет его срезал — это записано в `notes`,
+  молчаливой деградации нет.
+
+Не тронуто: `producer-brain.js`, `session-store.js`, `server-contract/`, инфраструктура,
+`buildLyricsSkeleton`, `detectBpm`, сигнатура `buildTags(brief, options)`.
+
+### 3. Тесты
+
+- новый `tools/check-music-brain.cjs` — 9 групп ассертов приёмки §5 (+ печать таблицы 20 брифов);
+- `tools/fixtures/briefs-20.json` — фикстуры брифов;
+- `tools/check-assembly.cjs` и `tools/check-producer.cjs` — зелёные (проверено в ветке);
+- CI: сюита добавлена в `.github/workflows/ci.yml`.
+
+### 4. Фаза 2: бенчмарк
+
+| Файл | Что внутри |
+|---|---|
+| `bench/briefs-12.json` | 12 задумок под лирики VELVET STATIC + строки промтов владельца |
+| `bench/lyrics-12.json` | лирика референса (общий вход A и B) |
+| `bench/prompts-12.json` | собранные caption: A (владелец) и B (мозг v2) |
+| `audits/brain-v2/BENCH-PROMPTS.md` | 12 треков: A vs B, обоснование каждого расхождения, честный прогноз «где B проиграет» |
+| `tools/bench-captions.cjs` | сборка промтов из задумок (только `buildCaption`, без копирования caption'ов владельца) |
+| `tools/bench-ab.cjs` | последовательная генерация A/B, wav-only, обезличенные имена `track-NN-x/y`, ключ в `bench/KEY.md` |
+| `bench/README.md` | процедура прослушивания и голосования |
+
+---
+
+## ⚠️ Чего НЕ сделано и почему
+
+1. **Генерация 12×2 WAV не выполнена.** media-bff живёт на стенде владельца за
+   туннелем и bearer-токеном (`server-contract/README.md`); из сэндбокса агента он
+   недостижим. `tools/bench-ab.cjs` готов и проверен в `--dry-run`; реальный прогон:
+   `MEDIA_BFF_URL=… MEDIA_BFF_TOKEN=… node tools/bench-ab.cjs`.
+   Выдавать «подготовлено» за «сгенерировано» — прямое нарушение честности бенчмарка
+   (REVIEWER_KICK, ловушка 5).
+2. **Браузерные сюиты (`check-studio`, `check-waveform`, `check-session-store`,
+   `check-studio-storage`, `check-wait-phrases`) в сэндбоксе не запускались** —
+   нет playwright. Проверено вручную: быстрый путь `studio.js` (русская идея →
+   ASCII-промт) по-прежнему даёт `≤240` символов, содержит `vocals` и
+   `English lyrics`. Финальное слово — CI (`ubuntu-latest`).
+3. **Вокальный слой в бенчмарке нейтрализован** (VOCAL-CONST одинаков у A и B,
+   как требует §7.1) — значит, по этому бенчмарку нельзя судить об улучшении
+   вокального слоя. Это отдельная проверка.
+
+## Что делать владельцу (по шагам)
+
+1. Прочитать `audits/brain-v2/RESEARCH_PACK.md` §4–5 (схема слоёв) и `BENCH-PROMPTS.md` §3.5
+   (где мозг ожидаемо слаб).
+2. Прогнать CI / локально: `node tools/check-music-brain.cjs`.
+3. Запустить генерацию A/B на стенде (команда выше) — 24 дорожки, последовательно.
+4. Прослушать вслепую, проголосовать, открыть `bench/KEY.md`, посчитать счёт в issue #20.
+
+## Открытые вопросы к владельцу
+
+- Подключать ли `buildCaption` (640) к студии вместо `buildTags` (240) — это меняет
+  поведение карточки трека и требует правки двух ассертов `check-studio`/`check-assembly`.
+  В этой поставке студия оставлена на 240 намеренно (обратная совместимость).
+- Нужен ли отдельный прогон «v2a: без концепт-строки» — чтобы изолировать вклад
+  самого спорного слоя (BENCH-PROMPTS §3.4)?
+
+— executor, ветка `arena/a5a51eed-briix-studio`
