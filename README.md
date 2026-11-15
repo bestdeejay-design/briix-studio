@@ -21,7 +21,9 @@ Chat-first AI studio: сессии чата, генерация музыки и 
   база стиля владельца, копия в `assets/data/`).
 - `assets/` — файлы, которые студия подгружает по same-origin
   (`creative-base.json`) и которые нужны тестам (`showcase/*.m4a`).
-- `tools/` — 7 тестовых сюит + `browser-env.cjs` (общий playwright-раннер).
+- `tools/` — 8 тестовых сюит + `browser-env.cjs` (общий playwright-раннер),
+  `fixtures/briefs-20.json` (брифы приёмки мозга v2) и `bench-captions.cjs` /
+  `bench-ab.cjs` (бенчмарк «мозг vs альбом», см. `bench/README.md`).
 - `server-contract/` — справочник контракта media-bff (`bff.py` + README).
   Снимок: живой сервис на стенде A, источник истины не здесь.
 
@@ -45,6 +47,7 @@ python3 -m http.server 8080
 ```bash
 export NODE_PATH=/opt/homebrew/lib/node_modules
 node tools/check-assembly.cjs        # сборка запроса #109: sanitize, языковое правило, brain-теги, каркас лирики
+node tools/check-music-brain.cjs     # музыкальный мозг v2: слои caption, ритм всегда, бюджет, негативы, 20 брифов
 node tools/check-studio.cjs          # студия целиком: композер, чат SSE, music/photo job'ы, библиотека, мобильная вёрстка
 node tools/check-session-store.cjs   # session-store.js: персист и восстановление сессий
 node tools/check-studio-storage.cjs  # localStorage/квоты/миграции хранилища студии
