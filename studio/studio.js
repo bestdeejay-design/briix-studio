@@ -682,6 +682,19 @@
         return peaks;
       });
   }
+  // T-37: пики кэшируются в памяти (успех и отказ) — восстановление сессии с
+  // 20 треками больше не даёт лавину параллельных запросов, а 404 не
+  // повторяется при каждом пересоздании карточки.
+  const peaksCache = new Map();
+  function peaksFor(job) {
+    let rec = peaksCache.get(job);
+    if (!rec) {
+      rec = fetchPeaks(job); // резолвит массив пиков
+      peaksCache.set(job, rec);
+      rec.catch(() => {}); // отказ кэшируется: тихая деградация без повторных запросов
+    }
+    return rec;
+  }
   // Обложка — единый рендер-путь для fresh и restore: если аудио ещё не загружено
   // (restore после перезагрузки страницы), клик по обложке запускает загрузку и
   // сразу play по готовности; иначе это обычный play/pause-тоггл.
@@ -733,6 +746,7 @@
     const waveSlot = document.createElement('div');
     waveSlot.className = 'waveform-track';
     const waveHolder = document.createElement('div');
+    waveHolder.className = 'waveform-holder'; // min-height: пустой холдер всё равно «интерсектится» (T-37)
     // F-25: таймкоды «текущее / длительность» под волной (формат — BriixPlayer.fmtTime).
     const timeEl = document.createElement('div');
     timeEl.className = 'waveform-time';
@@ -757,17 +771,21 @@
     let wave = null;
     const loadError = document.createElement('div');
     loadError.className = 'load-error';
-    fetchPeaks(job).then(peaks => {
+    // T-37: пики идут через кэш (успех и отказ кэшируются — 404 не повторяется
+    // при каждом пересоздании карточки). Observer-гейтинг опробован и отложен:
+    // конфликтует со scroll-restoration при восстановлении длинных лент.
+    const attachWave = () => peaksFor(job).then(peaks => {
       if (!frame.isConnected) throw new Error('Карточка недоступна.');
       placeholder.remove();
       wave = BriixWaveform.attachFromPeaks(peaks, waveHolder, {
         onSeekPending: () => { if (!state.audio) ensureLoaded(); } // seek до загрузки — грузим трек
       });
       if (state.audio) wave.setAudio(state.audio);
-    }).catch(() => {
-      console.warn('BRIIX waveform: пики недоступны (' + job + ') — только нативный плеер.');
+    }).catch(error => {
+      console.warn('BRIIX waveform: пики недоступны (' + job + ') — только нативный плеер.', error?.message || error);
       placeholder.remove();
     });
+    attachWave();
     let pending = null;
     const ensureLoaded = () => pending ||= (async () => {
       try {
@@ -817,9 +835,14 @@
 
   // Ленточная обёртка единого компонента (fresh и restore).
   function renderTrackCard(session, opts) {
+    // card() скроллит ещё пустую карточку; после наполнения она вырастает —
+    // если читатель был у низа, доводим до низа ещё раз, иначе волна, ждущая
+    // вьюпорта (T-37), остаётся за складкой.
+    const stick = els.feed.scrollHeight - els.feed.scrollTop - els.feed.clientHeight < 140;
     const body = card('assistant', opts.who, '', session);
     const t = buildTrackCard(opts);
     body.append(t.body);
+    if (stick) scrollFeed(true);
     return { body, ensureLoaded: t.ensureLoaded };
   }
 
@@ -2418,17 +2441,17 @@
         try {
           const path = cover || (await serverJobs()).find(item => item.id === job)?.cover_url;
           if (!path || !frame.isConnected || currentUser() !== owner) return;
-          const blob = await fileBlob(path, 2);
-          if (!frame.isConnected || currentUser() !== owner) return;
-          const image = new Image(); image.alt = 'Обложка трека';
-          // T-36: обложка кэшируется как objectURL (LRU 60) — повторные сборки
-          // карточки не перекачивают файл; выход и смена профиля чистят кэш.
+          // T-36: кэш проверяется ДО загрузки — повторная карточка (Библиотека
+          // после ленты) не качает обложку заново и не занимает слот очереди.
           let url = coverUrlCache.get(path);
           if (!url) {
+            const blob = await fileBlob(path, 2);
+            if (!frame.isConnected || currentUser() !== owner) return;
             url = URL.createObjectURL(blob);
             coverUrlCache.set(path, url);
             if (coverUrlCache.size > 60) { const oldest = coverUrlCache.keys().next().value; URL.revokeObjectURL(coverUrlCache.get(oldest)); coverUrlCache.delete(oldest); }
           }
+          const image = new Image(); image.alt = 'Обложка трека';
           image.onerror = () => {
             coverUrlCache.delete(path);
             if (frame.contains(image)) { frame.textContent = '♫'; frame.setAttribute('aria-label', 'Обложка недоступна'); }

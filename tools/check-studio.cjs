@@ -642,6 +642,9 @@ function bffServer(port) {
   assert.match(await p.locator('.lib-item .lib-prompt', { hasText: 'lighthouse' }).innerText(), /lighthouse/);
   // Музыкальная запись: модель в .who, подпись M4A, сворачиваемый текст песни.
   const musicItem = p.locator('.lib-item', { hasText: /Музыка/i }).first();
+  // Карточки стали выше (заголовок F-18, таймкоды F-25) — музыкальная запись
+  // может быть за складкой: скроллим к ней, как сделал бы читатель (обложки ленивые).
+  await musicItem.scrollIntoViewIfNeeded();
   await musicItem.locator('.lib-cover img').waitFor({ state: 'visible', timeout: 10000 }); // обложка-миниатюра (infra#77)
   const musicWho = await musicItem.locator('.who').innerText();
   assert.match(musicWho, /flash/i, 'music .who carries the human model name (F-19)');
@@ -898,7 +901,8 @@ function bffServer(port) {
   // Обложка = PLAY и в restore-карточке: до загрузки файла запросов аудио нет.
   const coversBefore = await p.evaluate(() => [...document.querySelectorAll('#feed .track-cover')].every(f => f.classList.contains('playable')));
   assert.equal(coversBefore, true, 'restored covers are PLAY buttons right away');
-  // Волна из peaks.json строится сразу при карточке, до загрузки аудио.
+  // Волна из peaks.json строится сразу при карточке, до загрузки аудио;
+  // повторных запросов пиков нет — кэш (T-37).
   await p.waitForFunction(() => document.querySelectorAll('#feed .waveform-canvas').length === 100, {}, { timeout: 15000 });
   await p.waitForTimeout(500);
   assert.equal(state.audioRequests, 0, 'restored history does not fetch 100 audio files');
