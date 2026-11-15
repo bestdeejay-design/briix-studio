@@ -250,7 +250,9 @@
     profileKeyBtn: $('profileKeyBtn'), profileLogoutBtn: $('profileLogoutBtn'), keyStatus: $('keyStatus'),
     tabs: $('tabs'), lib: $('lib'), sessionsOpen: $('sessionsOpen'), sessionsOverlay: $('sessionsOverlay'),
     sessionsDialog: $('sessionsDialog'), sessionsClose: $('sessionsClose'), sessionsNew: $('sessionsNew'),
-    sessionsList: $('sessionsList'), storageWarning: $('storageWarning')
+    sessionsList: $('sessionsList'), storageWarning: $('storageWarning'),
+    opsOverlay: $('opsOverlay'), opsText: $('opsText'), opsStopLogout: $('opsStopLogout'),
+    opsStay: $('opsStay'), opsCancel: $('opsCancel'), opsBadge: $('opsBadge')
   };
 
   let mode = 'chat';
@@ -258,8 +260,9 @@
   let instrumental = false; // вокальный контур починен (infra#79) — дефолт снова «Песня»; выбор хранится в браузере
   try { const savedInstr = localStorage.getItem('briix-studio-instrumental'); if (savedInstr !== null) instrumental = savedInstr === '1'; } catch {}
   let advanced = false;
-  let chatActive = false;
-  let musicChatActive = false;
+  // T-20/F-06: занятость диалога — свойство сессии, а не модуля: стрим в сессии A
+  // не блокирует ввод в сессии B. Ключ — id сессии, значение { kind, stop }.
+  const sessionBusy = new Map();
   // Источник лирики и название трека для transparency-блока и params.title:
   // выставляются путём, который знает происхождение (наставник/пользователь/автолирика).
   let pendingLyricsSource = null;
@@ -428,7 +431,7 @@
     const stageBody = card('stage', rec.kind === 'music' ? 'Музыка (продолжение)' : 'Фото (продолжение)', '', session);
     const eta = etaNote(rec.kind === 'music' ? (rec.input?.model || '') : 'flux-2-klein-4b', 'продолжение');
     const wait = waitRow(rec.kind === 'music' ? 'music' : 'image', rec.kind === 'music' ? 'synthesizing' : 'generating', { onTick: eta.update });
-    const handle = makeCancelHandle();
+    const handle = trackedHandle('resume', session, rec.kind === 'music' ? 'ожидание трека' : 'ожидание фото');
     handle.jobId = rec.job;
     appendStop(wait.row, handle);
     stageBody.append(wait.row, eta.el);
@@ -456,7 +459,7 @@
         } else {
           card('error', 'Ошибка', error.message || 'Неизвестная ошибка.', session);
         }
-      }
+      } finally { handle.unregister?.(); }
     })();
   }
 
@@ -489,6 +492,14 @@
     row.append(b);
     handle.stopBtn = b;
     return b;
+  }
+
+  // T-24: операция с ✕ попадает в реестр (ops.js) — «остановить и выйти» гасит
+  // их все: локальный abort + cancel джобы на сервере (T-05). Снятие — в finally.
+  function trackedHandle(kind, session, title = '') {
+    const handle = makeCancelHandle();
+    handle.unregister = BRIIX_OPS.register({ kind, sessionId: session?.id || '', title, stop: () => handle.stop() });
+    return handle;
   }
 
   function setStatus(text, isBusy) {
@@ -1180,8 +1191,10 @@
 
   function updateEnabled() {
     // Один ход диалога за раз (чат и разговорный музыкальный режим): генерации медиа не блокируют.
+    // T-20/F-06: занятость привязана к сессии — стрим в другой сессии не блокирует ввод здесь.
     const hasInput = Boolean(promptValue() || (mode === 'music' && advanced && els.lyrics.value.trim()));
-    const dialogBusy = (mode === 'chat' && chatActive) || (mode === 'music' && !advanced && musicChatActive);
+    const busyKind = sessionBusy.get(activeSession?.id)?.kind;
+    const dialogBusy = (mode === 'chat' && busyKind === 'chat') || (mode === 'music' && !advanced && busyKind === 'music-chat');
     els.send.disabled = storageBlocked || !hasInput || dialogBusy;
     $('chatPending').hidden = !dialogBusy;
     els.genTrack.disabled = storageBlocked || mode !== 'music' || !hasInput;
@@ -1224,7 +1237,7 @@
   async function create() {
     if (storageBlocked || !activeSession || !needKey()) return;
     const text = promptValue();
-    if ((!text && !(mode === 'music' && advanced && els.lyrics.value.trim())) || (mode === 'chat' && chatActive)) return;
+    if ((!text && !(mode === 'music' && advanced && els.lyrics.value.trim())) || (mode === 'chat' && sessionBusy.get(activeSession?.id)?.kind === 'chat')) return;
     if (mode === 'chat') return createChat(text);
     if (mode === 'photo') return createPhoto(text);
     // Решение владельца 15.11: в Simple-режиме send = разговор с наставником
@@ -1236,7 +1249,6 @@
 
   async function createChat(text) {
     const session = activeSession;
-    chatActive = true;
     const turn = { role: 'user', content: text };
     const assistant = currentAssistant();
     card('user', 'Вы', text, session);
@@ -1245,7 +1257,8 @@
     updateEnabled();
     const who = assistant.name;
     const body = card('assistant', who, '', session);
-    const handle = makeCancelHandle(); // ✕ в карточке гасит только этот стрим
+    const handle = trackedHandle('chat', session, who); // ✕ в карточке гасит только этот стрим
+    sessionBusy.set(session.id, { kind: 'chat', stop: () => handle.stop() });
     const textSpan = document.createElement('span'); // текст отдельно от ✕, чтобы не перемешивались
     const wait = waitLine('chat'); // мгновенный отклик: видно, что запрос ушёл
     const stopRow = document.createElement('div');
@@ -1283,7 +1296,11 @@
         else if (session === activeSession && mode !== 'chat' && !drafts.chat.trim()) drafts.chat = text;
         errorCard(error, session);
       }
-    } finally { chatActive = false; body.classList.remove('streaming'); setBusy(false); updateEnabled(); }
+    } finally {
+      sessionBusy.delete(session.id);
+      handle.unregister?.();
+      body.classList.remove('streaming'); setBusy(false); updateEnabled();
+    }
   }
 
   // ---- разговорный музыкальный режим (вариант B «Студия-агент») -----------------
@@ -1333,8 +1350,7 @@
 
   async function createMusicChat(text) {
     const session = activeSession;
-    if (musicChatActive) return;
-    musicChatActive = true;
+    if (sessionBusy.get(session.id)?.kind === 'music-chat') return;
     const assistant = currentAssistant();
     // Один наставник на диалог: смена роли обнуляет историю (делается и в чипе).
     if (!session.musicChat || session.musicChat.assistant !== assistant.id) {
@@ -1348,7 +1364,8 @@
     updateEnabled();
     const who = assistant.name;
     const body = card('assistant', who, '', session);
-    const handle = makeCancelHandle(); // ✕ в карточке гасит только этот стрим
+    const handle = trackedHandle('music-chat', session, who); // ✕ в карточке гасит только этот стрим
+    sessionBusy.set(session.id, { kind: 'music-chat', stop: () => handle.stop() });
     const textSpan = document.createElement('span');
     const wait = waitLine('chat');
     const stopRow = document.createElement('div');
@@ -1394,7 +1411,11 @@
         if (session === activeSession && mode === 'music' && !advanced && !els.prompt.value.trim()) els.prompt.value = text;
         errorCard(error, session);
       }
-    } finally { musicChatActive = false; setBusy(false); updateEnabled(); }
+    } finally {
+      sessionBusy.delete(session.id);
+      handle.unregister?.();
+      setBusy(false); updateEnabled();
+    }
   }
 
   // Draft-блок наставника: компактные поля + «Принять в поля» (с бэкапом/откатом,
@@ -1509,7 +1530,7 @@
     stageBody.append(skel);
     const eta = etaNote('flux-2-klein-4b', 'фото');
     const wait = waitRow('image', 'generating', { onTick: eta.update });
-    const handle = makeCancelHandle(); // ✕ гасит только эту джобу
+    const handle = trackedHandle('photo', session); // ✕ гасит только эту джобу
     appendStop(wait.row, handle);
     stageBody.append(wait.row, eta.el);
     try {
@@ -1551,7 +1572,7 @@
         else if (session === activeSession && mode !== 'photo' && !drafts.photo.trim()) drafts.photo = text;
         errorCard(error, session);
       }
-    } finally { setBusy(false); updateEnabled(); }
+    } finally { handle.unregister?.(); setBusy(false); updateEnabled(); }
   }
 
   // Brain-теги приоритетнее: добавляем к переводу только те, которых ещё нет.
@@ -1634,7 +1655,7 @@
     const stageBody = card('stage', 'Музыка', '', session); // мгновенно, включая фазу автолирики
     const eta = etaNote(MUSIC_MODELS[snapshot.quality], MODEL_LABELS[snapshot.quality]);
     const wait = waitRow('music', !vocal ? 'model-warmup' : (vocal && !lyrics ? 'writing-lyrics' : 'synthesizing'), { onTick: eta.update });
-    const handle = makeCancelHandle(); // ✕ гасит автолирику и поллинг этой джобы
+    const handle = trackedHandle('music', session); // ✕ гасит автолирику и поллинг этой джобы
     appendStop(wait.row, handle);
     stageBody.append(wait.row);
     // Индикатор стадий показывает серверный этап, а не выдуманный процент.
@@ -1798,7 +1819,7 @@
         restoreMusicDraft();
         errorCard(error, session);
       }
-    } finally { setBusy(false); updateEnabled(); }
+    } finally { handle.unregister?.(); setBusy(false); updateEnabled(); }
   }
 
   // All authenticated file transfers share two slots. Interactive requests can pass
@@ -1876,7 +1897,7 @@
     if (snapshot.idea.length > BriixProducer.MAX_IDEA || snapshot.lyrics.length > BriixProducer.MAX_LYRICS) {
       card('notice', 'Продюсер', 'Идея или текст слишком длинные для подготовки. Сократите их самостоятельно.'); return;
     }
-    const handle = makeCancelHandle();
+    const handle = trackedHandle('producer', session, 'подготовка черновика');
     producerRequests.set(session.id, handle);
     const stage = card('stage', 'Музыкальный продюсер', '', session);
     const wait = waitRow('music', 'writing-lyrics');
@@ -1913,7 +1934,7 @@
       }
     } finally {
       clearTimeout(timer); wait.stop(); stage.closest('.card')?.remove();
-      producerRequests.delete(session.id); setBusy(false);
+      producerRequests.delete(session.id); handle.unregister?.(); setBusy(false);
     }
   }
 
@@ -2130,6 +2151,7 @@
     loadDraft(session);
     setView('chat');
     closeSessions();
+    renderOpsBadge(); // T-20: чужая занятость меняется при смене сессии
     persistSessions();
     resumeSessionJobs(session); // T-52: незакрытые генерации сессии продолжают ждать
   }
@@ -2272,9 +2294,64 @@
     resumeSessionJobs(activeSession); // T-52: судьба джоб прошлой сессии — в ленту
   }
 
+  // T-20/F-06: индикатор в шапке — «в другой сессии идёт работа»; клик переносит
+  // туда, где живёт ✕ (остановить стрим из чужой сессии иначе невозможно).
+  function renderOpsBadge() {
+    const summary = BRIIX_OPS.running();
+    const foreign = summary.ops.filter(op => op.sessionId && op.sessionId !== activeSession?.id);
+    if (!foreign.length) { els.opsBadge.hidden = true; return; }
+    const session = sessionProfile?.sessions.find(s => s.id === foreign[0].sessionId);
+    els.opsBadge.textContent = (OP_KIND_LABELS[foreign[0].kind] || 'работа')
+      + (foreign.length > 1 ? ' (+' + (foreign.length - 1) + ')' : '')
+      + (session ? ' · ' + (session.title || 'Новый чат') : '');
+    els.opsBadge.hidden = false;
+  }
+  BRIIX_OPS.subscribe(renderOpsBadge);
+  els.opsBadge.addEventListener('click', () => {
+    const summary = BRIIX_OPS.running();
+    const target = summary.ops.find(op => op.sessionId && op.sessionId !== activeSession?.id);
+    const session = target && sessionProfile?.sessions.find(s => s.id === target.sessionId);
+    if (session) selectSession(session);
+  });
+
+  // T-24: выход при живых операциях — явный выбор «остановить и выйти / остаться»,
+  // а не тихий отказ (A20: refusal-карточка была невидима на вкладке «Библиотека»).
+  const OP_KIND_LABELS = {
+    chat: 'ответ наставника', 'music-chat': 'разговор с наставником',
+    music: 'генерация музыки', photo: 'генерация фото',
+    producer: 'подготовка черновика', resume: 'ожидание генерации'
+  };
+  function opsSummaryLine(summary) {
+    return Object.entries(summary.byKind).map(([kind, n]) => (OP_KIND_LABELS[kind] || kind) + (n > 1 ? ' ×' + n : '')).join(', ');
+  }
   async function logout() {
     if (sessionTransition) return;
-    if (runningOps) { card('notice', 'Выход', 'Сначала дождитесь завершения активных операций или остановите их.'); return; }
+    const running = BRIIX_OPS.running();
+    if (running.count) {
+      els.opsText.textContent = 'Прямо сейчас выполняются: ' + opsSummaryLine(running)
+        + '. «Остановить и выйти» отменит их на сервере — очереди и GPU освободятся; несохранённые тексты полей будут потеряны.';
+      els.opsOverlay.hidden = false;
+      els.opsStopLogout.focus();
+      return;
+    }
+    await doLogout();
+  }
+  els.opsStay.addEventListener('click', () => { els.opsOverlay.hidden = true; els.profileBtn.focus(); });
+  els.opsCancel.addEventListener('click', () => { els.opsOverlay.hidden = true; els.profileBtn.focus(); });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && !els.opsOverlay.hidden) { els.opsOverlay.hidden = true; els.profileBtn.focus(); }
+  });
+  els.opsStopLogout.addEventListener('click', async () => {
+    els.opsStopLogout.disabled = true;
+    try {
+      BRIIX_OPS.stopAll(); // abort локально + cancel каждой джобы на сервере (T-05)
+      await new Promise(r => setTimeout(r, 150)); // дать отменам уйти
+      await doLogout();
+    } finally { els.opsStopLogout.disabled = false; }
+  });
+  async function doLogout() {
+    els.opsOverlay.hidden = true;
+    if (sessionTransition) return;
     if (sessionProfile) { saveDraft(activeSession); if (!(await persistSessions())) return; }
     libSeq++;
     if (producerSaveTimer) { clearTimeout(producerSaveTimer); producerSaveTimer = null; }

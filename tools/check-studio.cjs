@@ -849,26 +849,54 @@ function bffServer(port) {
   assert.match(await p.locator('.card.notice').last().innerText(), /УЛУЧШЕННЫЙ ТЕКСТ/);
   ok('late improvement preserves newer edits');
 
-  // Во время активного ответа выход запрещён, пока ответ не остановлен/не завершился.
+  // T-24: выход при живом стриме — явный диалог «остановить и выйти / остаться»,
+  // а не тихий отказ карточкой в скрытой ленте (A20).
   resetBff(); state.chatSlow = true;
   p = await page();
   await p.locator('#prompt').fill('Долгий ответ');
   await p.locator('#send').click();
   await p.waitForSelector('.card.assistant .stage-stop');
+  p.once('dialog', d => d.accept()); // нативный confirm «Выйти?» — уходит в R6 (3.3)
+  await p.locator('#profileBtn').click();
+  await p.locator('#profileLogoutBtn').click();
+  await p.waitForSelector('#opsOverlay:not([hidden])');
+  assert.match(await p.locator('#opsText').innerText(), /ответ наставника/, 'диалог называет живые операции');
+  assert.equal(await p.locator('#studio').isVisible(), true, 'после «Остаться» студия на месте');
+  await p.locator('#opsStay').click();
+  await p.waitForSelector('#opsOverlay', { state: 'hidden' });
+  assert.equal(await p.locator('#studio').isVisible(), true, '«Остаться» закрывает диалог и не выходит');
+  // «Остановить и выйти»: стрим гасится, профиль закрывается без потери данных.
   p.once('dialog', d => d.accept());
   await p.locator('#profileBtn').click();
   await p.locator('#profileLogoutBtn').click();
-  assert.equal(await p.locator('#studio').isVisible(), true);
-  assert.match(await p.locator('.card.notice').last().innerText(), /активных операций/);
-  await p.locator('.card.assistant .stage-stop').click();
-  await p.waitForFunction(() => !document.querySelector('#status').classList.contains('busy'));
-  p.once('dialog', d => d.accept());
-  await p.locator('#profileBtn').click();
-  await p.locator('#profileLogoutBtn').click();
-  await p.waitForSelector('#gate:not([hidden])');
-  assert.equal(await p.locator('#gate').isVisible(), true);
+  await p.waitForSelector('#opsOverlay:not([hidden])');
+  await p.locator('#opsStopLogout').click();
+  await p.waitForSelector('#gate:not([hidden])', { timeout: 10000 });
+  assert.equal(await p.locator('#gate').isVisible(), true, '«Остановить и выйти» завершает сессию');
   state.chatSlow = false;
-  ok('active session cannot leak into another profile');
+  ok('logout with live ops: explicit stop-and-leave dialog (T-24, A20)');
+
+  // F-06/A10 (T-20): смена сессии во время стрима — ввод в новой сессии свободен,
+  // индикатор в шапке ведёт к занятой сессии, стрим можно остановить оттуда.
+  resetBff(); state.chatSlow = true;
+  p = await page();
+  await p.locator('#prompt').fill('стрим в первой сессии');
+  await p.locator('#send').click();
+  await p.waitForSelector('.card.assistant .stage-stop');
+  await p.locator('#sessionsOpen').click();
+  await p.locator('#sessionsNew').click();
+  await p.waitForSelector('#sessionsOverlay', { state: 'hidden' });
+  await p.locator('#prompt').fill('вопрос из новой сессии');
+  assert.equal(await p.locator('#send').isDisabled(), false, 'новая сессия не заблокирована стримом старой (F-06)');
+  assert.equal(await p.locator('#chatPending').isVisible(), false, 'подсказка «дождитесь ответа» не висит в чужой сессии');
+  await p.waitForSelector('#opsBadge:not([hidden])');
+  assert.match(await p.locator('#opsBadge').innerText(), /ответ наставника/, 'бейдж называет операцию другой сессии');
+  await p.locator('#opsBadge').click(); // вернуться к сессии со стримом
+  await p.waitForSelector('.card.assistant .stage-stop');
+  await p.locator('.card.assistant .stage-stop').click();
+  await p.waitForSelector('#opsBadge', { state: 'hidden' });
+  state.chatSlow = false;
+  ok('session-bound busy: stream in A does not block B; header badge jumps to the busy session (T-20/F-06)');
 
 
   // Библиотека: миниатюры и аудио делят очередь, а не грузят все файлы одновременно.

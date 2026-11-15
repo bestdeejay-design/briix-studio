@@ -471,6 +471,10 @@ button:disabled { cursor: not-allowed; opacity: .4; }
 .brand-mark { display: grid; place-items: center; width: 27px; height: 27px;
   border-radius: 8px; color: var(--accent-ink); background: var(--accent); font-weight: 800; }
 .header-divider { height: 16px; width: 1px; background: var(--line-focus); }
+.header-tools { display: flex; align-items: center; gap: 8px; }
+/* T-20/F-06: индикатор живых операций в других сессиях; клик — перейти туда */
+.ops-badge { color: var(--amber); border-color: var(--amber-soft); font-size: 12px; }
+.ops-badge::before { content: '●'; margin-right: 6px; font-size: 10px; }
 .header-note { font-size: 12px; }
 .lib-results { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .lib-error { color: var(--danger); margin-top: 10px; font-size: 13px; }
@@ -516,6 +520,9 @@ button:disabled { cursor: not-allowed; opacity: .4; }
 .session-new, .session-item { min-height: 44px; border-radius: 10px; text-align: left; padding: 10px 12px; background: var(--surface-2); }
 .session-new { color: var(--ink); border: 1px solid var(--line-focus); }
 .sessions-help { color: var(--muted); font-size: 12px; margin: 0; }
+/* T-24: диалог «остановить и выйти» — те же меры касания, что и у остального */
+.ops-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.ops-actions .action { justify-content: center; }
 .sessions-list { overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
 .session-item { width: 100%; display: flex; flex-direction: column; gap: 2px; overflow-wrap: anywhere; }
 .session-item[aria-current="true"] { outline: 1px solid var(--accent); }

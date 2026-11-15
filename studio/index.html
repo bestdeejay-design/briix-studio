@@ -44,7 +44,10 @@ if (location.hostname === 'briix.ru' || location.hostname === 'www.briix.ru') {
 <main class="studio" id="studio" hidden>
   <header class="studio-header">
     <div><span class="brand-mark">B</span><strong>BRIIX</strong><span class="header-divider"></span><span>Студия</span></div>
-    <button id="sessionsOpen" class="tool chip" type="button" aria-haspopup="dialog" aria-controls="sessionsDialog">☰ История</button>
+    <div class="header-tools">
+      <button id="opsBadge" class="tool chip ops-badge" type="button" hidden></button>
+      <button id="sessionsOpen" class="tool chip" type="button" aria-haspopup="dialog" aria-controls="sessionsDialog">☰ История</button>
+    </div>
   </header>
   <div id="storageWarning" class="storage-warning" role="alert" hidden></div>
   <div id="sessionsOverlay" class="sessions-overlay" hidden>
@@ -53,6 +56,18 @@ if (location.hostname === 'briix.ru' || location.hostname === 'www.briix.ru') {
       <button id="sessionsNew" class="session-new" type="button">＋ Новый чат</button>
       <p class="sessions-help">Сессии хранятся в этом браузере; приватная вкладка может удалить их после закрытия. Аудиофайлы на сервере могут быть удалены.</p>
       <div id="sessionsList" class="sessions-list"></div>
+    </section>
+  </div>
+
+  <!-- T-24: выход при живых операциях — явный выбор, а не тихий отказ -->
+  <div id="opsOverlay" class="sessions-overlay" hidden>
+    <section class="sessions-dialog" role="dialog" aria-modal="true" aria-labelledby="opsTitle" tabindex="-1">
+      <div class="sessions-head"><h2 id="opsTitle">Идут операции</h2><button id="opsCancel" class="tool icon-only" type="button" aria-label="Остаться">✕</button></div>
+      <p class="sessions-help" id="opsText">Прямо сейчас выполняются генерации. Остановить их и выйти — очереди и GPU освободятся, несохранённые тексты полей будут потеряны.</p>
+      <div class="ops-actions">
+        <button id="opsStopLogout" class="session-new" type="button">Остановить и выйти</button>
+        <button id="opsStay" class="action" type="button">Остаться</button>
+      </div>
     </section>
   </div>
 
@@ -194,6 +209,7 @@ if (location.hostname === 'briix.ru' || location.hostname === 'www.briix.ru') {
 <script src="./wait-phrases.js?v=20261115"></script>
 <script src="./wait-ui.js?v=20261115"></script>
 <script src="catalog.js?v=20261115"></script>
+<script src="ops.js?v=20261115"></script>
 <script src="session-store.js?v=20261114-agent-b-1"></script>
 <script src="waveform.js?v=20261114-peaks-1"></script>
 <script src="player.js?v=20261115"></script>
