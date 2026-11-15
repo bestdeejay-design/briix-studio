@@ -1329,6 +1329,19 @@ function bffServer(port) {
   // ---- Анатомия карточки трека (общая для ленты и Библиотеки) --------------------
   resetBff();
   p = await page();
+  // R1: стаб MediaSession стоит с загрузки страницы — первый же play привязывает
+  // к нему хендлеры и метаданные (экран блокировки знает, что играет).
+  await p.addInitScript(() => {
+    window.__metaCalls = [];
+    window.__mediaActions = {};
+    window.MediaMetadata = class { constructor(m) { window.__metaCalls.push(m); } };
+    try {
+      Object.defineProperty(navigator, 'mediaSession', { configurable: true, value: {
+        metadata: null, playbackState: 'none',
+        setActionHandler(action, fn) { window.__mediaActions[action] = typeof fn; }
+      } });
+    } catch { /* уже определён — не критично */ }
+  });
   await p.evaluate(async wavB64 => {
     const binary = atob(wavB64), bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
@@ -1363,6 +1376,21 @@ function bffServer(port) {
     c.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: r.left + r.width * 0.5, clientY: r.top + r.height / 2 }));
   });
   await p.waitForFunction(() => Math.abs(document.querySelector('#feed audio').currentTime - 1) < 0.4, {}, { timeout: 5000 });
+  // R1 (player.js): таймкоды под волной (F-25) и MediaSession-метаданные.
+  const timecodes = await p.locator('#feed .waveform-time').innerText();
+  assert.match(timecodes, /^\d+:\d\d \/ \d+:\d\d$/, 'timecodes rendered under the wave: ' + JSON.stringify(timecodes));
+  const media = await p.evaluate(() => ({ calls: window.__metaCalls, state: navigator.mediaSession.playbackState, actions: window.__mediaActions }));
+  assert.equal(media.state, 'paused', 'playbackState follows the audio (paused now)');
+  assert.ok(media.calls.length >= 1, 'MediaMetadata is set on play');
+  assert.match(media.calls.at(-1).title, /Тест: Трек/, 'lockscreen title comes from the card');
+  assert.equal(media.calls.at(-1).artist, 'tester', 'lockscreen artist comes from the card');
+  assert.equal(media.actions.play, 'function', 'play/pause/stop handlers are wired');
+  assert.equal(media.actions.pause, 'function');
+  assert.equal(media.actions.stop, 'function');
+  await p.locator('#feed .track-cover.playable').click(); // снова play — состояние сессии оживает
+  await p.waitForFunction(() => navigator.mediaSession.playbackState === 'playing' && !document.querySelector('#feed audio').paused, {}, { timeout: 5000 });
+  await p.locator('#feed .track-cover.playing').click(); // пауза — не мешаем следующим проверкам
+  await p.waitForFunction(() => document.querySelector('#feed audio').paused, {}, { timeout: 5000 });
   // Единое меню «⋯»: ровно 7 действий.
   await p.locator('#feed .menu-btn').click();
   const menuTexts = await p.locator('.track-menu:not([hidden]) button').allInnerTexts();

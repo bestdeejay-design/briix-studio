@@ -157,8 +157,11 @@ const studioSrc = fs.readFileSync(path.join(ROOT, 'studio/studio.js'), 'utf8');
 assert.match(studioSrc, /Язык явно не указан — пиши текст песни по-английски/, 'autoLyrics defaults to English');
 assert.match(studioSrc, /langLine = language === 'ru' \? ' Пиши текст песни на русском\.'/, 'explicit Russian is honored');
 assert.match(studioSrc, /translatePrompt\(style, handle\.controller\.signal\)/, 'translation is abortable on the producer chat path');
-// duration никуда не отправляется.
-assert.doesNotMatch(studioSrc, /duration/i, 'no duration anywhere in studio.js');
+// duration никуда не отправляется. Единственные допустимые вхождения в studio.js —
+// чтение audio.duration и событие durationchange для таймкодов карточки (F-25,
+// локальный показ); в params/запросах/именах полей duration по-прежнему нет.
+assert.doesNotMatch(studioSrc.replace(/audio\.duration|durationchange/g, ''), /duration/i,
+  'duration appears only as audio playback display, never in requests/params');
 console.log('PASS assembly: sanitize, language rule, Latin tags, brain stage, scaffold, manual/instrumental guards');
 
 })().catch(error => { console.error('FAIL: ' + (error?.message || error)); process.exit(1); });

@@ -51,7 +51,9 @@ button {
 }
 button:disabled { cursor: not-allowed; opacity: .4; }
 :focus { outline: none; }
-:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--accent-ring); border-radius: var(--radius-pill); }
+/* F-45: одно объявление :focus-visible на весь проект (раньше конкурировали
+   outline:none+ring и отдельный outline ниже по файлу). */
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; box-shadow: 0 0 0 3px var(--accent-ring); }
 
 /* ---- каркас: лента сверху скроллится, композер прижат к низу -------------- */
 .studio {
@@ -476,7 +478,6 @@ button:disabled { cursor: not-allowed; opacity: .4; }
 .card .track-cover img, .lib-item .lib-media .track-cover img {
   width: 100%; height: 100%; margin: 0; object-fit: cover; border-radius: 0;
 }
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (max-width: 480px) {
   .studio-header { min-height: 48px; }
   .header-note { display: none; }
@@ -580,6 +581,7 @@ button:disabled { cursor: not-allowed; opacity: .4; }
 
 .waveform { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; position: relative; }
 .waveform-canvas { width: 100%; height: 36px; display: block; cursor: pointer; }
+.waveform-time { margin-top: 2px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 /* Слайдер — клавиатурный a11y-фолбэк поверх волны: визуально скрыт,
    раскрывается при фокусе с клавиатуры. */
 .waveform-seek { position: absolute; width: 1px; height: 1px; margin: -1px; clip-path: inset(50%); overflow: hidden; accent-color: var(--accent); }

@@ -273,18 +273,9 @@
     return url;
   }
 
-  // T-51: один активный звук в студии — новое воспроизведение ставит на паузу
-  // предыдущее. Лента, библиотека и restore создают аудио в двух местах, но
-  // проходят через один реестр, поэтому двух одновременных треков больше нет.
-  const liveAudios = new Set();
-  function claimAudio(audio) {
-    for (const a of [...liveAudios]) if (!a.isConnected) liveAudios.delete(a);
-    if (liveAudios.has(audio)) return;
-    liveAudios.add(audio);
-    audio.addEventListener('play', () => {
-      for (const other of liveAudios) if (other !== audio && !other.paused) other.pause();
-    });
-  }
+  // T-51: единственный активный звук — модуль player.js (лента/библиотека/restore
+  // проходят через BriixPlayer.claim): новое воспроизведение гасит предыдущее,
+  // метаданные MediaSession уходят на экран блокировки.
 
   function warnStorage(error) {
     storageDirty = true;
@@ -756,10 +747,16 @@
     }
     const waveSlot = document.createElement('div');
     waveSlot.className = 'waveform-track';
+    const waveHolder = document.createElement('div');
+    // F-25: таймкоды «текущее / длительность» под волной (формат — BriixPlayer.fmtTime).
+    const timeEl = document.createElement('div');
+    timeEl.className = 'waveform-time';
+    timeEl.setAttribute('aria-hidden', 'true');
+    waveSlot.append(waveHolder, timeEl);
     const placeholder = document.createElement('div');
     placeholder.className = 'waveform-ph';
     placeholder.setAttribute('aria-hidden', 'true');
-    waveSlot.append(placeholder);
+    waveHolder.append(placeholder);
     wrap.append(waveSlot);
     const audioSlot = document.createElement('div');
     audioSlot.hidden = true;
@@ -778,7 +775,7 @@
     fetchPeaks(job).then(peaks => {
       if (!frame.isConnected) throw new Error('Карточка недоступна.');
       placeholder.remove();
-      wave = BriixWaveform.attachFromPeaks(peaks, waveSlot, {
+      wave = BriixWaveform.attachFromPeaks(peaks, waveHolder, {
         onSeekPending: () => { if (!state.audio) ensureLoaded(); } // seek до загрузки — грузим трек
       });
       if (state.audio) wave.setAudio(state.audio);
@@ -803,7 +800,20 @@
         placeholder.remove();
         if (wave) wave.setAudio(audio);
         state.audio = audio;
-        claimAudio(audio); // T-51: эксклюзивное воспроизведение
+        BriixPlayer.claim(audio, { // T-51/R1: эксклюзивный транспорт + MediaSession
+          title: input.title || '',
+          artist: input.artist || currentUser(),
+          artwork: cover || ''
+        });
+        // F-25: таймкоды обновляются событиями аудио, табличные цифры не пляшут.
+        const paintTime = () => {
+          timeEl.textContent = BriixPlayer.fmtTime(audio.currentTime)
+            + ' / ' + BriixPlayer.fmtTime(Number.isFinite(audio.duration) ? audio.duration : 0);
+        };
+        audio.addEventListener('timeupdate', paintTime);
+        audio.addEventListener('loadedmetadata', paintTime);
+        audio.addEventListener('durationchange', paintTime);
+        paintTime();
         audio.addEventListener('play', () => { frame.classList.add('playing'); frame.setAttribute('aria-label', 'Пауза'); });
         audio.addEventListener('pause', () => { frame.classList.remove('playing'); frame.setAttribute('aria-label', 'Слушать трек'); });
         return audio;
@@ -2583,7 +2593,7 @@
     audio.preload = 'metadata';
     audio.src = url;
     container.append(audio);
-    claimAudio(audio); // T-51: эксклюзивное воспроизведение
+    BriixPlayer.claim(audio); // T-51: эксклюзивное воспроизведение
     return audio;
   }
 
