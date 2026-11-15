@@ -588,10 +588,12 @@ function bffServer(port) {
   await p.reload();
   await p.waitForSelector('#studio:not([hidden])');
   assert.equal(await p.locator('#gate').isVisible(), false, 'session survives reload');
-  p.once('dialog', d => d.accept());
   await p.locator('#profileBtn').click();
   await p.waitForSelector('#profileMenu:not([hidden])');
   await p.locator('#profileLogoutBtn').click();
+  // F-13: собственный диалог подтверждения вместо нативного confirm.
+  await p.waitForSelector('.confirm-overlay:not([hidden])');
+  await p.getByRole('button', { name: 'Выйти' }).click();
   await p.waitForSelector('#gate:not([hidden])');
   await p.locator('#nickInput').fill('owner');
   for (const digit of '9999') await p.locator(`.pk[data-digit="${digit}"]`).click();
@@ -707,8 +709,10 @@ function bffServer(port) {
   assert.ok(await p.locator('.lib-item').count() >= 1, 'favorite filter shows it');
   await p.locator('.lib-filters .tag', { hasText: 'Все' }).click();
   const beforeDel = await p.locator('.lib-item').count();
-  p.once('dialog', d => d.accept());
   await p.locator('.lib-item .action', { hasText: 'Удалить' }).first().click();
+  await p.waitForSelector('.confirm-overlay');
+  assert.match(await p.locator('.confirm-dialog').innerText(), /Серверная запись будет удалена и на стенде/, 'серверное удаление объясняет последствия: DELETE на стенде (F-23)');
+  await p.getByRole('button', { name: 'Удалить', exact: true }).click();
   await p.waitForFunction(n => document.querySelectorAll('.lib-item').length < n, beforeDel);
   await p.locator('.tab[data-tab="chat"]').click();
   assert.equal(await p.locator('#composer').isVisible(), true, 'chat tab restores composer');
@@ -856,9 +860,10 @@ function bffServer(port) {
   await p.locator('#prompt').fill('Долгий ответ');
   await p.locator('#send').click();
   await p.waitForSelector('.card.assistant .stage-stop');
-  p.once('dialog', d => d.accept()); // нативный confirm «Выйти?» — уходит в R6 (3.3)
   await p.locator('#profileBtn').click();
   await p.locator('#profileLogoutBtn').click();
+  await p.waitForSelector('.confirm-overlay');
+  await p.getByRole('button', { name: 'Выйти' }).click(); // F-13: свой диалог вместо confirm
   await p.waitForSelector('#opsOverlay:not([hidden])');
   assert.match(await p.locator('#opsText').innerText(), /ответ наставника/, 'диалог называет живые операции');
   assert.equal(await p.locator('#studio').isVisible(), true, 'после «Остаться» студия на месте');
@@ -866,9 +871,10 @@ function bffServer(port) {
   await p.waitForSelector('#opsOverlay', { state: 'hidden' });
   assert.equal(await p.locator('#studio').isVisible(), true, '«Остаться» закрывает диалог и не выходит');
   // «Остановить и выйти»: стрим гасится, профиль закрывается без потери данных.
-  p.once('dialog', d => d.accept());
   await p.locator('#profileBtn').click();
   await p.locator('#profileLogoutBtn').click();
+  await p.waitForSelector('.confirm-overlay');
+  await p.getByRole('button', { name: 'Выйти' }).click();
   await p.waitForSelector('#opsOverlay:not([hidden])');
   await p.locator('#opsStopLogout').click();
   await p.waitForSelector('#gate:not([hidden])', { timeout: 10000 });
@@ -1174,15 +1180,15 @@ function bffServer(port) {
   await p.locator('.tab[data-tab="library"]').click();
   await p.waitForSelector('.lib-item');
   await p.locator('.lib-item .menu-btn').first().click();
-  let repeatDialogs = 0;
-  const repeatDialogHandler = async d => {
-    repeatDialogs++;
-    if (repeatDialogs === 1) assert.match(d.message(), /только промпт \(33 зн\./, 'confirm честно называет объём данных сервера');
-    await d.accept().catch(() => {});
-    if (repeatDialogs >= 2) p.off('dialog', repeatDialogHandler);
-  };
-  p.on('dialog', repeatDialogHandler);
   await p.locator('.track-menu:not([hidden]) button', { hasText: 'Повторить с правками' }).first().click();
+  // F-13: первый диалог — честный объём данных сервера (F-20).
+  await p.waitForSelector('.confirm-overlay');
+  assert.match(await p.locator('.confirm-dialog').innerText(), /только промпт \(33 зн\./, 'диалог честно называет объём данных сервера');
+  await p.getByRole('button', { name: 'Продолжить' }).click();
+  // Второй диалог — замена текущего черновика пользователя.
+  await p.waitForSelector('.confirm-overlay');
+  assert.match(await p.locator('.confirm-dialog').innerText(), /заменён данными этого трека/, 'диалог предупреждает о замене черновика');
+  await p.getByRole('button', { name: 'Заменить' }).click();
   await p.waitForFunction(() => document.querySelector('#musicPrompt')?.value.includes('серверная короткая'));
   assert.equal(await p.locator('#musicPrompt').inputValue(), 'серверная короткая версия промпта', 'поля заполнены промптом серверной записи (F-20)');
   assert.match(await p.locator('#modelName').innerText(), /Pro/, 'модель переключена на запись сервера (ace-step-pro)');
@@ -1366,8 +1372,15 @@ function bffServer(port) {
   await p.locator('.producer-draft').first().waitFor();
   assert.equal(await p.locator('[data-producer-field="title"]').first().inputValue(), 'Новые огни');
   assert.equal(await p.locator('#musicPrompt').inputValue(), 'dream pop, 72 BPM, no guitar');
-  p.once('dialog', dialog => dialog.accept());
+  // F-13: возврат — через собственный диалог; Escape = отмена без действий.
   await p.getByRole('button', { name: 'Вернуть как было' }).first().click();
+  await p.waitForSelector('.confirm-overlay');
+  await p.keyboard.press('Escape');
+  await p.waitForSelector('.confirm-overlay', { state: 'detached' });
+  assert.equal(await p.locator('#musicPrompt').inputValue(), 'dream pop, 72 BPM, no guitar', 'Escape отменяет возврат');
+  await p.getByRole('button', { name: 'Вернуть как было' }).first().click();
+  await p.waitForSelector('.confirm-overlay');
+  await p.getByRole('button', { name: 'Вернуть', exact: true }).click();
   await p.waitForFunction(() => !document.querySelector('#prompt').hidden);
   assert.equal(await p.locator('#prompt').inputValue(), idea);
   assert.equal(state.jobPosts.length, 0);
@@ -1382,11 +1395,14 @@ function bffServer(port) {
   assert.equal(await p.locator('[data-producer-field="lyrics"]').inputValue(), 'Моя собственная строка');
   assert.match(state.chatPosts[0].messages[1].content, /Моя собственная строка/);
   await p.locator('#lyrics').fill('Новая правка в ожидании');
-  p.once('dialog', dialog => dialog.dismiss());
   await p.getByRole('button', { name: 'Принять в поля' }).click();
+  await p.waitForSelector('.confirm-overlay');
+  await p.getByRole('button', { name: 'Отменить' }).click(); // F-13: отмена в своём диалоге
+  await p.waitForSelector('.confirm-overlay', { state: 'detached' });
   assert.equal(await p.locator('#lyrics').inputValue(), 'Новая правка в ожидании');
-  p.once('dialog', dialog => dialog.accept());
   await p.getByRole('button', { name: 'Принять в поля' }).click();
+  await p.waitForSelector('.confirm-overlay');
+  await p.getByRole('button', { name: 'Заменить', exact: true }).click();
   await p.waitForFunction(() => document.querySelector('#lyrics').value === 'Моя собственная строка');
   await p.locator('.producer-idea summary').click();
   assert.match(await p.locator('.producer-idea').innerText(), /Новая правка в ожидании/);
@@ -1673,6 +1689,54 @@ function bffServer(port) {
   assert.match(menuText, /Flash\s*ace-step-flash · ~2 минуты/, 'меню Flash показывает ориентир: ' + JSON.stringify(menuText));
   assert.match(menuText, /Pro\s*ace-step-pro · ~10 минут · недоступна/, 'меню Pro честно показывает ориентир и недоступность');
   ok('catalog /v1/models: measured ETA in the wait card and honest model menu (F-59)', catalog);
+
+  // R6: тосты (F-38), дедупликация notice (F-42), мини-плеер (T-51-остаток).
+  resetBff();
+  p = await page();
+  // F-42: две неудачные попытки без ключа — одна карточка «Ключ», не две (A2).
+  await p.evaluate(() => localStorage.removeItem('briix-media-live-token'));
+  await p.locator('.mode[data-mode="music"]').click();
+  await p.locator('.seg-btn[data-vocal="1"]').click();
+  await p.locator('#prompt').fill('без ключа один');
+  await p.locator('#genTrack').click();
+  await p.waitForSelector('.card.notice');
+  await p.locator('#prompt').fill('без ключа два');
+  await p.locator('#genTrack').click();
+  await p.waitForTimeout(400);
+  assert.equal(await p.locator('.card.notice').count(), 1, 'F-42: одинаковые notice не стакаются — одна карточка на причину');
+  // F-38: копирование отвечает тостом, а не строкой статуса.
+  await p.locator('#keyInput').fill('test-token'); // вернуть ключ для следующих шагов
+  await p.locator('#keySave').click();
+  // Материал для библиотеки и плеера: один инструментальный трек (мок ~5 с).
+  await p.locator('#prompt').fill('спокойный инструментальный этюд для проверки');
+  await p.locator('#genTrack').click();
+  await p.locator('#feed audio', { timeout: 30000 }).waitFor();
+  await p.locator('.tab[data-tab="library"]').click();
+  await p.waitForSelector('.lib-item');
+  await p.context().grantPermissions(['clipboard-read', 'clipboard-write']); // headless: иначе writeText падает
+  await p.locator('.lib-item .menu-btn').first().click();
+  await p.locator('.track-menu:not([hidden]) button', { hasText: 'Копировать промпт' }).first().click();
+  await p.waitForSelector('.toast.done', { timeout: 5000 });
+  assert.match(await p.locator('.toast.done').last().innerText(), /Скопировано: промпт/, 'F-38: тост «Скопировано» виден поверх вкладки Библиотека');
+  // Мини-плеер: трек играет — полоса под шапкой с названием и таймкодом.
+  await p.locator('.tab[data-tab="chat"]').click();
+  await p.waitForFunction(() => window.BriixPlayer.current, {}, { timeout: 10000 });
+  if (await p.evaluate(() => window.BriixPlayer.current.paused)) {
+    await p.locator('#feed .track-cover.playable').first().click(); // тоггл: играть, если молчит
+  }
+  await p.waitForFunction(() => !document.getElementById('miniPlayer').hidden
+    && document.getElementById('mpTitle').textContent.length > 1
+    && !window.BriixPlayer.current.paused, {}, { timeout: 10000 });
+  const mpState = await p.evaluate(() => ({
+    title: document.getElementById('mpTitle').textContent,
+    time: document.getElementById('mpTime').textContent,
+    playing: !window.BriixPlayer.current.paused
+  }));
+  assert.match(mpState.time, /^\d+:\d\d \/ \d+:\d\d$/, 'мини-плеер показывает таймкод');
+  assert.equal(mpState.playing, true, 'мини-плеер видит играющий трек');
+  await p.locator('#mpToggle').click();
+  await p.waitForFunction(() => window.BriixPlayer.current.paused, {}, { timeout: 5000 });
+  ok('R6: toasts over library tab, notice dedupe, mini-player with timecode', mpState);
   await p.close();
 
   assert.deepEqual(errors, [], 'no page errors anywhere');

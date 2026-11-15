@@ -9,8 +9,15 @@
   'use strict';
 
   const live = new Set();
+  const metas = new WeakMap();   // audio → {title, artist} для мини-плеера
+  const listeners = new Set();   // подписчики состояния (мини-плеер студии)
   let current = null;
   let sessionWired = false;
+
+  function notify() {
+    const state = { audio: current, playing: !!(current && !current.paused), meta: current ? (metas.get(current) || null) : null };
+    for (const cb of listeners) { try { cb(state); } catch { /* подписчик не должен ронять плеер */ } }
+  }
 
   function fmtTime(seconds) {
     const total = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0;
@@ -59,6 +66,7 @@
   // остальные, делает себя текущим и выставляет метаданные MediaSession.
   function claim(audio, meta = null) {
     for (const a of [...live]) if (!a.isConnected) live.delete(a);
+    if (meta) metas.set(audio, meta);
     if (!live.has(audio)) {
       live.add(audio);
       audio.addEventListener('play', () => {
@@ -66,14 +74,18 @@
         for (const other of live) if (other !== audio && !other.paused) other.pause();
         setPlaybackState(true);
         if (meta) setMetadata(meta);
+        notify();
       });
-      audio.addEventListener('pause', () => { if (current === audio) setPlaybackState(false); });
+      audio.addEventListener('pause', () => { if (current === audio) { setPlaybackState(false); notify(); } });
+      audio.addEventListener('ended', () => { if (current === audio) { setPlaybackState(false); notify(); } });
+      audio.addEventListener('timeupdate', () => { if (current === audio && !audio.paused) notify(); });
     }
   }
 
   globalThis.BriixPlayer = Object.freeze({
     claim,
     fmtTime,
+    subscribe(cb) { listeners.add(cb); return () => listeners.delete(cb); },
     get current() { return current; }
   });
 })();

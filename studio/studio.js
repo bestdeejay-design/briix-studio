@@ -279,6 +279,26 @@
   // T-51: единственный активный звук — модуль player.js (лента/библиотека/restore
   // проходят через BriixPlayer.claim): новое воспроизведение гасит предыдущее,
   // метаданные MediaSession уходят на экран блокировки.
+  // Мини-плеер (R6): полоса под шапкой — заголовок, таймкод, play/pause;
+  // клик по названию возвращает к карточке трека.
+  const mp = { root: $('miniPlayer'), toggle: $('mpToggle'), title: $('mpTitle'), time: $('mpTime') };
+  BriixPlayer.subscribe(state => {
+    if (!state.audio || !state.audio.isConnected) { mp.root.hidden = true; return; }
+    mp.root.hidden = false;
+    mp.title.textContent = (state.meta?.title || 'Трек') + (state.meta?.artist ? ' — ' + state.meta.artist : '');
+    mp.toggle.textContent = state.playing ? '⏸' : '▶';
+    mp.toggle.setAttribute('aria-label', state.playing ? 'Пауза' : 'Продолжить воспроизведение');
+    mp.time.textContent = BriixPlayer.fmtTime(state.audio.currentTime || 0) + ' / ' + BriixPlayer.fmtTime(state.audio.duration || 0);
+  });
+  mp.toggle.addEventListener('click', () => {
+    const audio = BriixPlayer.current;
+    if (!audio) return;
+    if (audio.paused) audio.play().catch(() => {}); else audio.pause();
+  });
+  mp.title.addEventListener('click', () => {
+    const card = BriixPlayer.current?.closest('.card');
+    if (card) { setView('chat'); card.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+  });
 
   function warnStorage(error) {
     storageDirty = true;
@@ -777,7 +797,7 @@
     card('error', 'Ошибка', (error.message || 'Неизвестная ошибка.') + support, session);
   }
 
-  function repeatMusic(entry, input) {
+  async function repeatMusic(entry, input) {
     if (storageBlocked) return;
     const has = v => typeof v === 'string' && v.trim();
     // F-20: пустой input (серверный трек без локальной сессии) не должен затирать
@@ -792,15 +812,15 @@
     if (input && (has(input.prompt) || has(input.lyrics))) {
       // inputComplete === false — флаг старых записей библиотеки; у карточек ленты
       // полного снимка input считается полным.
-      if (entry.inputComplete === false && !confirm('Данные старого трека могут быть неполными: промпт мог быть сокращён. Продолжить с тем, что сохранилось?')) return;
+      if (entry.inputComplete === false && !(await BRIIX_TOASTS.confirmDialog({ title: 'Повтор с правками', body: 'Данные старого трека могут быть неполными: промпт мог быть сокращён. Продолжить с тем, что сохранилось?', confirmLabel: 'Продолжить' }))) return;
     } else {
       // Серверная запись: промпт обрезан до 200 знаков, лирика — до лимита сервера.
       const what = has(source.prompt) && has(source.lyrics) ? 'промпт и лирика (возможно, сокращённые)'
         : (has(source.prompt) ? 'только промпт (' + source.prompt.length + ' зн. — сервер хранит сокращённую версию)' : 'только лирика');
-      if (!confirm('Для этого трека сохранился ' + what + '. Продолжить с тем, что есть?')) return;
+      if (!(await BRIIX_TOASTS.confirmDialog({ title: 'Повтор с правками', body: 'Для этого трека сохранился ' + what + '. Продолжить с тем, что есть?', confirmLabel: 'Продолжить' }))) return;
     }
     const musicDraft = mode === 'music' ? (els.prompt.value || els.musicPrompt.value || els.lyrics.value) : (drafts.music || els.musicPrompt.value || els.lyrics.value);
-    if (musicDraft.trim() && !confirm('Заменить текущий музыкальный черновик данными этого трека?')) return;
+    if (musicDraft.trim() && !(await BRIIX_TOASTS.confirmDialog({ title: 'Заменить черновик?', body: 'Текущий музыкальный черновик будет заменён данными этого трека. Прежний текст можно вернуть кнопкой ↩ после «Улучшить», но лучше скопировать его сейчас.', confirmLabel: 'Заменить', danger: true }))) return;
     setView('chat'); setMode('music'); advanced = true;
     els.musicPrompt.value = source.prompt || ''; els.lyrics.value = source.lyrics || '';
     instrumental = !!source.instrumental;
@@ -812,10 +832,10 @@
     renderChrome(); els.musicPrompt.focus();
     card('notice', 'Повтор с правками', 'Проверьте и измените данные перед отправкой. Это новая генерация по тексту, не аудиоремикс.');
   }
-  function createCoverDraft(entry) {
+  async function createCoverDraft(entry) {
     if (storageBlocked) return;
     const photoDraft = mode === 'photo' ? els.prompt.value : drafts.photo;
-    if (photoDraft.trim() && !confirm('Заменить текущий черновик изображения?')) return;
+    if (photoDraft.trim() && !(await BRIIX_TOASTS.confirmDialog({ title: 'Заменить черновик изображения?', body: 'Текущий текст запроса будет заменён заготовкой обложки. Прежний текст лучше скопировать сейчас.', confirmLabel: 'Заменить', danger: true }))) return;
     setView('chat'); setMode('photo');
     els.prompt.value = 'Обложка для трека: ' + (entry.title || entry.prompt || '').slice(0, 200);
     renderChrome(); els.prompt.focus();
@@ -1024,8 +1044,12 @@
 
   async function copyText(value, label) {
     if (!value) return;
-    try { await navigator.clipboard.writeText(value); setStatus('Скопировано: ' + label); }
-    catch { setStatus('Не удалось скопировать: ' + label); }
+    try {
+      await navigator.clipboard.writeText(value);
+      BRIIX_TOASTS.toast('Скопировано: ' + label, { kind: 'done' }); // F-38: видно при любом скролле
+    } catch {
+      BRIIX_TOASTS.toast('Не удалось скопировать: ' + label + '. Выделите текст и нажмите Ctrl+C.', { kind: 'error' });
+    }
   }
 
   function libEntry(job) { return libLoad().find(x => x.job === job); }
@@ -1055,6 +1079,14 @@
     });
   }
 
+  // Человекочитаемый размер файла для тостов (F-38/F-21).
+  function fmtBytes(n) {
+    if (!Number.isFinite(n)) return '';
+    if (n < 1024) return n + ' Б';
+    if (n < 1024 * 1024) return (n / 1024).toFixed(0) + ' КБ';
+    return (n / (1024 * 1024)).toFixed(1).replace('.', ',') + ' МБ';
+  }
+
   function trackMenuItems(cardEl, ctx) {
     const input = ctx.input || {};
     const download = async () => {
@@ -1065,6 +1097,7 @@
         link.href = feedObjectURL(blob);
         link.download = name;
         document.body.append(link); link.click(); link.remove();
+        BRIIX_TOASTS.toast('Скачано: ' + name + ' (' + fmtBytes(blob.size) + ')', { kind: 'done', key: 'download' }); // F-38
       } catch (error) { errorCard(error); }
     };
     const favorite = () => {
@@ -1096,7 +1129,16 @@
     const remove = {
       label: 'Удалить', danger: true,
       onPick: async () => {
-        if (!confirm('Удалить трек из библиотеки? Файл на стенде останется.')) return;
+        // F-23: подтверждение объясняет, что реально происходит с записью и файлом.
+        const serverEntry = libEntry(ctx.job)?.server;
+        const ok = await BRIIX_TOASTS.confirmDialog({
+          title: 'Удалить трек из библиотеки?',
+          body: serverEntry
+            ? 'Серверная запись будет удалена и на стенде — скачивание этого файла перестанет работать. Отменить будет нельзя; если файл нужен — сначала скачайте его.'
+            : 'Запись исчезнет из библиотеки этого браузера. Файл на стенде не трогаем — карточка останется в ленте, пока жива сессия.',
+          confirmLabel: 'Удалить', danger: true
+        });
+        if (!ok) return;
         const item = libEntry(ctx.job);
         if (item?.server) {
           try { await request('/jobs/' + encodeURIComponent(ctx.job), { method: 'DELETE', headers: headers() }); }
@@ -1298,11 +1340,26 @@
     updateEnabled();
   }
 
+  // F-42: одинаковые предупреждения не стакаются — по ключу обновляется живая
+  // карточка (A2: две неудачные попытки без ключа = одна карточка, не две).
+  function noticeOnce(key, who, text, session = activeSession) {
+    const root = session && rootFor(session);
+    const existing = root && [...root.querySelectorAll('.card.notice')].find(c => c.dataset.noticeKey === key);
+    if (existing?.isConnected) {
+      const body = existing.querySelector('.body');
+      if (body) body.textContent = text;
+      return;
+    }
+    const body = card('notice', who, text, session);
+    const holder = body.closest('.card');
+    if (holder) holder.dataset.noticeKey = key;
+  }
+
   function needKey() {
     if (token()) return true;
     els.keyCard.hidden = false;
     els.keyInput.focus();
-    card('notice', 'Ключ', 'Вставьте ключ приватного стенда — тот же, что в Настройках демо.');
+    noticeOnce('need-key', 'Ключ', 'Вставьте ключ приватного стенда — тот же, что в Настройках демо.');
     return false;
   }
 
@@ -1571,7 +1628,7 @@
       if (!promptField.value.trim() && !(lyricsField && lyricsField.value.trim())) { state.textContent = 'Черновик пуст.'; return; }
       if ((els.musicPrompt.value.trim() && els.musicPrompt.value !== promptField.value) ||
           (els.lyrics.value.trim() && lyricsField && els.lyrics.value !== lyricsField.value)) {
-        if (!confirm('Заменить текущий стиль и лирику черновиком наставника? Текущие значения сохранятся для возврата.')) return;
+        if (!(await BRIIX_TOASTS.confirmDialog({ title: 'Заменить поля черновиком наставника?', body: 'Текущие стиль и лирика будут заменены. Прежние значения сохранятся для возврата кнопкой «Вернуть как было».', confirmLabel: 'Заменить' }))) return;
       }
       backupFields();
       // Persist backup before touching the form.
@@ -1596,7 +1653,7 @@
     }));
     revert.addEventListener('click', runOnce(async () => {
       if (storageBlocked || activeSession !== session || mode !== 'music' || !entry.beforeApply) { state.textContent = 'Откройте эту сессию и режим «Музыка».'; return; }
-      if (!confirm('Вернуть поля до принятия? Текущие изменения полей будут заменены.')) return;
+      if (!(await BRIIX_TOASTS.confirmDialog({ title: 'Вернуть поля до принятия?', body: 'Текущие изменения полей будут заменены сохранёнными значениями. То, что вы правили после принятия, сохранится в списке резервных копий карточки.', confirmLabel: 'Вернуть' }))) return;
       entry.beforeRevert = { style: els.musicPrompt.value, lyrics: els.lyrics.value, advanced };
       (entry.backups ||= []).push(entry.beforeRevert);
       if (!(await persistSessions())) { state.textContent = 'Не удалось сохранить текущие поля.'; return; }
@@ -1752,8 +1809,8 @@
     const style = BriixProducer.sanitize(rawIdea); // снимает только markdown-обрамление и служебные обёртки
     let lyrics = snapshot.advanced ? BriixProducer.latinizeTags(BriixProducer.sanitize(els.lyrics.value)) : '';
     const vocal = !snapshot.instrumental;
-    if (!style && !lyrics) { card('notice', 'Музыка', 'Опишите трек — стиль или лирику.'); return; }
-    if (vocal && !lyrics && !style) { card('notice', 'Музыка', 'Опишите трек — о чём песня?'); return; }
+    if (!style && !lyrics) { noticeOnce('music-empty', 'Музыка', 'Опишите трек — стиль или лирику.'); return; }
+    if (vocal && !lyrics && !style) { noticeOnce('music-empty', 'Музыка', 'Опишите трек — о чём песня?'); return; }
     if (!snapshot.advanced) els.prompt.value = '';
     else els.musicPrompt.value = '';
     updateEnabled();
@@ -2132,7 +2189,7 @@
       if (!title.value.trim() || !style.value.trim() || (lyrics && !lyrics.value.trim())) { state.textContent = 'Заполните название, звучание и текст песни.'; return; }
       if (instrumental !== entry.snapshot.instrumental) { state.textContent = 'Режим песни изменился. Верните исходный режим, чтобы принять черновик.'; return; }
       const changed = els.prompt.value !== entry.snapshot.quick || els.musicPrompt.value !== entry.snapshot.style || els.lyrics.value !== entry.snapshot.lyrics || (!entry.snapshot.advanced && (!!els.musicPrompt.value.trim() || (!entry.snapshot.instrumental && !!els.lyrics.value.trim())));
-      if (changed && !confirm('В студии есть изменённые или скрытые поля. Заменить стиль и лирику подготовленным черновиком? Текущие поля сохранятся для возврата.')) return;
+      if (changed && !(await BRIIX_TOASTS.confirmDialog({ title: 'Заменить поля подготовленным черновиком?', body: 'В студии есть изменённые или скрытые поля. Текущие значения сохранятся для возврата кнопкой «Вернуть как было».', confirmLabel: 'Заменить' }))) return;
       entry.beforeApply = { quick: els.prompt.value, style: els.musicPrompt.value, lyrics: els.lyrics.value, advanced };
       (entry.backups ||= []).push(entry.beforeApply); refreshBackups();
       // Persist backup before touching the form. If saving fails the form remains unchanged.
@@ -2150,7 +2207,7 @@
     }));
     revert.addEventListener('click', runOnce(async () => {
       if (storageBlocked || activeSession !== session || mode !== 'music' || !entry.beforeApply) { state.textContent = 'Откройте эту сессию и режим «Музыка».'; return; }
-      if (!confirm('Вернуть поля до принятия? Текущие изменения полей будут заменены.')) return;
+      if (!(await BRIIX_TOASTS.confirmDialog({ title: 'Вернуть поля до принятия?', body: 'Текущие изменения полей будут заменены сохранёнными значениями. То, что вы правили после принятия, сохранится в списке резервных копий карточки.', confirmLabel: 'Вернуть' }))) return;
       // Preserve what is being replaced as another recoverable snapshot.
       entry.beforeRevert = { quick: els.prompt.value, style: els.musicPrompt.value, lyrics: els.lyrics.value, advanced };
       (entry.backups ||= []).push(entry.beforeRevert); refreshBackups();
@@ -2806,6 +2863,7 @@
         link.download = mediaFileName(entry.kind, entry, { type: blobTypes.get(entry.job) || '' });
         link.title = link.download;
         document.body.append(link); link.click(); link.remove();
+        BRIIX_TOASTS.toast('Скачано: ' + link.download + ' (' + fmtBytes(blob.size) + ')', { kind: 'done', key: 'download' });
       } catch { showLibError(div, 'Не удалось скачать файл. Проверьте подключение и попробуйте снова.'); }
     });
     const fav = document.createElement('button');
@@ -2834,7 +2892,15 @@
     del.className = 'action';
     del.textContent = '🗑 Удалить';
     del.addEventListener('click', async () => {
-      if (!confirm('Удалить из библиотеки? Файл на стенде останется.')) return;
+      // F-23: честное объяснение последствий для серверной и локальной записи.
+      const ok = await BRIIX_TOASTS.confirmDialog({
+        title: 'Удалить из библиотеки?',
+        body: entry.server
+          ? 'Серверная запись будет удалена и на стенде — скачивание этого файла перестанет работать. Если файл нужен — сначала скачайте его.'
+          : 'Запись исчезнет из библиотеки этого браузера. Файл на стенде не трогаем.',
+        confirmLabel: 'Удалить', danger: true
+      });
+      if (!ok) return;
       if (entry.server) {
         try { await request('/jobs/' + encodeURIComponent(entry.job), { method: 'DELETE', headers: headers() }); }
         catch { showLibError(div, 'Не удалось удалить запись.'); return; }
@@ -3052,9 +3118,13 @@
     els.keyCard.hidden = false;
     els.keyInput.focus();
   });
-  els.profileLogoutBtn.addEventListener('click', () => {
+  els.profileLogoutBtn.addEventListener('click', async () => {
     closeMenus();
-    if (confirm('Выйти из профиля ' + currentUser() + '?')) logout();
+    if (await BRIIX_TOASTS.confirmDialog({
+      title: 'Выйти из профиля?',
+      body: 'Профиль «' + currentUser() + '» останется в этом браузере вместе с сессиями и библиотекой; ключ стенда не удаляется. Идущие генерации можно остановить на следующем шаге.',
+      confirmLabel: 'Выйти', danger: true
+    })) logout();
   });
 
   // пин-пад: цифры и backspace

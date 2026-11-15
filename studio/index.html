@@ -49,6 +49,12 @@ if (location.hostname === 'briix.ru' || location.hostname === 'www.briix.ru') {
       <button id="sessionsOpen" class="tool chip" type="button" aria-haspopup="dialog" aria-controls="sessionsDialog">☰ История</button>
     </div>
   </header>
+  <!-- Мини-плеер (T-51-остаток/R6): пока трек заявлен — заголовок, таймкод, play/pause -->
+  <div id="miniPlayer" class="mini-player" hidden>
+    <button id="mpToggle" class="tool mp-toggle" type="button" aria-label="Пауза">⏸</button>
+    <button id="mpTitle" class="tool mp-title" type="button" title="Показать карточку трека"></button>
+    <span id="mpTime" class="mp-time"></span>
+  </div>
   <div id="storageWarning" class="storage-warning" role="alert" hidden></div>
   <div id="sessionsOverlay" class="sessions-overlay" hidden>
     <section id="sessionsDialog" class="sessions-dialog" role="dialog" aria-modal="true" aria-labelledby="sessionsTitle" tabindex="-1">
@@ -210,6 +216,7 @@ if (location.hostname === 'briix.ru' || location.hostname === 'www.briix.ru') {
 <script src="./wait-ui.js?v=20261115"></script>
 <script src="catalog.js?v=20261115"></script>
 <script src="ops.js?v=20261115"></script>
+<script src="toasts.js?v=20261115"></script>
 <script src="session-store.js?v=20261114-agent-b-1"></script>
 <script src="waveform.js?v=20261114-peaks-1"></script>
 <script src="player.js?v=20261115"></script>
