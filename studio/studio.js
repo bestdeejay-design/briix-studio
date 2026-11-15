@@ -907,12 +907,12 @@
               } catch (error) { errorCard(error); return; }
             }
             item.fav = next; libSave(list);
+            libApplyFav(ctx.job, next); // T-36: точечная мутация карточки Библиотеки
           } else if (next) {
             libAdd({ job: ctx.job, sessionId: activeSession?.id, kind: 'music', prompt: input.prompt || '',
               lyrics: input.lyrics || '', title: input.title || '', file: ctx.file || '', cover: '', created: Date.now(), fav: true });
           }
-          jobsInFlight.clear();
-          if (!els.lib.hidden) renderLibrary();
+          jobsInFlight.clear(); // серверный favorite изменился — при следующем рендере перечитать
         }
       };
     };
@@ -928,7 +928,7 @@
         libSave(libLoad().filter(x => x.job !== ctx.job));
         if (blobCache.has(ctx.job)) { URL.revokeObjectURL(blobCache.get(ctx.job)); blobCache.delete(ctx.job); }
         jobsInFlight.clear();
-        if (!els.lib.hidden) renderLibrary();
+        libControls.get(ctx.job)?.removeSelf(); // T-36: без пересборки Библиотеки
         cardEl.remove();
       }
     };
@@ -2200,6 +2200,7 @@
     els.prompt.value = ''; els.lyrics.value = ''; els.musicPrompt.value = '';
     Object.keys(drafts).forEach(k => { drafts[k] = ''; });
     blobCache.forEach(url => URL.revokeObjectURL(url)); blobCache.clear(); blobTypes.clear(); blobBytes.clear();
+    coverUrlCache.forEach(url => URL.revokeObjectURL(url)); coverUrlCache.clear();
     feedObjectUrls.forEach(url => URL.revokeObjectURL(url)); feedObjectUrls.clear();
     localStorage.removeItem(USER_KEY);
     els.studio.hidden = true; els.gate.hidden = false; els.nickInput.value = '';
@@ -2210,6 +2211,7 @@
   const blobCache = new Map(); // job_id → objectURL
   const blobTypes = new Map();
   const blobBytes = new Map();
+  const coverUrlCache = new Map(); // путь обложки → objectURL (T-36, LRU 60)
   let libFilter = 'all';
 
   function libLoad() {
@@ -2253,64 +2255,93 @@
     return work;
   }
 
-  function renderLibrary() {
-    els.lib.innerHTML = '';
+  // T-36: скелет и карточки Библиотеки живут между вызовами — renderLibrary
+  // больше не начинается с innerHTML='' (замер A11: 100 пересозданных обсерверов
+  // и 75 повторных загрузок обложек на один клик ♥). Полная пересборка — только
+  // при входе/выходе/смене профиля;.favorite/delete — точечные мутации.
+  const libState = { built: false, owner: '', filterRow: null, privacy: null, note: null, results: null, cards: new Map() };
+  const libControls = new Map(); // job → { applyFav, removeSelf } — точечные мутации карточек
+  // Сигнатура нормализует optional-поля (undefined ≡ ''): серверная сверка не
+  // должна пересобирать живую карточку из-за приведения типов (T-36).
+  const libSignature = entry => JSON.stringify([entry.kind, entry.prompt || '', entry.model || '', entry.created || 0, entry.lyrics || '',
+    entry.fav ? 1 : 0, entry.file || '', entry.cover || '', entry.sessionId || '', entry.title || '']);
+
+  function libSkeleton() {
+    if (libState.built && libState.results?.isConnected && libState.owner === currentUser()) return;
+    libState.built = false;
+    libState.cards.clear();
+    libControls.clear();
+    els.lib.textContent = '';
     const filterRow = document.createElement('div');
     filterRow.className = 'lib-filters';
     for (const [value, label] of FILTERS) {
       const chip = document.createElement('button');
       chip.className = 'tag';
       chip.textContent = label;
-      chip.setAttribute('aria-pressed', String(libFilter === value));
+      chip.dataset.filter = value;
       chip.addEventListener('click', () => { libFilter = value; renderLibrary(); });
       filterRow.append(chip);
     }
-    els.lib.append(filterRow);
-    const results = document.createElement('div');
-    results.className = 'lib-results';
     // T-41: плашка приватности — серверный список /jobs общий до серверного скоупинга
     // (INFRA, §2.8 аудита); клиент прячет только атрибутируемых чужих.
     const privacy = document.createElement('div');
     privacy.className = 'lib-privacy';
     privacy.setAttribute('role', 'status');
     privacy.hidden = true;
-    els.lib.append(privacy);
-    const cards = new Map();
-    const render = (list, note) => {
-      if (list.length && note) note.hidden = true;
+    const results = document.createElement('div');
+    results.className = 'lib-results';
+    const note = document.createElement('div');
+    note.className = 'card notice';
+    note.textContent = 'Загружаем библиотеку…';
+    els.lib.append(filterRow, privacy, note, results);
+    Object.assign(libState, { built: true, owner: currentUser(), filterRow, privacy, note, results });
+  }
+
+  // Точечная мутация избранного: класс карточки, подпись кнопки, сигнатура
+  // диффинга — без пересборки списка и без повторных загрузок (T-36).
+  function libApplyFav(job, next) {
+    const item = libState.cards.get(job);
+    if (item) { item.entry.fav = next; item.signature = libSignature(item.entry); }
+    libControls.get(job)?.applyFav(next);
+  }
+
+  function renderLibrary() {
+    libSkeleton();
+    for (const chip of libState.filterRow.querySelectorAll('.tag')) {
+      chip.setAttribute('aria-pressed', String(chip.dataset.filter === libFilter));
+    }
+    const { cards, note, results, privacy } = libState;
+    const render = (list) => {
+      if (list.length) note.hidden = true;
       if (!list.length) {
-        for (const item of cards.values()) item.node.remove();
+        for (const item of cards.values()) { item.node.remove(); libControls.delete(item.entry.job); }
         cards.clear();
-        if (note) { note.hidden = false; note.textContent = libFilter === 'all'
+        note.hidden = false;
+        note.textContent = libFilter === 'all'
           ? 'Пока пусто — создайте фото или трек в чате, они появятся здесь.'
-          : 'В этом фильтре пусто.'; }
+          : 'В этом фильтре пусто.';
         return;
       }
       const wanted = new Set();
       list.forEach((entry, index) => {
-        const signature = JSON.stringify([entry.kind, entry.prompt, entry.model, entry.created, entry.lyrics,
-          entry.fav, entry.file, entry.cover, entry.sessionId]);
+        const signature = libSignature(entry);
         let item = cards.get(entry.job);
         if (!item || item.signature !== signature) {
           const node = libCard(entry);
           if (item) item.node.replaceWith(node);
           item = { node, signature, entry }; cards.set(entry.job, item);
         } else {
-          // Keep the existing player and handlers, but update server mutation capability.
+          // Карточка жива: обновляем данные (серверная мутабельность), узел не трогаем.
           Object.assign(item.entry, entry);
         }
         wanted.add(entry.job);
         if (results.children[index] !== item.node) results.insertBefore(item.node, results.children[index] || null);
       });
-      for (const [job, item] of cards) if (!wanted.has(job)) { item.node.remove(); cards.delete(job); }
+      for (const [job, item] of cards) if (!wanted.has(job)) { item.node.remove(); cards.delete(job); libControls.delete(job); }
     };
     // мгновенно — клиентские записи, чтобы вкладка не мигала пустотой
     const local = libLoad().filter(e => libFilter === 'all' ? true : libFilter === 'fav' ? e.fav : e.kind === libFilter);
-    const note = document.createElement('div');
-    note.className = 'card notice';
-    note.textContent = 'Загружаем библиотеку…';
-    els.lib.append(note, results);
-    render(local, note);
+    render(local);
     // затем серверный список поверх (объединение по job id)
     const seq = ++libSeq;
     serverJobs().then(items => {
@@ -2349,7 +2380,9 @@
       }
       for (const e of byId.values()) merged.push(e);
       merged.sort((a, b) => (b.created || 0) - (a.created || 0));
-      render(merged.filter(e => libFilter === 'all' ? true : libFilter === 'fav' ? e.fav : e.kind === libFilter), note);
+      // Серверное изменение favorite (с другого устройства) меняет сигнатуру —
+      // render пересоберёт только эту карточку; свои клики ♥ идут мимо рендера.
+      render(merged.filter(e => libFilter === 'all' ? true : libFilter === 'fav' ? e.fav : e.kind === libFilter));
       privacy.hidden = !foreignHidden;
       privacy.textContent = foreignHidden
         ? 'Показаны только ваши треки: скрыто чужих — ' + foreignHidden + '. Серверный список общий до серверного разграничения.'
@@ -2388,10 +2421,16 @@
           const blob = await fileBlob(path, 2);
           if (!frame.isConnected || currentUser() !== owner) return;
           const image = new Image(); image.alt = 'Обложка трека';
-          const url = URL.createObjectURL(blob);
-          image.onload = () => URL.revokeObjectURL(url);
+          // T-36: обложка кэшируется как objectURL (LRU 60) — повторные сборки
+          // карточки не перекачивают файл; выход и смена профиля чистят кэш.
+          let url = coverUrlCache.get(path);
+          if (!url) {
+            url = URL.createObjectURL(blob);
+            coverUrlCache.set(path, url);
+            if (coverUrlCache.size > 60) { const oldest = coverUrlCache.keys().next().value; URL.revokeObjectURL(coverUrlCache.get(oldest)); coverUrlCache.delete(oldest); }
+          }
           image.onerror = () => {
-            URL.revokeObjectURL(url);
+            coverUrlCache.delete(path);
             if (frame.contains(image)) { frame.textContent = '♫'; frame.setAttribute('aria-label', 'Обложка недоступна'); }
           };
           image.src = url; frame.textContent = ''; frame.removeAttribute('aria-label'); frame.append(image);
@@ -2479,8 +2518,8 @@
       const list = libLoad();
       const item = list.find(x => x.job === entry.job);
       if (item) { item.fav = next; libSave(list); }
-      jobsInFlight.clear();
-      renderLibrary();
+      libApplyFav(entry.job, next); // T-36: точечная мутация вместо полного ре-рендера
+      fav.disabled = false;
     });
     const del = document.createElement('button');
     del.type = 'button';
@@ -2496,10 +2535,20 @@
       libSave(libLoad().filter(x => x.job !== entry.job));
       if (blobCache.has(entry.job)) URL.revokeObjectURL(blobCache.get(entry.job));
       blobCache.delete(entry.job); blobTypes.delete(entry.job); blobBytes.delete(entry.job);
-      jobsInFlight.clear();
-      renderLibrary();
+      jobsInFlight.clear(); // серверный список изменился — при следующем рендере перечитать
+      libControls.get(entry.job)?.removeSelf(); // T-36: точечное удаление без пересборки
     });
     const sourceSession = sessionProfile?.sessions.find(s => s.id === entry.sessionId || s.feed.some(item => item && item.job === entry.job) || s.jobs?.some(item => item.job === entry.job));
+    // T-36: регистрируем точечные мутации этой карточки (♥/удаление без пересборки).
+    libControls.set(entry.job, {
+      applyFav: next => {
+        entry.fav = next;
+        div.classList.toggle('fav', next);
+        fav.textContent = next ? '★ В избранном' : '☆ В избранное';
+        if (libFilter === 'fav' && !next) { div.remove(); libState.cards.delete(entry.job); libControls.delete(entry.job); }
+      },
+      removeSelf: () => { div.remove(); libState.cards.delete(entry.job); libControls.delete(entry.job); }
+    });
     if (entry.kind !== 'music') {
       const promptEl = document.createElement('div');
       promptEl.className = 'body lib-prompt';

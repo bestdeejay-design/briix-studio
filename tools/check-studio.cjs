@@ -34,7 +34,7 @@ const POLICY_MESSAGE = 'Запрос нарушает политику конт�
 let state;
 function resetBff() {
   state = {
-    chatPosts: [], chatBlocked: false, chatImproveText: 'УЛУЧШЕННЫЙ ТЕКСТ', chatSlow: false, improveDelay: 0, favoriteFail: false, coverRateLimit: 0, coverRequests: 0, audioRequests: 0, photoRequests: 0, fileOrder: [], fileDelay: 0, activeFiles: 0, maxActiveFiles: 0,
+    chatPosts: [], chatBlocked: false, chatImproveText: 'УЛУЧШЕННЫЙ ТЕКСТ', chatSlow: false, improveDelay: 0, favoriteFail: false, coverRateLimit: 0, coverRequests: 0, audioRequests: 0, photoRequests: 0, fileOrder: [], fileDelay: 0, activeFiles: 0, maxActiveFiles: 0, jobsLists: 0,
     jobPosts: [], jobBlock: false, pollFailures: [], pollAttempts: 0, polls: 0, deleted: {}, favs: {}, jobSeq: 1, pollsOf: {}, cancels: [], foreign: []
   };
 }
@@ -118,6 +118,7 @@ function bffServer(port) {
 
       // infra#77 контракт: список / мягкое удаление / избранное (id уникальны, как на живом bff)
       if (req.url.split('?')[0] === '/jobs' && req.method === 'GET') { // клиент зовёт /jobs?limit=100
+        state.jobsLists++;
         const own = state.jobPosts
           .filter(({ id }) => !state.deleted[id])
           .map(({ id, type, prompt, params }, i) => ({
@@ -678,8 +679,16 @@ function bffServer(port) {
   await p.locator('.lib-filters .tag', { hasText: '★ Избранное' }).click();
   assert.equal(await p.locator('.lib-item').count(), 0, 'not a favorite yet');
   await p.locator('.lib-filters .tag', { hasText: 'Все' }).click();
-  await p.locator('.lib-item .action', { hasText: 'В избранное' }).first().click();
-  await p.waitForSelector('.lib-item.fav', { timeout: 10000 }); // флаг летит на шину и обратно — ждём перерисовку
+  // T-36: клик ♥ — точечная мутация: тот же узел, без перекачки обложек и без лишнего GET /jobs.
+  const favBtn = p.locator('.lib-item .action', { hasText: 'В избранное' }).first();
+  await favBtn.evaluate(el => el.closest('.lib-item').setAttribute('data-t36', 'target'));
+  const t36CoversBefore = state.coverRequests;
+  const t36ListsBefore = state.jobsLists;
+  await favBtn.click();
+  await p.waitForSelector('.lib-item[data-t36="target"].fav', { timeout: 10000 });
+  assert.equal(await p.locator('.lib-item[data-t36="target"].fav').count(), 1, 'the same card node was mutated in place (T-36)');
+  assert.equal(state.coverRequests, t36CoversBefore, 'no cover re-fetch on favorite (T-36)');
+  assert.equal(state.jobsLists, t36ListsBefore, 'no extra GET /jobs round-trip on favorite (T-36)');
   assert.ok(await p.locator('.lib-item.fav').count() >= 1, 'favorite applied');
   await p.locator('.lib-filters .tag', { hasText: '★ Избранное' }).click();
   assert.ok(await p.locator('.lib-item').count() >= 1, 'favorite filter shows it');
