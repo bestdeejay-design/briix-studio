@@ -349,7 +349,7 @@ function bffServer(port) {
   await p.locator('.card .action.make-track').click();
   assert.equal(await p.locator('.mode[data-mode="music"]').getAttribute('aria-pressed'), 'true', 'switched to music mode');
   assert.match(await p.locator('#prompt').inputValue(), /Стрим пришёл/, 'brief inserted into the music field');
-  assert.match(await p.locator('#prompt').getAttribute('placeholder'), /Опиши трек/);
+  assert.match(await p.locator('#prompt').getAttribute('placeholder'), /Опишите трек/);
   ok('make-track switches to music with the brief prefilled', {});
 
   // 5. «Тонко настроить»: два поля, улучшение лирики (few-shot, non-stream, отмена).
@@ -570,7 +570,7 @@ function bffServer(port) {
   assert.match(dl, /^briix-photo-.*\.png$/, 'download link carries a filename');
   ok('photo card carries a download link', { dl });
 
-  // 15. Профиль-меню: ник, ключ через «Ключ стенда…», Escape закрывает меню.
+  // 15. Профиль-меню: ник, ключ через «Ключ доступа…», Escape закрывает меню.
   await p.locator('#profileBtn').click();
   await p.waitForSelector('#profileMenu:not([hidden])');
   assert.match(await p.locator('#profileNick').innerText(), /^tester$/, 'profile menu shows the nick');
@@ -578,7 +578,7 @@ function bffServer(port) {
   await p.waitForSelector('#keyCard:not([hidden])');
   assert.equal(await p.locator('#keyCard').isVisible(), true, 'key card opens from the profile menu');
   assert.match(await p.locator('#keyStatus').innerText(), /сохранён ✓/, 'key status line reflects saved state');
-  assert.match(await p.locator('#profileKeyBtn').innerText(), /Ключ стенда ✓/, 'menu item marks the saved key');
+  assert.match(await p.locator('#profileKeyBtn').innerText(), /Ключ доступа ✓/, 'menu item marks the saved key');
   assert.equal(await p.locator('#profileMenu').isVisible(), false, 'menu closed after picking the item');
   await p.locator('#profileBtn').click();
   await p.waitForSelector('#profileMenu:not([hidden])');
@@ -723,7 +723,7 @@ function bffServer(port) {
   const beforeDel = await p.locator('.lib-item').count();
   await p.locator('.lib-item .action', { hasText: 'Удалить' }).first().click();
   await p.waitForSelector('.confirm-overlay');
-  assert.match(await p.locator('.confirm-dialog').innerText(), /Серверная запись будет удалена и на стенде/, 'серверное удаление объясняет последствия: DELETE на стенде (F-23)');
+  assert.match(await p.locator('.confirm-dialog').innerText(), /Серверная запись будет удалена и на сервере/, 'серверное удаление объясняет последствия: DELETE на сервере (F-23)');
   await p.getByRole('button', { name: 'Удалить', exact: true }).click();
   await p.waitForFunction(n => document.querySelectorAll('.lib-item').length < n, beforeDel);
   await p.locator('.tab[data-tab="chat"]').click();
@@ -1692,7 +1692,7 @@ function bffServer(port) {
     const el = document.querySelector('.card.stage .stage-eta');
     return el && !el.hidden ? { text: el.textContent, late: el.classList.contains('late') } : false;
   }, {}, { timeout: 15000 }).then(h => h.jsonValue());
-  assert.match(etaState.text, /Ориентир: ~2 минуты \(Flash\) — замер стенда/, 'ориентир из каталога в карточке ожидания: ' + JSON.stringify(etaState.text));
+  assert.match(etaState.text, /Ориентир: ~2 минуты \(Flash\) — по замеру сервера/, 'ориентир из каталога в карточке ожидания: ' + JSON.stringify(etaState.text));
   assert.equal(etaState.late, false, 'тон задержки включается только после ×1,5 — не раньше');
   // Дожидаемся конца генерации (мок быстро отдаёт ready), затем — меню моделей.
   await p.waitForSelector('.card.stage', { state: 'detached', timeout: 20000 });
@@ -1796,7 +1796,7 @@ function bffServer(port) {
   await p.locator('#profileBtn').click();
   await p.locator('#profileWipeBtn').click();
   await p.waitForSelector('.confirm-overlay');
-  assert.match(await p.locator('.confirm-dialog').innerText(), /ключ стенда, все профили и PIN/, 'T-43: диалог перечисляет, что будет удалено');
+  assert.match(await p.locator('.confirm-dialog').innerText(), /ключ доступа, все профили и PIN/, 'T-43: диалог перечисляет, что будет удалено');
   await p.getByRole('button', { name: 'Очистить и выйти' }).click();
   await p.waitForSelector('#gate:not([hidden])', { timeout: 10000 });
   const wiped = await p.evaluate(async () => {

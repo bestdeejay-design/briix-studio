@@ -17,7 +17,7 @@
   const PLACEHOLDERS = {
     chat: 'Что создаём?',
     photo: 'Что рисуем? Опишите изображение…',
-    music: 'Опиши трек или спроси наставника…'
+    music: 'Опишите трек или спросите наставника…' // F-52: единое «вы»
   };
 
   const ASSISTANTS = {
@@ -84,9 +84,10 @@
     try { response = await fetch(server() + path, options); }
     catch (error) {
       if (error?.name === 'AbortError') throw error;
-      throw new BusError('network', 'Стенд недоступен: ' + server() + ' не отвечает.');
+      // F-53: без служебного URL и внутреннего жаргона.
+      throw new BusError('network', 'Сервер не отвечает. Проверьте подключение — мы повторим автоматически.');
     }
-    if (response.status === 401) throw new BusError('unauthorized', 'Ключ отклонён стендом (401). Проверьте ключ.', 401);
+    if (response.status === 401) throw new BusError('unauthorized', 'Ключ не принят. Проверьте ключ в профиле — меню рядом с историей.', 401);
     if (response.status === 422 || response.status === 400) {
       let payload = null;
       try { payload = await response.json(); } catch { /* пустое тело */ }
@@ -205,7 +206,11 @@
           return data;
         }
         if (['error', 'failed', 'cancelled', 'expired'].includes(data.status)) {
-          throw new BusError(data.status, 'Задача не завершена: ' + (data.error?.message || data.status) + '.');
+          // F-53: сырой английский статус не показываем — переводим причину.
+          const reason = data.status === 'expired' ? 'истёк срок хранения файла'
+            : data.status === 'cancelled' ? 'задача отменена'
+            : (data.error?.message || 'сервер не смог завершить задачу');
+          throw new BusError(data.status, 'Задача не завершилась: ' + reason + '.');
         }
       }
       throw new BusError('timeout', 'Задача выполняется слишком долго — ожидание прервано.');
@@ -760,7 +765,7 @@
     const sec = typeof BRIIX_CATALOG !== 'undefined' ? BRIIX_CATALOG.etaSeconds(modelId) : null;
     if (!sec) { el.hidden = true; return { el, seconds: null, update: () => {} }; }
     const approx = fmtMinutes(sec);
-    const base = 'Ориентир: ~' + approx + (humanLabel ? ' (' + humanLabel + ')' : '') + ' — замер стенда.';
+    const base = 'Ориентир: ~' + approx + (humanLabel ? ' (' + humanLabel + ')' : '') + ' — по замеру сервера.';
     el.textContent = base;
     let shownLate = false;
     return {
@@ -799,6 +804,16 @@
     return { row, stop: () => clearInterval(timer) };
   }
 
+  // F-55: заголовок карточки ошибки называет тип неполадки — не всё «Ошибка».
+  function errorTitle(error) {
+    if (error.code === 'network') return 'Нет соединения';
+    if (error.code === 'unauthorized') return 'Ключ';
+    if (error.code === 'queue_full' || error.code === 'unavailable') return 'Сервер занят';
+    if (error.code === 'job_gone' || error.code === 'expired') return 'Файл устарел';
+    if (error.code === 'timeout') return 'Долго нет ответа';
+    if (error.code === 'bad_response' || error.code === 'empty_stream') return 'Сервер ответил странно';
+    return 'Ошибка';
+  }
   function errorCard(error, session = activeSession) {
     if (error.name === 'AbortError' || error.code === 'cancelled') {
       card('notice', 'Остановлено', 'Генерацию остановили — текст остался в поле, можно править и запустить снова.', session);
@@ -811,7 +826,11 @@
     }
     if (error.code === 'unauthorized' && session === activeSession) { els.keyCard.hidden = false; els.keyInput.focus(); }
     const support = error.requestId ? ' Код запроса для поддержки: ' + error.requestId + '.' : '';
-    card('error', 'Ошибка', (error.message || 'Неизвестная ошибка.') + support, session);
+    // F-54: что случилось → что сделать; F-55: тип в заголовке.
+    const hint = error.code === 'network' ? ' Проверьте интернет и попробуйте снова.'
+      : error.code === 'not_found' || error.code === 'job_gone' ? ' Нажмите «Повторить с правками», чтобы сгенерировать заново.'
+      : '';
+    card('error', errorTitle(error), (error.message || 'Неизвестная ошибка.') + hint + support, session);
   }
 
   async function repeatMusic(entry, input) {
@@ -1014,7 +1033,7 @@
       } catch (error) {
         pending = null; // обложка остаётся кнопкой повтора
         if (frame.isConnected && currentUser() === sessionProfile?.nick) {
-          loadError.textContent = 'Файл недоступен. ' + (error.message || '') + ' Повтор — нажатием на обложку.';
+          loadError.textContent = 'Файл недоступен. ' + (error.message || '') + ' Нажмите на обложку — попробуем загрузить ещё раз.';
           waveSlot.append(loadError);
         }
         throw error;
@@ -1151,8 +1170,8 @@
         const ok = await BRIIX_TOASTS.confirmDialog({
           title: 'Удалить трек из библиотеки?',
           body: serverEntry
-            ? 'Серверная запись будет удалена и на стенде — скачивание этого файла перестанет работать. Отменить будет нельзя; если файл нужен — сначала скачайте его.'
-            : 'Запись исчезнет из библиотеки этого браузера. Файл на стенде не трогаем — карточка останется в ленте, пока жива сессия.',
+            ? 'Серверная запись будет удалена и на сервере — скачивание этого файла перестанет работать. Отменить будет нельзя; если файл нужен — сначала скачайте его.'
+            : 'Запись исчезнет из библиотеки этого браузера. Файл на сервере не трогаем — карточка останется в ленте, пока жива сессия.',
           confirmLabel: 'Удалить', danger: true
         });
         if (!ok) return;
@@ -1377,7 +1396,7 @@
     if (token()) return true;
     els.keyCard.hidden = false;
     els.keyInput.focus();
-    noticeOnce('need-key', 'Ключ', 'Вставьте ключ приватного стенда — тот же, что в Настройках демо.');
+    noticeOnce('need-key', 'Ключ', 'Вставьте ключ приватного доступа — тот же, что в Настройках демо.');
     return false;
   }
 
@@ -1385,9 +1404,9 @@
   function renderKeyChip() {
     const has = Boolean(token());
     els.profileNick.textContent = currentUser() || '';
-    els.profileBtn.title = has ? 'Профиль — ключ стенда сохранён' : 'Профиль — ключ стенда не задан';
+    els.profileBtn.title = has ? 'Профиль — ключ доступа сохранён' : 'Профиль — ключ доступа не задан';
     // статус ключа виден всегда: в пункте меню и внутри карточки ключа
-    els.profileKeyBtn.textContent = has ? 'Ключ стенда ✓' : 'Ключ стенда…';
+    els.profileKeyBtn.textContent = has ? 'Ключ доступа ✓' : 'Ключ доступа…';
     if (els.keyStatus) els.keyStatus.textContent = has
       ? (tokenRemembered()
         ? 'Ключ сохранён ✓ — запомнен в этом браузере.'
@@ -2081,7 +2100,7 @@
         const status = response.response.status;
         if ((status !== 429 && status !== 503) || attempt >= 3) {
           if (status === 429) throw new BusError('rate_limited', 'Слишком много запросов (429). Повторите через минуту.', 429);
-          if (status === 401) throw new BusError('unauthorized', 'Ключ стенда не принят (401).', 401);
+          if (status === 401) throw new BusError('unauthorized', 'Ключ не принят (401). Проверьте ключ в профиле.', 401);
           if (status === 404) throw new BusError('not_found', 'Файл не найден (404); срок хранения мог истечь.', 404);
           throw new BusError('http', 'Файл не получен (' + status + ').', status);
         }
@@ -2797,7 +2816,7 @@
       if (seq !== libSeq) return;
       note.hidden = false;
       note.textContent = error instanceof BusError && error.status === 401
-        ? 'Серверная библиотека недоступна: проверьте ключ (профиль → «Ключ стенда…»).'
+        ? 'Серверная библиотека недоступна: проверьте ключ (профиль → «Ключ доступа…»).'
         : 'Серверная библиотека недоступна — показаны локальные записи.';
     });
   }
@@ -2937,8 +2956,8 @@
       const ok = await BRIIX_TOASTS.confirmDialog({
         title: 'Удалить из библиотеки?',
         body: entry.server
-          ? 'Серверная запись будет удалена и на стенде — скачивание этого файла перестанет работать. Если файл нужен — сначала скачайте его.'
-          : 'Запись исчезнет из библиотеки этого браузера. Файл на стенде не трогаем.',
+          ? 'Серверная запись будет удалена и на сервере — скачивание этого файла перестанет работать. Если файл нужен — сначала скачайте его.'
+          : 'Запись исчезнет из библиотеки этого браузера. Файл на сервере не трогаем.',
         confirmLabel: 'Удалить', danger: true
       });
       if (!ok) return;
@@ -3179,7 +3198,7 @@
     closeMenus();
     if (await BRIIX_TOASTS.confirmDialog({
       title: 'Выйти из профиля?',
-      body: 'Профиль «' + currentUser() + '» останется в этом браузере вместе с сессиями и библиотекой; ключ стенда не удаляется. Идущие генерации можно остановить на следующем шаге.',
+      body: 'Профиль «' + currentUser() + '» останется в этом браузере вместе с сессиями и библиотекой; ключ доступа не удаляется. Идущие генерации можно остановить на следующем шаге.',
       confirmLabel: 'Выйти', danger: true
     })) logout();
   });
@@ -3190,7 +3209,7 @@
     closeMenus();
     const ok = await BRIIX_TOASTS.confirmDialog({
       title: 'Выйти и очистить это устройство?',
-      body: 'Будут удалены: ключ стенда, все профили и PIN, сессии и история диалогов, библиотеки и настройки. Отменить будет нельзя — скачайте нужное заранее. Файлы на сервере не трогаем.',
+      body: 'Будут удалены: ключ доступа, все профили и PIN, сессии и история диалогов, библиотеки и настройки. Отменить будет нельзя — скачайте нужное заранее. Файлы на сервере не трогаем.',
       confirmLabel: 'Очистить и выйти', danger: true
     });
     if (!ok) return;

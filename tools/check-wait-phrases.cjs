@@ -134,6 +134,28 @@ function bffServer(port) {
   assert.ok(await p.evaluate(() => !!window.BRIIX_WAIT_PHRASES.image.zones?.late?.length), 'у фото тоже зоны');
   ok('pools: 40+ unique phrases per type, stages, zones (F-62), no dead video pool', { types: Object.keys(pools) });
 
+  // 1c. Словарь (F-58): жаргона инфраструктуры и «магии нейросетей» в фразах нет;
+  //     обещания сроков («почти готов», «скоро») — только в зонах мока, где
+  //     длительность известна и коротка. Ассерт ходит по данным, не по файлу.
+  const lexicon = await p.evaluate(() => {
+    const out = [];
+    const walk = (node, mock, where) => {
+      if (typeof node === 'string') { out.push({ text: node, mock, where }); return; }
+      if (Array.isArray(node)) { node.forEach(x => walk(x, mock, where)); return; }
+      for (const [k, v] of Object.entries(node)) walk(v, mock || k === 'mock', where ? where + '.' + k : k);
+    };
+    walk(window.BRIIX_WAIT_PHRASES, false, '');
+    return out;
+  });
+  const hardBan = /стенд|нейросет|диффузи|аудио-код/i;
+  const timingBan = /почти готов|скоро/i;
+  for (const item of lexicon) {
+    if (hardBan.test(item.text)) assert.fail('F-58: жаргон в фразе (' + item.where + '): ' + item.text);
+    if (!item.mock && timingBan.test(item.text)) assert.fail('F-58: обещание сроков вне мока (' + item.where + '): ' + item.text);
+  }
+  assert.ok(lexicon.length >= 120, 'словарь unexpectedly мал: ' + lexicon.length);
+  ok('banned lexicon absent: no stand/neural/diffusion jargon, timing promises only inside mock zones', { phrases: lexicon.length, mock: lexicon.filter(x => x.mock).length });
+
   // 1b. Тональная зона и пасхалки в выборе (F-62): зона подмешивается к стадии,
   //     пасхалка — редкая. Проверяем детерминированно через Math.random.
   const tone = await p.evaluate(() => {
