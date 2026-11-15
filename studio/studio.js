@@ -263,10 +263,6 @@
   // T-20/F-06: занятость диалога — свойство сессии, а не модуля: стрим в сессии A
   // не блокирует ввод в сессии B. Ключ — id сессии, значение { kind, stop }.
   const sessionBusy = new Map();
-  // Источник лирики и название трека для transparency-блока и params.title:
-  // выставляются путём, который знает происхождение (наставник/пользователь/автолирика).
-  let pendingLyricsSource = null;
-  let pendingTrackTitle = null;
   const improving = new Set();
   let sessionProfile = null, sessionBackend = null, activeSession = null;
   let storageBlocked = true, storageDirty = false, pendingSaves = 0, saveQueue = Promise.resolve();
@@ -712,18 +708,38 @@
     card('error', 'Ошибка', (error.message || 'Неизвестная ошибка.') + support, session);
   }
 
-  let pendingMusicSource = null;
   function repeatMusic(entry, input) {
     if (storageBlocked) return;
-    const source = input || { prompt: entry.prompt || '', lyrics: entry.lyrics || '', model: entry.model || '', instrumental: !!entry.instrumental };
-    if (!input && !entry.inputComplete && !confirm('Данные старого трека могут быть неполными: промпт мог быть сокращён. Продолжить с тем, что сохранилось?')) return;
+    const has = v => typeof v === 'string' && v.trim();
+    // F-20: пустой input (серверный трек без локальной сессии) не должен затирать
+    // черновик пользователя пустотой — источник собирается из того, что сохранилось.
+    const source = (input && (has(input.prompt) || has(input.lyrics)))
+      ? { ...input, prompt: input.prompt || entry.prompt || '', lyrics: input.lyrics || entry.lyrics || '', model: input.model || entry.model || '', instrumental: input.instrumental ?? !!entry.instrumental }
+      : { prompt: entry.prompt || '', lyrics: entry.lyrics || '', model: entry.model || '', instrumental: !!entry.instrumental };
+    if (!has(source.prompt) && !has(source.lyrics)) {
+      card('notice', 'Повтор с правками', 'Для этого трека не сохранилось ни промпта, ни лирики — повторять не с чем. Текущий черновик не тронут.');
+      return;
+    }
+    if (input && (has(input.prompt) || has(input.lyrics))) {
+      // inputComplete === false — флаг старых записей библиотеки; у карточек ленты
+      // полного снимка input считается полным.
+      if (entry.inputComplete === false && !confirm('Данные старого трека могут быть неполными: промпт мог быть сокращён. Продолжить с тем, что сохранилось?')) return;
+    } else {
+      // Серверная запись: промпт обрезан до 200 знаков, лирика — до лимита сервера.
+      const what = has(source.prompt) && has(source.lyrics) ? 'промпт и лирика (возможно, сокращённые)'
+        : (has(source.prompt) ? 'только промпт (' + source.prompt.length + ' зн. — сервер хранит сокращённую версию)' : 'только лирика');
+      if (!confirm('Для этого трека сохранился ' + what + '. Продолжить с тем, что есть?')) return;
+    }
     const musicDraft = mode === 'music' ? (els.prompt.value || els.musicPrompt.value || els.lyrics.value) : (drafts.music || els.musicPrompt.value || els.lyrics.value);
     if (musicDraft.trim() && !confirm('Заменить текущий музыкальный черновик данными этого трека?')) return;
     setView('chat'); setMode('music'); advanced = true;
     els.musicPrompt.value = source.prompt || ''; els.lyrics.value = source.lyrics || '';
     instrumental = !!source.instrumental;
     quality = Object.keys(MUSIC_MODELS).find(key => MUSIC_MODELS[key] === source.model) || quality;
-    pendingMusicSource = { sessionId: activeSession.id, jobId: entry.job };
+    // T-21: связь с родительской джобой живёт на сессии (переживает перезагрузку),
+    // а не в глобальной переменной — параллельные запуски не перехватывают её.
+    activeSession.repeatOf = { jobId: entry.job, at: Date.now() };
+    persistSessions();
     renderChrome(); els.musicPrompt.focus();
     card('notice', 'Повтор с правками', 'Проверьте и измените данные перед отправкой. Это новая генерация по тексту, не аудиоремикс.');
   }
@@ -1479,7 +1495,9 @@
       if (!(await persistSessions())) { state.textContent = 'Не удалось сохранить резервную копию; поля не изменены.'; return; }
       entry.applied = true;
       writeFields();
-      pendingTrackTitle = titleField.value.trim() || null;
+      // T-21: название черновика — на сессии, не в глобале: переживёт смену
+      // сессии и не перехватывается параллельной генерацией из другой сессии.
+      session.pendingDraftTitle = titleField.value.trim() || null;
       await persistSessions();
       revert.hidden = false;
       state.textContent = 'Поля заполнены (показать: «Тонко настроить»). Генерация запускается отдельно.';
@@ -1502,11 +1520,11 @@
       entry.applied = true;
       writeFields();
       advanced = true; renderChrome();
-      pendingLyricsSource = 'наставник: ' + entry.who;
-      pendingTrackTitle = titleField.value.trim() || null;
       await persistSessions();
       revert.hidden = false;
-      await createMusic(els.musicPrompt.value); // promptReady-путь: английский промпт черновика уходит как есть
+      // T-21: контекст идёт аргументом — параллельная генерация B не подхватит
+      // название/источник лирики черновика A.
+      await createMusic(els.musicPrompt.value, { title: titleField.value.trim() || null, lyricsSource: 'наставник: ' + entry.who }); // promptReady-путь: английский промпт черновика уходит как есть
     }));
     actions.append(apply, revert, generate); body.append(actions);
   }
@@ -1622,14 +1640,20 @@
     return BriixProducer.latinizeTags(BriixProducer.sanitize(full)).slice(0, 8000);
   }
 
-  async function createMusic(description) {
+  async function createMusic(description, ctx = {}) {
     const session = activeSession;
+    // T-21: контекст генерации (название, источник лирики, родительская джоба) —
+    // аргумент источника запуска, а не глобальные pending-переменные: параллельные
+    // запуски не перехватывают чужое название/источник. repeatOf (после «Повторить
+    // с правками») живёт на сессии и потребляется этим запуском.
+    const parentJobId = ctx.parentJobId || session.repeatOf?.jobId || null;
+    if (parentJobId) session.repeatOf = null;
     // Зафиксировать настройки до автолирики: пользователь может менять их во время ожидания.
-    const snapshot = { advanced, quality, instrumental, parentJobId: pendingMusicSource?.sessionId === session.id ? pendingMusicSource.jobId : null };
-    if (snapshot.parentJobId) pendingMusicSource = null;
-    // Источник лирики/название выставлены путём запуска (наставник/поля/автолирика).
-    const draftSource = pendingLyricsSource; pendingLyricsSource = null;
-    const draftTitle = pendingTrackTitle; pendingTrackTitle = null;
+    const snapshot = { advanced, quality, instrumental, parentJobId };
+    const draftSource = ctx.lyricsSource || null;
+    // Название из «Принять в поля» живёт на сессии до первого запуска генерации.
+    const draftTitle = ctx.title ?? session.pendingDraftTitle ?? null;
+    session.pendingDraftTitle = null;
     // Сборка (#109): исходная идея пользователя сохраняется неизменной (в карточку
     // и журнал идёт она), а в модель уходит чистая сборка без markdown и болтовни.
     const rawIdea = snapshot.advanced ? els.musicPrompt.value.trim() : description;

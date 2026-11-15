@@ -1157,6 +1157,37 @@ function bffServer(port) {
   assert.equal(await p.locator('#feed audio').count(), 2, 'cover image did not replace the audio');
   ok('editable text repeat and separate cover image, without pretending to remix or replace artwork');
 
+  // F-20 (A15): серверный трек без локальной сессии — повтор не затирает черновик
+  // пустотой, честно предупреждает о сокращённом промпте и подставляет модель записи.
+  resetBff();
+  p = await page();
+  await p.evaluate(() => {
+    // Серверная запись в библиотеке: сессии с таким job нет → input = {}.
+    localStorage.setItem('briix-studio-library-tester', JSON.stringify([{
+      job: 'job-foreign-1', kind: 'music', server: true, prompt: 'серверная короткая версия промпта',
+      lyrics: '', model: 'ace-step-pro', instrumental: true, inputComplete: false,
+      title: 'Чужой трек', file: '/files/job-foreign-1.m4a', cover: '', created: Date.now(), fav: false
+    }]));
+  });
+  await p.locator('.mode[data-mode="music"]').click();
+  await p.locator('#prompt').fill('мой текущий английский промпт, который я берегу');
+  await p.locator('.tab[data-tab="library"]').click();
+  await p.waitForSelector('.lib-item');
+  await p.locator('.lib-item .menu-btn').first().click();
+  let repeatDialogs = 0;
+  const repeatDialogHandler = async d => {
+    repeatDialogs++;
+    if (repeatDialogs === 1) assert.match(d.message(), /только промпт \(33 зн\./, 'confirm честно называет объём данных сервера');
+    await d.accept().catch(() => {});
+    if (repeatDialogs >= 2) p.off('dialog', repeatDialogHandler);
+  };
+  p.on('dialog', repeatDialogHandler);
+  await p.locator('.track-menu:not([hidden]) button', { hasText: 'Повторить с правками' }).first().click();
+  await p.waitForFunction(() => document.querySelector('#musicPrompt')?.value.includes('серверная короткая'));
+  assert.equal(await p.locator('#musicPrompt').inputValue(), 'серверная короткая версия промпта', 'поля заполнены промптом серверной записи (F-20)');
+  assert.match(await p.locator('#modelName').innerText(), /Pro/, 'модель переключена на запись сервера (ace-step-pro)');
+  ok('repeat from server record: honest prompt-size confirm, no empty-draft wipe (F-20/A15)');
+
   // Контролируемый 429-шторм: считаем реальные попытки и восстановленные карточки в mock.
   resetBff(); state.coverRateLimit = 4;
   state.jobPosts = Array.from({ length: 4 }, (_, i) => ({ id: 'job-storm-' + i, type: 'music', prompt: 'Шторм ' + i, params: { model: 'ace-step-flash' } }));
