@@ -424,6 +424,7 @@ button:disabled { cursor: not-allowed; opacity: .4; }
 /* ---- библиотека ------------------------------------------------------------- */
 .lib-filters { display: flex; flex-wrap: wrap; gap: 6px; }
 .lib-item { display: flex; gap: 12px; align-items: center; } /* строка-карточка: миниатюра слева, контент справа */
+.lib-privacy { margin: 8px 0; padding: 8px 10px; font-size: 12px; line-height: 1.45; color: var(--muted); background: var(--surface-2); border-radius: 8px; }
 .lib-item .lib-cover { position: relative; width: 64px; height: 64px; flex-shrink: 0; overflow: hidden;
   display: grid; place-items: center; border-radius: 10px; background: var(--surface-2); color: var(--muted); }
 .lib-item .lib-cover img { width: 100%; height: 100%; margin: 0; border-radius: 0; object-fit: cover; }

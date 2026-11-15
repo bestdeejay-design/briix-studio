@@ -35,7 +35,7 @@ let state;
 function resetBff() {
   state = {
     chatPosts: [], chatBlocked: false, chatImproveText: 'УЛУЧШЕННЫЙ ТЕКСТ', chatSlow: false, improveDelay: 0, favoriteFail: false, coverRateLimit: 0, coverRequests: 0, audioRequests: 0, photoRequests: 0, fileOrder: [], fileDelay: 0, activeFiles: 0, maxActiveFiles: 0,
-    jobPosts: [], jobBlock: false, pollFailures: [], pollAttempts: 0, polls: 0, deleted: {}, favs: {}, jobSeq: 1, pollsOf: {}, cancels: []
+    jobPosts: [], jobBlock: false, pollFailures: [], pollAttempts: 0, polls: 0, deleted: {}, favs: {}, jobSeq: 1, pollsOf: {}, cancels: [], foreign: []
   };
 }
 resetBff();
@@ -118,7 +118,7 @@ function bffServer(port) {
 
       // infra#77 контракт: список / мягкое удаление / избранное (id уникальны, как на живом bff)
       if (req.url.split('?')[0] === '/jobs' && req.method === 'GET') { // клиент зовёт /jobs?limit=100
-        const items = state.jobPosts
+        const own = state.jobPosts
           .filter(({ id }) => !state.deleted[id])
           .map(({ id, type, prompt, params }, i) => ({
             id,
@@ -131,6 +131,9 @@ function bffServer(port) {
             favorite: !!state.favs[id],
             created_at: 1794000000 + i
           }));
+        // T-41: чужие записи (params.artist ≠ текущий ник) — как на живом стенде
+        // до скоупинга: общий ключ видит всё, фильтрация — на клиенте.
+        const items = [...state.foreign.filter(({ id }) => !state.deleted[id]), ...own];
         send(200, { total: items.length, limit: 100, offset: 0, items });
         return;
       }
@@ -684,6 +687,31 @@ function bffServer(port) {
   await p.locator('.tab[data-tab="chat"]').click();
   assert.equal(await p.locator('#composer').isVisible(), true, 'chat tab restores composer');
   ok('library: entry from job, favorite toggle + filter, delete, tab switching', {});
+
+  // T-41: общий ключ — чужие записи не показываются и не трогаются.
+  resetBff();
+  state.foreign = [
+    { id: 'foreign-1', type: 'music', status: 'ready', prompt: 'чужой секретный трек', params: { artist: 'someone-else', model: 'ace-step-pro' }, result_url: '/files/foreign-1.m4a', cover_url: '', favorite: false, created_at: 1790000000 },
+    { id: 'foreign-2', type: 'image', status: 'ready', prompt: 'чужое фото', params: { artist: 'someone-else' }, result_url: '/files/foreign-2.png', cover_url: '', favorite: false, created_at: 1790000001 }
+  ];
+  p = await page();
+  await p.locator('.mode[data-mode="photo"]').click();
+  await p.locator('#prompt').fill('моё фото');
+  await p.locator('#send').click();
+  await p.waitForSelector('.card.assistant img', { timeout: 20000 });
+  await p.locator('.tab[data-tab="library"]').click();
+  await p.waitForSelector('.lib-results .lib-item');
+  assert.equal(await p.locator('.lib-item').count(), 1, 'only the own photo is rendered');
+  assert.equal(await p.locator('.lib-item', { hasText: 'чужой' }).count(), 0, 'foreign entries are not rendered');
+  assert.equal(await p.locator('.lib-item', { hasText: 'чужое фото' }).count(), 0, 'foreign photos are not rendered');
+  await p.waitForSelector('.lib-privacy:not([hidden])');
+  assert.match(await p.locator('.lib-privacy').innerText(), /только ваши/i);
+  assert.match(await p.locator('.lib-privacy').innerText(), /2/);
+  assert.equal(state.jobPosts.at(-1).params?.artist, 'tester', 'photo job carries params.artist for attribution');
+  assert.deepEqual(Object.keys(state.deleted), [], 'nothing foreign was deleted');
+  assert.deepEqual(Object.keys(state.favs), [], 'nothing foreign was favorited');
+  assert.equal(state.fileOrder.filter(u => u.includes('foreign')).length, 0, 'foreign files are never fetched');
+  ok('library privacy: foreign /jobs entries hidden with an honest note, photo jobs attributed (T-41)', {});
 
   // 18. Мобильный 390×844: композер у низа, без горскролла, тач-таргеты ≥44.
   p = await page({ viewport: { width: 390, height: 844 } });

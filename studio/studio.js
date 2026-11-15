@@ -1381,7 +1381,7 @@
     appendStop(wait.row, handle);
     stageBody.append(wait.row);
     try {
-      const id = await submitJob({ type: 'image', prompt: text });
+      const id = await submitJob({ type: 'image', prompt: text, params: { artist: currentUser() } }); // T-41: фото-джоба атрибутируема в общем списке /jobs
       handle.jobId = id; // ✕ после отправки отменяет джобу и на сервере (T-05)
       recordSessionJob(session, id, 'photo', { prompt: text });
       const result = await pollJob(id, { shouldStop: () => handle.cancelled, onStatus: d => {
@@ -2223,6 +2223,13 @@
     els.lib.append(filterRow);
     const results = document.createElement('div');
     results.className = 'lib-results';
+    // T-41: плашка приватности — серверный список /jobs общий до серверного скоупинга
+    // (INFRA, §2.8 аудита); клиент прячет только атрибутируемых чужих.
+    const privacy = document.createElement('div');
+    privacy.className = 'lib-privacy';
+    privacy.setAttribute('role', 'status');
+    privacy.hidden = true;
+    els.lib.append(privacy);
     const cards = new Map();
     const render = (list, note) => {
       if (list.length && note) note.hidden = true;
@@ -2264,8 +2271,10 @@
     serverJobs().then(items => {
       if (seq !== libSeq) return; // устаревший прогон рендера
       const byId = new Map();
+      const owner = currentUser();
       for (const e of libLoad()) byId.set(e.job, e);
       const merged = [];
+      let foreignHidden = 0;
       for (const j of items) {
         const kind = j.type === 'image' ? 'photo' : j.type === 'music' ? 'music' : j.type;
         const localEntry = byId.get(j.id);
@@ -2278,17 +2287,28 @@
           merged.push(localEntry);
           byId.delete(j.id);
         } else if (j.result_url) {
+          // T-41: общий ключ = общий список. Чужая запись (params.artist ≠ ник)
+          // не показывается и не может быть удалена/лайкнута из этого профиля.
+          // Записи без artist (старые стенды, фото до 15.11) неатрибутируемы —
+          // показываем, как раньше: серверного признака владельца нет.
+          const artist = typeof j.params?.artist === 'string' ? j.params.artist : '';
+          if (artist && artist !== owner) { foreignHidden++; continue; }
           merged.push({
             job: j.id, kind, prompt: j.prompt || '',
             file: j.result_url, cover: j.cover_url || '',
             created: (j.created_at || 0) * 1000, fav: !!j.favorite, server: true,
-            lyrics: j.params?.lyrics || '', model: j.params?.model || ''
+            lyrics: j.params?.lyrics || '', model: j.params?.model || '',
+            title: typeof j.params?.title === 'string' ? j.params.title : ''
           });
         }
       }
       for (const e of byId.values()) merged.push(e);
       merged.sort((a, b) => (b.created || 0) - (a.created || 0));
       render(merged.filter(e => libFilter === 'all' ? true : libFilter === 'fav' ? e.fav : e.kind === libFilter), note);
+      privacy.hidden = !foreignHidden;
+      privacy.textContent = foreignHidden
+        ? 'Показаны только ваши треки: скрыто чужих — ' + foreignHidden + '. Серверный список общий до серверного разграничения.'
+        : '';
     }).catch((error) => {
       if (seq !== libSeq) return;
       note.hidden = false;
