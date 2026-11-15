@@ -374,15 +374,11 @@ function bffServer(port) {
   assert.ok(seen.length >= 1, 'polling stages were shown: ' + seen.join(','));
   const musicPost = state.jobPosts.at(-1);
   assert.equal(musicPost.type, 'music');
-  // issue #20: ASCII-идея не переписывается, но мозг v2 доводит caption слоями —
-  // с этого места ритм-секция и продакшн обязательны. Поэтому сверяем свойства,
-  // а не точную строку v1 (иначе тест закреплял бы старое поведение).
-  const musicPrompt = String(musicPost.prompt);
-  assert.ok(musicPrompt.startsWith('dream pop, 90 BPM, female vocals'), 'ASCII idea stays at the head of the prompt');
-  assert.match(musicPrompt, /groove|beat|drum/, 'v2 brain adds a rhythm layer');
-  assert.match(musicPrompt, /production|warmth|mix|saturation/, 'v2 brain adds a production layer');
-  assert.match(musicPrompt, /English lyrics/, 'brain adds the lyrics-language tag');
-  assert.equal(musicPrompt.split(', ').filter(t => t === 'atmospheric').length <= 1, true, 'no duplicate tags');
+  // Расширенный режим с ASCII-промтом: студия его НЕ переписывает (правило #109),
+  // мозг v2 здесь не участвует — контракт остался прежним. Слоевая доводка
+  // касается только путей, где промт собирает мозг (см. шаг 19 ниже).
+  assert.equal(musicPost.prompt, 'dream pop, 90 BPM, female vocals',
+    'advanced ASCII prompt is never rewritten by the brain');
   assert.match(musicPost.params.lyrics, /\[Chorus\]/);
   assert.equal(musicPost.params.model, 'ace-step-flash');
   assert.equal(musicPost.params.duration, undefined, 'duration must NOT be sent (infra#93: length follows lyrics)');
