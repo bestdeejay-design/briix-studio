@@ -51,9 +51,15 @@
     };
   }
 
+  // T-32: одно соединение IDB на вкладку (WeakMap по инстансу indexedDB) —
+  // раньше каждая запись открывала и закрывала базу. onversionchange закрывает
+  // соединение и сбрасывает кэш; неудачное открытие не кэшируется.
+  const dbCache = new WeakMap();
   function openDatabase(indexedDB) {
-    return new Promise((resolve, reject) => {
-      if (!indexedDB) { reject(new SessionStoreError('idb_unavailable', 'IndexedDB недоступна.')); return; }
+    if (!indexedDB) return Promise.reject(new SessionStoreError('idb_unavailable', 'IndexedDB недоступна.'));
+    const cached = dbCache.get(indexedDB);
+    if (cached) return cached;
+    const promise = new Promise((resolve, reject) => {
       let request;
       try { request = indexedDB.open(DB_NAME, DB_VERSION); }
       catch (error) { reject(new SessionStoreError('idb_unavailable', 'Не удалось открыть IndexedDB.', error)); return; }
@@ -66,10 +72,14 @@
       request.onsuccess = () => {
         if (settled) { request.result.close(); return; }
         settled = true;
-        request.result.onversionchange = () => request.result.close();
-        resolve(request.result);
+        const db = request.result;
+        db.onversionchange = () => { db.close(); dbCache.delete(indexedDB); };
+        resolve(db);
       };
     });
+    promise.catch(() => dbCache.delete(indexedDB)); // отказ не должен залипнуть в кэше
+    dbCache.set(indexedDB, promise);
+    return promise;
   }
 
   function transact(db, operation) {
@@ -93,27 +103,26 @@
     if (typeof nick !== 'string' || !nick) throw new SessionStoreError('invalid_nick', 'Нужен ник профиля.');
     const db = await openDatabase(options.indexedDB === undefined ? globalThis.indexedDB : options.indexedDB);
     const storage = options.storage === undefined ? globalThis.localStorage : options.storage;
-    try {
-      // A single write transaction serializes concurrent first opens and commits backup + import together.
-      return await transact(db, (store, done, fail) => {
-        const get = store.get(nick);
-        get.onsuccess = () => {
-          if (get.result !== undefined) {
-            if (get.result.schemaVersion !== SCHEMA_VERSION) {
-              fail(new SessionStoreError('schema_unsupported', 'Версия данных сессий не поддерживается.'));
-            } else done(get.result);
-            return;
-          }
-          try {
-            const profile = legacyProfile(nick, storage);
-            store.add(profile);
-            done(profile);
-          } catch (error) {
-            fail(error instanceof SessionStoreError ? error : new SessionStoreError('storage_write', 'Не удалось сохранить данные.', error));
-          }
-        };
-      });
-    } finally { db.close(); }
+    // T-32: соединение живёт на вкладке (dbCache) — закрывать на каждую операцию не нужно.
+    // A single write transaction serializes concurrent first opens and commits backup + import together.
+    return await transact(db, (store, done, fail) => {
+      const get = store.get(nick);
+      get.onsuccess = () => {
+        if (get.result !== undefined) {
+          if (get.result.schemaVersion !== SCHEMA_VERSION) {
+            fail(new SessionStoreError('schema_unsupported', 'Версия данных сессий не поддерживается.'));
+          } else done(get.result);
+          return;
+        }
+        try {
+          const profile = legacyProfile(nick, storage);
+          store.add(profile);
+          done(profile);
+        } catch (error) {
+          fail(error instanceof SessionStoreError ? error : new SessionStoreError('storage_write', 'Не удалось сохранить данные.', error));
+        }
+      };
+    });
   }
 
   async function saveProfile(profile, expectedRevision, options = {}) {
@@ -122,28 +131,27 @@
       throw new SessionStoreError('invalid_profile', 'Некорректные данные сессий.');
     }
     const db = await openDatabase(options.indexedDB === undefined ? globalThis.indexedDB : options.indexedDB);
-    try {
-      return await transact(db, (store, done, fail) => {
-        const get = store.get(profile.nick);
-        get.onsuccess = () => {
-          try {
-            const current = get.result;
-            if (!current || current.revision !== expectedRevision) {
-              fail(new SessionStoreError('conflict', 'Данные сессии изменились в другой вкладке. Перезагрузите их перед сохранением.'));
-              return;
-            }
-            if (current.schemaVersion !== SCHEMA_VERSION) {
-              fail(new SessionStoreError('schema_unsupported', 'Версия данных сессий не поддерживается.'));
-              return;
-            }
-            // A normal save cannot destroy the recovery copy, even if the caller supplies an outdated object.
-            const next = { ...profile, legacyBackup: current.legacyBackup, revision: expectedRevision + 1 };
-            store.put(next);
-            done(next);
-          } catch (error) { fail(new SessionStoreError('storage_write', 'Не удалось сохранить данные.', error)); }
-        };
-      });
-    } finally { db.close(); }
+    // T-32: постоянное соединение — без open/close на каждую запись.
+    return await transact(db, (store, done, fail) => {
+      const get = store.get(profile.nick);
+      get.onsuccess = () => {
+        try {
+          const current = get.result;
+          if (!current || current.revision !== expectedRevision) {
+            fail(new SessionStoreError('conflict', 'Данные сессии изменились в другой вкладке. Перезагрузите их перед сохранением.'));
+            return;
+          }
+          if (current.schemaVersion !== SCHEMA_VERSION) {
+            fail(new SessionStoreError('schema_unsupported', 'Версия данных сессий не поддерживается.'));
+            return;
+          }
+          // A normal save cannot destroy the recovery copy, even if the caller supplies an outdated object.
+          const next = { ...profile, legacyBackup: current.legacyBackup, revision: expectedRevision + 1 };
+          store.put(next);
+          done(next);
+        } catch (error) { fail(new SessionStoreError('storage_write', 'Не удалось сохранить данные.', error)); }
+      };
+    });
   }
 
   const modeKey = nick => 'briix-studio-sessions-backend-' + nick;
@@ -178,8 +186,8 @@
       if (mode === 'local' && !locks) throw new SessionStoreError('lock_unavailable', 'Локальные сессии доступны только с блокировкой вкладок.');
       if (!mode) {
         try {
-          const db = await openDatabase(options.indexedDB === undefined ? globalThis.indexedDB : options.indexedDB);
-          db.close();
+          // T-32: проба открытия переиспользует постоянное соединение (или создаёт его).
+          await openDatabase(options.indexedDB === undefined ? globalThis.indexedDB : options.indexedDB);
           mode = 'idb';
         } catch (error) {
           if (error.code !== 'idb_unavailable') throw error;

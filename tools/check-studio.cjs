@@ -1219,6 +1219,78 @@ function bffServer(port) {
   assert.equal(await p.locator('#musicPrompt').inputValue(), 'исходный стиль сессии A', 'undo возвращает текст своей сессии (T-22)');
   ok('session-bound undo backup: no cross-session restore (T-22)');
 
+  // T-33: ход чата не хранит ответ дважды — track стал флагом, а не копией текста.
+  resetBff();
+  p = await page();
+  await p.locator('#prompt').fill('расскажи длинно про хранение');
+  await p.locator('#send').click();
+  await p.waitForFunction(() => document.querySelectorAll('#feed .card.assistant').length >= 1
+    && ![...document.querySelectorAll('#feed .card.assistant')].some(c => c.classList.contains('streaming')), {}, { timeout: 15000 });
+  // Ждём коммита записи приложения (write-гонка IDB), иначе читается старая ревизия.
+  let chatStored = null;
+  for (let i = 0; i < 30 && chatStored?.track !== true; i++) {
+    chatStored = await p.evaluate(async () => {
+      const { profile } = await BriixSessionStore.open('tester');
+      const s = profile.sessions[0];
+      const entry = s.feed.find(x => x.t === 'assistant');
+      return entry ? { track: entry.track, textLen: entry.text.length, history: s.history.length } : null;
+    });
+    if (chatStored?.track !== true) await p.waitForTimeout(500);
+  }
+  assert.equal(chatStored?.track, true, 'T-33: track — флаг, копия текста не хранится');
+  assert.ok(chatStored.textLen > 10 && chatStored.history >= 2, 'текст и история на месте');
+  // Restore после перезагрузки: кнопка «Сделать из этого трек» берёт text, не копию.
+  await p.reload();
+  await p.waitForSelector('#feed .card.assistant .make-track', { timeout: 10000 });
+  ok('chat turn stored once (track flag), make-track survives reload (T-33)', chatStored);
+
+  // F-33: черновик композера пишется на вводе — без смены сессии и перезагрузки.
+  p = await page();
+  await p.locator('#prompt').fill('черновик, который не должен потеряться');
+  await p.waitForTimeout(700); // дебаунс 400 мс
+  const draftSaved = await p.evaluate(async () => {
+    const { profile } = await BriixSessionStore.open('tester');
+    const s = profile.sessions.find(x => x.draft?.prompts?.chat === 'черновик, который не должен потеряться');
+    return !!s;
+  });
+  assert.equal(draftSaved, true, 'F-33: черновик сохранён дебаунсом на вводе');
+  // T-29: beforeunload не липнет без записи в полёте (раньше — навсегда после сбоя).
+  const sticky = await p.evaluate(() => {
+    const ev = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(ev);
+    return ev.defaultPrevented;
+  });
+  assert.equal(sticky, false, 'T-29: системный диалог закрытия не вешается в покое');
+  ok('composer draft auto-saves on input; beforeunload is not sticky (F-33/T-29)');
+
+  // T-28: конфликт ревизий — диалог выбора, а не липкая плашка.
+  resetBff();
+  p = await page();
+  await p.locator('#prompt').fill('вопрос до конфликта');
+  await p.locator('#send').click();
+  await p.waitForFunction(() => document.querySelectorAll('#feed .card.assistant').length >= 1
+    && ![...document.querySelectorAll('#feed .card.assistant')].some(c => c.classList.contains('streaming')), {}, { timeout: 15000 });
+  await p.evaluate(async () => {
+    // «Другая вкладка» пишет с той же ревизией — ревизия приложения просрочена.
+    const { profile } = await BriixSessionStore.open('tester');
+    profile.sessions[0].title = 'Изменено в другой вкладке';
+    await BriixSessionStore.save(profile, profile.revision, 'idb');
+  });
+  await p.locator('#prompt').fill('вопрос после конфликта');
+  await p.locator('#send').click();
+  await p.waitForSelector('.card.notice', { timeout: 15000 });
+  assert.match(await p.locator('.card.notice').last().innerText(), /конфликт вкладок/i, 'T-28: конфликт показан диалогом выбора');
+  await p.getByRole('button', { name: 'Заменить своей версией' }).click();
+  await p.waitForFunction(() => ![...document.querySelectorAll('.card.notice')].some(c => /Конфликт вкладок/.test(c.textContent || '')), {}, { timeout: 15000 });
+  const resolved = await p.evaluate(async () => {
+    const { profile } = await BriixSessionStore.open('tester');
+    const s = profile.sessions[0];
+    return { title: s.title, feed: s.feed.length, questions: s.feed.filter(x => x.t === 'user').length };
+  });
+  assert.equal(resolved.title, 'вопрос до конфликта', 'наша версия перезаписала чужую (T-28)');
+  assert.equal(resolved.questions, 2, 'оба вопроса сохранились после решения конфликта');
+  ok('revision conflict resolves via explicit choice (T-28)');
+
   // Контролируемый 429-шторм: считаем реальные попытки и восстановленные карточки в mock.
   resetBff(); state.coverRateLimit = 4;
   state.jobPosts = Array.from({ length: 4 }, (_, i) => ({ id: 'job-storm-' + i, type: 'music', prompt: 'Шторм ' + i, params: { model: 'ace-step-flash' } }));

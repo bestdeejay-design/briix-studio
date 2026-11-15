@@ -296,9 +296,51 @@
       els.storageWarning.append(exportButton);
     }
   }
+  // T-28: конфликт ревизий (другая вкладка записала раньше) — выбор версий,
+  // а не липкая плашка: «Заменить своей версией» / «Обновить».
+  let conflictOffered = false;
+  async function reloadProfileInPlace() {
+    const opened = await BriixSessionStore.open(currentUser());
+    sessionProfile = opened.profile; sessionBackend = opened.backend;
+    conflictOffered = false; storageDirty = false;
+    els.storageWarning.hidden = sessionBackend !== 'local';
+    activeSession = sessionProfile.sessions.find(s => s.id === sessionProfile.activeSessionId) || sessionProfile.sessions[0];
+    if (!activeSession) activeSession = sessionProfile.sessions[0] = newSessionRecord();
+    sessionProfile.activeSessionId = activeSession.id;
+    sessionRoots.clear();
+    els.feed.textContent = '';
+    ensureRoot(activeSession);
+    rootFor(activeSession).hidden = false;
+    loadDraft(activeSession);
+    renderOpsBadge();
+  }
+  function handleStorageConflict() {
+    if (conflictOffered) return; // один диалог за раз — не спамить на каждый ход очереди
+    conflictOffered = true;
+    const body = card('notice', 'Конфликт вкладок', 'Данные сессий изменились в другой вкладке. Эта вкладка не может сохранить свои изменения, пока не решён конфликт.', activeSession);
+    const actions = document.createElement('div'); actions.className = 'actions';
+    const mine = document.createElement('button'); mine.type = 'button'; mine.className = 'action'; mine.textContent = 'Заменить своей версией';
+    const refresh = document.createElement('button'); refresh.type = 'button'; refresh.className = 'action'; refresh.textContent = 'Обновить (потерять несохранённое)';
+    mine.addEventListener('click', async () => {
+      try {
+        const opened = await BriixSessionStore.open(currentUser());
+        sessionProfile.revision = opened.profile.revision; // перезаписать версию другой вкладки
+        conflictOffered = false;
+        if (await persistSessions()) body.closest('.card').remove();
+      } catch (error) { warnStorage(error); }
+    });
+    refresh.addEventListener('click', async () => {
+      try { await reloadProfileInPlace(); body.closest('.card').remove(); }
+      catch (error) { warnStorage(error); }
+    });
+    actions.append(mine, refresh); body.append(actions);
+  }
   function persistSessions() {
     if (!sessionProfile) return Promise.resolve(false);
-    const snapshot = JSON.parse(JSON.stringify(sessionProfile));
+    // T-32: structuredClone вместо JSON-раундтрипа — в 2–4 раза быстрее и не
+    // теряет undefined-поля; состояние сессий — только клонируемые данные
+    // (занятость живёт в sessionBusy вне профиля, undo/repeatOf — простые значения).
+    const snapshot = structuredClone(sessionProfile);
     storageDirty = true;
     pendingSaves++;
     saveQueue = saveQueue.then(async () => {
@@ -309,13 +351,31 @@
         els.storageWarning.hidden = sessionBackend !== 'local';
         if (sessionBackend === 'local') els.storageWarning.textContent = 'IndexedDB недоступна: сессии хранятся в localStorage этого браузера, объём ограничен.';
         return true;
-      } catch (error) { warnStorage(error); return false; }
+      } catch (error) {
+        if (error?.code === 'conflict') handleStorageConflict(); // T-28
+        else warnStorage(error);
+        return false;
+      }
       finally { pendingSaves--; }
     });
     return saveQueue;
   }
+  // T-25/F-33: черновик композера и продюсера пишутся с дебаунсом; pagehide
+  // флэшит оба таймера — закрытие вкладки больше не теряет последний ввод.
+  let draftSaveTimer = null;
+  function saveDraftSoon() {
+    if (draftSaveTimer || !activeSession) return;
+    draftSaveTimer = setTimeout(() => { draftSaveTimer = null; saveDraft(activeSession); persistSessions(); }, 400);
+  }
+  window.addEventListener('pagehide', () => {
+    if (producerSaveTimer) { clearTimeout(producerSaveTimer); producerSaveTimer = null; persistSessions(); }
+    if (draftSaveTimer) { clearTimeout(draftSaveTimer); draftSaveTimer = null; saveDraft(activeSession); persistSessions(); }
+  });
+  // T-29: системный диалог закрытия — только когда реально теряется запись,
+  // которая идёт прямо сейчас. Неудачная запись раньше делала диалог липким
+  // навсегда; теперь об этом говорит только плашка с экспортом внутри страницы.
   window.addEventListener('beforeunload', e => {
-    if (storageDirty || pendingSaves || producerSaveTimer) { e.preventDefault(); e.returnValue = ''; }
+    if (pendingSaves > 0) { e.preventDefault(); e.returnValue = ''; }
   });
   function rootFor(session) { return sessionRoots.get(session.id); }
   function recordSessionJob(session, job, kind, input) {
@@ -342,6 +402,9 @@
     session.updatedAt = Date.now();
     return persistSessions();
   }
+  // T-33: track — флаг, а не копия текста (раньше ответ хранился дважды:
+  // в text и в track). Старые записи со строкой в track читаются как раньше.
+  const trackBriefOf = d => (d.track === true ? d.text : (typeof d.track === 'string' ? d.track : ''));
   function feedRestore(session) {
     for (const d of session.feed) {
       if (!d || typeof d !== 'object') continue;
@@ -358,11 +421,11 @@
           body.textContent = '';
           // R2/T-18: фото-restore — тот же компонент, что fresh и Библиотека.
           body.append(photoCard({ loadBlob: () => fileBlob(d.file, 1) }).body);
-          if (d.track) addMakeTrackAction(body.closest('.card'), d.track);
+          if (d.track) addMakeTrackAction(body.closest('.card'), trackBriefOf(d));
         }
       } else {
         const body = card(d.t, d.who, d.text, session);
-        if (d.t === 'assistant' && d.track) addMakeTrackAction(body.closest('.card'), d.track);
+        if (d.t === 'assistant' && d.track) addMakeTrackAction(body.closest('.card'), trackBriefOf(d));
       }
     }
   }
@@ -1301,7 +1364,7 @@
       stopRow.remove();
       body.textContent = full; // чистый текст вместо служебных узлов
       session.history.push(turn, { role: 'assistant', content: full });
-      feedPush({ t: 'assistant', who, text: full, track: full }, session); // track = бриф «Сделать из этого трек»
+      feedPush({ t: 'assistant', who, text: full, track: true }, session); // T-33: флаг вместо копии текста
       addMakeTrackAction(body.closest('.card'), full);
     } catch (error) {
       stopRow.remove();
@@ -2246,7 +2309,11 @@
     sessionTransition = true;
     try {
       saveDraft(activeSession);
-      if (!(await persistSessions())) return;
+      if (!(await persistSessions())) {
+        // T-29/A14: ошибка записи больше не запирает «Новый чат»: сессия
+        // создаётся в памяти этой вкладки, плашка с экспортом уже видна.
+        card('notice', 'Новый чат', 'Сессия создаётся в этой вкладке — сохранение в хранилище сейчас не работает (см. предупреждение сверху). Несохранённое можно скачать кнопкой в плашке.');
+      }
       if (!activeSession.feed.length && !activeSession.history.length) { closeSessions(); return; }
       const session = newSessionRecord();
       sessionProfile.sessions.push(session);
@@ -2922,6 +2989,9 @@
     await createMusic(promptValue());
   });
   els.prepareMusic.addEventListener('click', prepareMusic);
+  // F-33: черновик композера пишется на вводе (дебаунс 400 мс) — раньше
+  // набранный текст терялся при закрытии вкладки без смены сессии.
+  for (const el of [els.prompt, els.lyrics, els.musicPrompt]) el.addEventListener('input', saveDraftSoon);
   els.improveLyrics.addEventListener('click', () => improve('lyrics'));
   // Ключ 'musicPrompt' (а не 'prompt'): undo('musicPrompt') читает тот же ключ —
   // раньше кнопка возврата стиля была видима, но не работала (запись шла в 'prompt').
