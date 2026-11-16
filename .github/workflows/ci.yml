@@ -52,7 +52,10 @@ jobs:
       # это относится ТОЛЬКО к тестам — у деплоя отдельная группа, cancel: false).
       group: ci-tests-${{ github.ref }}
       cancel-in-progress: true
-    runs-on: ubuntu-latest   # внешний runner; briix-ci (self-hosted) — только по явной команде владельца
+    # github-hosted, НЕ self-hosted стенда A: chromium-прогон конкурирует с живым
+    # BFF и генерациями (родственно флейкам check-media, briix.ru infra#98).
+    # Перенос на briix-ci — отдельное решение владельца, не «по умолчанию».
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
