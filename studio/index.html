@@ -2,8 +2,12 @@
 <html lang="ru" data-theme="dark">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizableViewport">
 <meta name="color-scheme" content="dark">
+<!-- T-35: тема и иконки — раньше favicon отдавался 404 на каждый заход -->
+<meta name="theme-color" content="#0d0e10">
+<link rel="icon" href="./favicon.svg" type="image/svg+xml" sizes="any">
+<link rel="manifest" href="./manifest.webmanifest">
 <title>BRIIX Студия</title>
 <script>
 // Зеркало на Pages (briix.ru) без шины /api — сразу на рабочую студию (demo.briix.ru).
@@ -11,42 +15,189 @@ if (location.hostname === 'briix.ru' || location.hostname === 'www.briix.ru') {
   location.replace('https://demo.briix.ru/studio/' + location.hash);
 }
 </script>
-<link rel="stylesheet" href="studio.css?v=20261114-agent-b-1">
+<script>
+/* Кеш-самолечение (хвост T-35). Браузер держит этот HTML в эвристическом кеше,
+ * а деплой перезаписывает JS/CSS под старыми именами — «старый HTML + новые
+ * файлы под старыми ?v=» роняют загрузку, и экран остаётся чёрным: оба корневых
+ * блока ниже в разметке скрыты. Сторож инлайн-овый и работает, даже если ни один
+ * внешний скрипт не загрузился:
+ *  1) version.json (сборочный отпечаток ассетов на сервере) запрашивается без
+ *     кеша; расхождение с window.__BRIIX_BUILD__ этой страницы — страница сама
+ *     перезагружается с параметром _b=<отпечаток>: новый URL гарантированно
+ *     минует кеш браузера. Пользователь ничего не нажимает — версия на сервере
+ *     всегда побеждает;
+ *  2) если за BOOT_TIMEOUT мс страница не ожила (гейт и студия скрыты,
+ *     data-booted нет) — та же перезагрузка: лечит битые пары из кеша;
+ *  3) не больше MAX_BUSTS перезагрузок за WINDOW_MS, дальше — видимый
+ *     fallback с кнопкой: не вечный чёрный экран и не цикл перезагрузок;
+ *  4) живая вкладка перепроверяется при возвращении на неё; если пользователь
+ *     занят (идут операции / есть несохраненный текст) — перезагрузка только
+ *     по его нажатию «Обновить», молча работа не сносим.
+ * window.__BRIIX_BOOT_TIMEOUT / __BRIIX_RECHECK_MS — хуки сюиты check-cache-selfheal. */
+window.__BRIIX_BUILD__ = '0726eadb8d';
+(function () {
+  var SS_KEY = 'briix-bust', MAX_BUSTS = 2, WINDOW_MS = 60000;
+  var BOOT_TIMEOUT = window.__BRIIX_BOOT_TIMEOUT || 9000;
+  var RECHECK_MS = window.__BRIIX_RECHECK_MS || 10000;
+  var lastCheck = 0, busy = false, bootTimer = null, cleanTimer = null;
+  function replaceUrl(mark) {
+    var u = new URL(location.href);
+    u.searchParams.set('_b', mark);
+    location.replace(u.href);
+  }
+  function bust(mark) {
+    if (busy) return;
+    busy = true;
+    if (bootTimer) { clearTimeout(bootTimer); bootTimer = null; }
+    // CacheStorage за собой подчищаем и в приватном режиме (там sessionStorage нет) —
+    // счётчик не ведётся, но и перезагрузка максимум одна: busy уже поставлен.
+    try {
+      if (window.caches && caches.keys) caches.keys().then(function (keys) {
+        keys.forEach(function (k) { caches.delete(k); });
+      }).catch(function () {});
+    } catch (e) {}
+    try {
+      var rec = null;
+      try { rec = JSON.parse(sessionStorage.getItem(SS_KEY) || 'null'); } catch (e) {}
+      var now = Date.now();
+      if (!rec || now - rec.at > WINDOW_MS) rec = { n: 0, at: now };
+      rec.n += 1; rec.at = now;
+      if (rec.n > MAX_BUSTS) { fallback(); return; }
+      sessionStorage.setItem(SS_KEY, JSON.stringify(rec));
+      replaceUrl(mark || String(now));
+    } catch (e) { replaceUrl(mark || String(Date.now())); }
+  }
+  function fallback() {
+    try { sessionStorage.removeItem(SS_KEY); } catch (e) {}
+    function show() {
+      if (document.getElementById('briixBootFallback')) return;
+      var el = document.createElement('div');
+      el.id = 'briixBootFallback';
+      el.className = 'boot-fallback';
+      el.setAttribute('role', 'alert');
+      var p = document.createElement('p');
+      p.textContent = 'Студия не загрузилась: браузер держит старые файлы.';
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = 'Перезагрузить';
+      b.addEventListener('click', function () { replaceUrl(String(Date.now())); });
+      el.append(p, b);
+      document.body.append(el);
+    }
+    if (document.body) show();
+    else document.addEventListener('DOMContentLoaded', show);
+  }
+  function booted() {
+    if (document.documentElement.getAttribute('data-booted') === '1') return true;
+    var g = document.getElementById('gate'), s = document.getElementById('studio');
+    return Boolean((g && !g.hidden) || (s && !s.hidden));
+  }
+  function offerUpdate(build) {
+    // Живая вкладка: сносим работу пользователя только когда безопасно.
+    var opsBadge = document.getElementById('opsBadge');
+    var opsLive = opsBadge && !opsBadge.hidden;
+    var typing = ['prompt', 'lyrics', 'musicPrompt'].some(function (id) {
+      var el = document.getElementById(id);
+      return Boolean(el && el.value);
+    });
+    if (!opsLive && !typing) { bust(build); return; }
+    var t = window.BRIIX_TOASTS;
+    if (t && t.toast) {
+      t.toast('Доступна новая версия студии', {
+        kind: 'info',
+        key: 'briix-update',
+        action: { label: 'Обновить', onClick: function () { replaceUrl(build); } }
+      });
+    }
+  }
+  function check() {
+    lastCheck = Date.now();
+    fetch('version.json?t=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (v) {
+        if (!v || !v.build || v.build === window.__BRIIX_BUILD__) return;
+        // Только открывшаяся страница перезагружается немедленно; давно живая —
+        // бережно (offerUpdate), чтобы не потерять ввод.
+        if (booted() && (window.performance ? performance.now() : 99999) > 3000) offerUpdate(v.build);
+        else bust(v.build);
+      })
+      .catch(function () {});
+  }
+  check();
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible' && Date.now() - lastCheck > RECHECK_MS) check();
+  });
+  bootTimer = setTimeout(function () {
+    if (!booted()) bust(null);
+  }, BOOT_TIMEOUT);
+  // Успешный бут: снимаем счётчик перезагрузок и убираем _b из адреса
+  // (replaceState — адрес остаётся чистым для шаринга и F5).
+  cleanTimer = setInterval(function () {
+    if (!booted()) return;
+    clearInterval(cleanTimer);
+    try { sessionStorage.removeItem(SS_KEY); } catch (e) {}
+    try {
+      var u = new URL(location.href);
+      if (u.searchParams.has('_b')) {
+        u.searchParams.delete('_b');
+        var q = u.searchParams.toString();
+        history.replaceState(null, '', u.pathname + (q ? '?' + q : '') + u.hash);
+      }
+    } catch (e) {}
+  }, 700);
+  setTimeout(function () { clearInterval(cleanTimer); }, 45000);
+})();
+</script>
+<link rel="stylesheet" href="studio.css?v=a4b3be1aca">
+<!-- T-35: главный скрипт стартует заранее; URL совпадает с тегом ниже (иначе двойная загрузка) -->
+<link rel="preload" as="script" href="studio.js?v=ccc487f3e2">
 </head>
 <body>
 
 <!-- Вход: ник + PIN-пад (клиентский; переезд на серверную auth — INFRA #78) -->
 <div id="gate" class="gate" hidden>
   <div class="gate-card">
-    <div class="gate-title">BRIIX Студия</div>
+    <!-- F-02: гейт объявляет себя скринридеру — заголовок документа и роли состояний -->
+    <h1 class="gate-title">BRIIX Студия</h1>
     <p class="gate-sub">Вход по нику и PIN-коду</p>
     <input id="nickInput" class="nick" aria-label="Ник" maxlength="24" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Ник">
-    <div id="pinDots" class="pin-dots" aria-label="PIN"></div>
+    <div id="pinDots" class="pin-dots" role="status" aria-live="polite"></div>
     <div class="pinpad" id="pinpad" aria-label="Пин-пад">
-      <button class="pk" data-digit="1">1</button>
-      <button class="pk" data-digit="2">2</button>
-      <button class="pk" data-digit="3">3</button>
-      <button class="pk" data-digit="4">4</button>
-      <button class="pk" data-digit="5">5</button>
-      <button class="pk" data-digit="6">6</button>
-      <button class="pk" data-digit="7">7</button>
-      <button class="pk" data-digit="8">8</button>
-      <button class="pk" data-digit="9">9</button>
+      <button class="pk" data-digit="1" aria-label="Цифра 1">1</button>
+      <button class="pk" data-digit="2" aria-label="Цифра 2">2</button>
+      <button class="pk" data-digit="3" aria-label="Цифра 3">3</button>
+      <button class="pk" data-digit="4" aria-label="Цифра 4">4</button>
+      <button class="pk" data-digit="5" aria-label="Цифра 5">5</button>
+      <button class="pk" data-digit="6" aria-label="Цифра 6">6</button>
+      <button class="pk" data-digit="7" aria-label="Цифра 7">7</button>
+      <button class="pk" data-digit="8" aria-label="Цифра 8">8</button>
+      <button class="pk" data-digit="9" aria-label="Цифра 9">9</button>
       <button class="pk ghost" hidden></button>
-      <button class="pk" data-digit="0">0</button>
+      <button class="pk" data-digit="0" aria-label="Цифра 0">0</button>
       <button class="pk ghost" data-action="back" aria-label="Стереть">⌫</button>
     </div>
     <button id="enterBtn" class="save gate-enter">Войти</button>
-    <p id="gateHint" class="hint">PIN — 4–6 цифр. Новый ник регистрируется при первом входе.</p>
+    <p id="gateHint" class="hint" role="status">PIN — 4–6 цифр. Новый ник регистрируется при первом входе.</p>
   </div>
 </div>
 
 <main class="studio" id="studio" hidden>
   <header class="studio-header">
     <div><span class="brand-mark">B</span><strong>BRIIX</strong><span class="header-divider"></span><span>Студия</span></div>
-    <button id="sessionsOpen" class="tool chip" type="button" aria-haspopup="dialog" aria-controls="sessionsDialog">☰ История</button>
+    <div class="header-tools">
+      <button id="opsBadge" class="tool chip ops-badge" type="button" hidden></button>
+      <button id="sessionsOpen" class="tool chip" type="button" aria-haspopup="dialog" aria-controls="sessionsDialog">☰ История</button>
+    </div>
   </header>
+  <!-- Мини-плеер (T-51-остаток/R6): пока трек заявлен — заголовок, таймкод, play/pause -->
+  <div id="miniPlayer" class="mini-player" hidden>
+    <button id="mpToggle" class="tool mp-toggle" type="button" aria-label="Пауза">⏸</button>
+    <button id="mpTitle" class="tool mp-title" type="button" title="Показать карточку трека"></button>
+    <span id="mpTime" class="mp-time"></span>
+  </div>
   <div id="storageWarning" class="storage-warning" role="alert" hidden></div>
+  <!-- T-26: баннер «Нет соединения» — операции при офлайне приостановлены -->
+  <div id="netBanner" class="net-banner" role="status" hidden></div>
   <div id="sessionsOverlay" class="sessions-overlay" hidden>
     <section id="sessionsDialog" class="sessions-dialog" role="dialog" aria-modal="true" aria-labelledby="sessionsTitle" tabindex="-1">
       <div class="sessions-head"><h2 id="sessionsTitle">История</h2><button id="sessionsClose" class="tool icon-only" type="button" aria-label="Закрыть историю">✕</button></div>
@@ -56,8 +207,22 @@ if (location.hostname === 'briix.ru' || location.hostname === 'www.briix.ru') {
     </section>
   </div>
 
+  <!-- T-24: выход при живых операциях — явный выбор, а не тихий отказ -->
+  <div id="opsOverlay" class="sessions-overlay" hidden>
+    <section class="sessions-dialog" role="dialog" aria-modal="true" aria-labelledby="opsTitle" tabindex="-1">
+      <div class="sessions-head"><h2 id="opsTitle">Идут операции</h2><button id="opsCancel" class="tool icon-only" type="button" aria-label="Остаться">✕</button></div>
+      <p class="sessions-help" id="opsText">Прямо сейчас выполняются генерации. Остановить их и выйти — очереди и GPU освободятся, несохранённые тексты полей будут потеряны.</p>
+      <div class="ops-actions">
+        <button id="opsStopLogout" class="session-new" type="button">Остановить и выйти</button>
+        <button id="opsStay" class="action" type="button">Остаться</button>
+      </div>
+    </section>
+  </div>
+
   <!-- Лента: чат-стрим, фото, треки — скроллится над композером -->
-  <section id="feed" class="feed" aria-live="polite"></section>
+  <!-- F-49: aria-live убран с ленты (речевой шторм при стриминге);
+   * стримящаяся карточка помечается aria-busy, объявления — через status-регионы. -->
+  <section id="feed" class="feed" aria-label="Лента диалога"></section>
 
   <!-- Библиотека: все генерации — скачать / в избранное / удалить -->
   <section id="lib" class="feed lib" hidden></section>
@@ -117,9 +282,11 @@ if (location.hostname === 'briix.ru' || location.hostname === 'www.briix.ru') {
       </div>
 
       <p id="chatPending" class="composer-hint" role="status" hidden>Дождитесь ответа или остановите его, чтобы отправить следующий вопрос.</p>
+      <!-- F-50: единое поведение Enter во всех режимах — и видимая подсказка о нём -->
+      <p class="composer-hint enter-hint">Enter — отправить · Shift+Enter — новая строка</p>
       <div class="producer-entry music-only" hidden>
-        <button id="prepareMusic" class="tool chip producer-button" type="button" disabled>✦ Подготовить песню</button>
-        <span>Продюсер предложит черновик без запуска генерации</span>
+        <button id="prepareMusic" class="tool chip producer-button" type="button" disabled aria-describedby="producerHint" aria-label="Подготовить песню" title="Продюсер предложит черновик без запуска генерации"><span class="lbl-full">✦ Подготовить песню</span><span class="lbl-short">✦ Подготовить</span></button>
+        <span id="producerHint">Продюсер предложит черновик без запуска генерации</span>
       </div>
 
       <!-- Тулбар инструментов под полем -->
@@ -149,8 +316,8 @@ if (location.hostname === 'briix.ru' || location.hostname === 'www.briix.ru') {
           <button class="seg-btn" data-vocal="1" aria-pressed="false">🎼 Инструментал</button>
         </div>
         <span class="spacer"></span>
-        <button id="tuneToggle" class="tool chip toggle music-only" hidden aria-pressed="false">Тонко настроить</button>
-        <button id="genTrack" class="tool chip gen-track music-only" hidden disabled title="Явная генерация трека из текущих полей — без диалога">Сгенерировать трек</button>
+        <button id="tuneToggle" class="tool chip toggle music-only" hidden aria-pressed="false" aria-label="Тонко настроить" title="Тонкая настройка: тональность, темп, размер"><span class="lbl-full">Тонко настроить</span><span class="lbl-short">Настроить</span></button>
+        <button id="genTrack" class="tool chip gen-track music-only" hidden disabled title="Явная генерация трека из текущих полей — без диалога" aria-label="Сгенерировать трек"><span class="lbl-full">Сгенерировать трек</span><span class="lbl-short">Трек</span></button>
         <button id="send" class="send" aria-label="Отправить" disabled>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>
         </button>
@@ -159,19 +326,21 @@ if (location.hostname === 'briix.ru' || location.hostname === 'www.briix.ru') {
       <!-- Мета-полоса -->
       <div class="meta">
         <span id="metaLeft">briix.ru · Чат · Наставник</span>
-        <span id="status" class="status">готов</span>
+        <span id="status" class="status" role="status">готов</span>
       </div>
     </div>
 
     <!-- Инлайн-ввод ключа -->
       <div id="keyCard" class="key-card" hidden>
-      <label class="field-label" for="keyInput">Ключ приватного стенда</label>
+      <label class="field-label" for="keyInput">Ключ приватного доступа</label>
       <div class="key-row">
         <input id="keyInput" type="password" autocomplete="off" placeholder="вставьте ключ">
         <button id="keySave" class="save">Сохранить</button>
       </div>
       <p id="keyStatus" class="hint" aria-live="polite"></p>
-      <p class="hint">Тот же ключ, что в Настройках демо. Хранится только в этом браузере.</p>
+      <!-- T-42: ключ живёт до закрытия вкладки, если явно не попросить запомнить -->
+      <label class="key-remember"><input type="checkbox" id="keyRemember"> Запомнить на этом устройстве</label>
+      <p class="hint">Тот же ключ, что в Настройках демо. По умолчанию — до закрытия вкладки; файлы на сервере ограничены сроком хранения.</p>
     </div>
   </section>
 
@@ -185,18 +354,25 @@ if (location.hostname === 'briix.ru' || location.hostname === 'www.briix.ru') {
       </button>
       <div id="profileMenu" class="menu" role="menu" aria-labelledby="profileBtn" hidden>
         <span id="profileNick" class="menu-nick"></span>
-        <button type="button" role="menuitem" id="profileKeyBtn">Ключ стенда…</button>
+        <button type="button" role="menuitem" id="profileKeyBtn">Ключ доступа…</button>
         <button type="button" role="menuitem" id="profileLogoutBtn">Выйти</button>
+        <button type="button" role="menuitem" id="profileWipeBtn" class="danger">Выйти и очистить это устройство</button>
       </div>
     </div>
   </nav>
 </main>
-<script src="./wait-phrases.js?v=20261114"></script>
-<script src="./wait-ui.js?v=20261114"></script>
-<script src="session-store.js?v=20261114-agent-b-1"></script>
-<script src="waveform.js?v=20261114-peaks-1"></script>
-<script src="producer-brain.js?v=20261114-agent-b-1"></script>
-<script src="music-brain.js?v=20261114-agent-b-1"></script>
-<script src="studio.js?v=20261114-agent-b-1"></script>
+<!-- T-35: 7 блокирующих скриптов стали defer (парсинг не ждёт, порядок сохранён);
+     wait-phrases.js (24,6 КБ данных) вообще не в HTML — wait-ui.js подтягивает
+     его лениво при первом живом ожидании -->
+<script defer src="./wait-ui.js?v=8c1753e686"></script>
+<script defer src="catalog.js?v=a9dd9e6116"></script>
+<script defer src="ops.js?v=760bf48ea0"></script>
+<script defer src="toasts.js?v=50285e4a33"></script>
+<script defer src="session-store.js?v=52128a0386"></script>
+<script defer src="waveform.js?v=0ee97fc2a9"></script>
+<script defer src="player.js?v=778d4b4c76"></script>
+<script defer src="producer-brain.js?v=f82a6e65db"></script>
+<script defer src="music-brain.js?v=c4f9d1bc83"></script>
+<script defer src="studio.js?v=ccc487f3e2"></script>
 </body>
 </html>

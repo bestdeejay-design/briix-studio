@@ -9,6 +9,7 @@
   const DEFAULT_SERVER = 'http://127.0.0.1:8300';
   const SERVER_KEY = 'briix-media-live-server';
   const TOKEN_KEY = 'briix-media-live-token';
+  const TOKEN_SESSION_KEY = 'briix-media-live-token-session'; // T-42: ключ до закрытия вкладки
   const MUSIC_MODELS = { flash: 'ace-step-flash', pro: 'ace-step-pro' };
   const MODEL_LABELS = { flash: 'Flash', pro: 'Pro' };
   const MODE_LABELS = { chat: 'Чат', photo: 'Фото', music: 'Музыка' };
@@ -16,7 +17,7 @@
   const PLACEHOLDERS = {
     chat: 'Что создаём?',
     photo: 'Что рисуем? Опишите изображение…',
-    music: 'Опиши трек или спроси наставника…'
+    music: 'Опишите трек или спросите наставника…' // F-52: единое «вы»
   };
 
   const ASSISTANTS = {
@@ -46,27 +47,50 @@
     if (host !== '127.0.0.1' && host !== 'localhost') return location.origin + '/api';
     try { return JSON.parse(localStorage.getItem(SERVER_KEY)) || DEFAULT_SERVER; } catch { return DEFAULT_SERVER; }
   };
-  const token = () => localStorage.getItem(TOKEN_KEY) || '';
-  const setToken = v => { const s = String(v || '').trim(); if (s) localStorage.setItem(TOKEN_KEY, s); else localStorage.removeItem(TOKEN_KEY); };
-  // Ключ из ссылки (?key=...) — для показов: открыл ссылку с ключом, ключ сохранился сам
+  const token = () => sessionStorage.getItem(TOKEN_SESSION_KEY) || localStorage.getItem(TOKEN_KEY) || '';
+  // T-42: по умолчанию ключ живёт в sessionStorage (до закрытия вкладки);
+  // в localStorage — только явное «запомнить на этом устройстве». Ранее
+  // сохранённые localStorage-ключи продолжают работать (миграция безболезненна).
+  const setToken = (v, { remember = false } = {}) => {
+    const s = String(v || '').trim();
+    sessionStorage.removeItem(TOKEN_SESSION_KEY);
+    if (remember) localStorage.setItem(TOKEN_KEY, s); else localStorage.removeItem(TOKEN_KEY);
+    if (s && !remember) sessionStorage.setItem(TOKEN_SESSION_KEY, s);
+    else if (!s) sessionStorage.removeItem(TOKEN_SESSION_KEY);
+  };
+  const tokenRemembered = () => Boolean(localStorage.getItem(TOKEN_KEY));
+  // Ключ из ссылки (?key=...) — для показов: открыл ссылку с ключом, ключ
+  // сохранился сам. T-42: только на сессию вкладки, и URL чистится сразу —
+  // ключ не остаётся в адресной строке, истории, закладках и логах прокси.
   try {
     const urlKey = new URLSearchParams(location.search).get('key');
-    if (urlKey && urlKey.trim()) setToken(urlKey);
+    if (urlKey && urlKey.trim()) {
+      setToken(urlKey);
+      history.replaceState(null, '', location.pathname + location.hash);
+    }
   } catch { /* ignore */ }
   const headers = () => ({ Authorization: 'Bearer ' + token(), 'Content-Type': 'application/json' });
+
+  // Каталог моделей (F-59): один запрос за сессию, без авторизации. Сбой
+  // не мешает работе — ожидание просто останется без ориентира времени.
+  BRIIX_CATALOG.load(server()).catch(() => {});
 
   class BusError extends Error {
     constructor(code, message, status = 0) { super(message || code); this.code = code; this.status = status; }
   }
 
   async function request(path, options = {}) {
+    // T-26: если сеть точно отвалилась (событие offline), не жжём браузерные
+    // таймауты на каждый запрос — сразу честная ошибка с понятной причиной.
+    if (!netOnline) throw new BusError('offline', 'Нет соединения с сервером. Проверьте сеть и повторите — данные не потеряются.');
     let response;
     try { response = await fetch(server() + path, options); }
     catch (error) {
       if (error?.name === 'AbortError') throw error;
-      throw new BusError('network', 'Стенд недоступен: ' + server() + ' не отвечает.');
+      // F-53: без служебного URL и внутреннего жаргона.
+      throw new BusError('network', 'Сервер не отвечает. Проверьте подключение — мы повторим автоматически.');
     }
-    if (response.status === 401) throw new BusError('unauthorized', 'Ключ отклонён стендом (401). Проверьте ключ.', 401);
+    if (response.status === 401) throw new BusError('unauthorized', 'Ключ не принят. Проверьте ключ в профиле — меню рядом с историей.', 401);
     if (response.status === 422 || response.status === 400) {
       let payload = null;
       try { payload = await response.json(); } catch { /* пустое тело */ }
@@ -81,7 +105,17 @@
       error.retryAfter = response.headers.get('Retry-After');
       throw error;
     }
-    if (!response.ok) throw new BusError('http', 'Сервер ответил ' + response.status + '.', response.status);
+    if (!response.ok) {
+      // T-09: сервер отдаёт конверт {error:{code,message,request_id}} и для 404/5xx —
+      // показываем его, а не голый статус; код запроса идёт в карточку ошибки.
+      let payload = null;
+      try { payload = await response.json(); } catch { /* пустое тело */ }
+      const code = payload?.error?.code || 'http';
+      const message = payload?.error?.message || ('Сервер ответил ' + response.status + '.');
+      const error = new BusError(code, message, response.status);
+      if (payload?.error?.request_id) error.requestId = payload.error.request_id;
+      throw error;
+    }
     return response;
   }
 
@@ -97,13 +131,26 @@
     return text;
   }
 
+  // T-15: одно SSE-событие может состоять из нескольких data:-строк — по
+  // спецификации они склеиваются; \r\n (nginx/прокси) нормализуем. Раньше
+  // парсер понимал только одиночный data: с \n\n.
   function parseEvent(raw) {
-    const line = raw.split('\n').find(l => l.startsWith('data:'));
-    if (!line) return null;
-    const payload = line.slice(5).trim();
+    const lines = [];
+    for (const line of raw.split('\n')) {
+      const clean = line.endsWith('\r') ? line.slice(0, -1) : line;
+      if (clean.startsWith('data:')) lines.push(clean.slice(5).replace(/^ /, ''));
+    }
+    if (!lines.length) return null;
+    const payload = lines.join('\n').trim();
     if (!payload) return null;
     if (payload === '[DONE]') return { done: true };
-    try { return JSON.parse(payload); } catch { return null; }
+    try { return JSON.parse(payload); } catch { /* возможно, прокси побил JSON на строки */ }
+    if (lines.length > 1) {
+      const joined = lines.join('').trim();
+      if (joined === '[DONE]') return { done: true };
+      try { return JSON.parse(joined); } catch { return null; }
+    }
+    return null;
   }
 
   async function chatStream({ messages, onChunk, signal }) {
@@ -115,20 +162,27 @@
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '', delivered = '';
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      let index;
-      while ((index = buffer.indexOf('\n\n')) >= 0) {
-        const event = parseEvent(buffer.slice(0, index));
-        buffer = buffer.slice(index + 2);
-        if (!event) continue;
-        if (event.done) { reader.cancel().catch(() => {}); buffer = ''; break; }
-        if (event.error) throw new BusError(event.error.code || 'upstream_error', event.error.message || 'Ошибка бэкенда посреди потока.');
-        const piece = event.choices?.[0]?.delta?.content;
-        if (piece) { delivered += piece; onChunk?.(piece); }
+    // T-15: reader отменяется при ЛЮБОМ выходе — ошибке события, исключении в
+    // onChunk, отмене по ✕. Раньше тело ответа оставалось открытым до GC.
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let match;
+        // T-15: разделитель — и \n\n, и \r\n\r\n (прокси перекодируют переводы строк).
+        while ((match = buffer.match(/\r\n\r\n|\n\n/))) {
+          const event = parseEvent(buffer.slice(0, match.index));
+          buffer = buffer.slice(match.index + match[0].length);
+          if (!event) continue;
+          if (event.done) { buffer = ''; break; }
+          if (event.error) throw new BusError(event.error.code || 'upstream_error', event.error.message || 'Ошибка бэкенда посреди потока.');
+          const piece = event.choices?.[0]?.delta?.content;
+          if (piece) { delivered += piece; onChunk?.(piece); }
+        }
       }
+    } finally {
+      try { reader.cancel().catch(() => {}); } catch { /* поток уже закрыт */ }
     }
     if (!delivered) throw new BusError('empty_stream', 'Сервер закрыл поток без текста.');
     return delivered;
@@ -142,25 +196,40 @@
   }
 
   let activePolls = 0;
-  async function pollJob(id, { onStatus, intervalMs = 2000, timeoutMs = 40 * 60000, shouldStop }) {
+  async function pollJob(id, { onStatus, intervalMs = 2000, timeoutMs = 40 * 60000, shouldStop, onRetry }) {
     const started = Date.now();
     let failures = 0, retryWait = 0;
     activePolls++;
     try {
-      while (Date.now() - started < timeoutMs) {
+      // T-26: время в скрытой вкладке не сжигает бюджет ожидания — серверная
+      // задача там продолжает работать, поллинг возобновится при возврате.
+      while (Date.now() - started - hiddenMs() < timeoutMs) {
         if (shouldStop?.()) throw new BusError('cancelled', 'Ожидание остановлено. Задача продолжает выполняться на сервере — результат не сохранится.');
         await new Promise(r => setTimeout(r, Math.max(intervalMs, activePolls * 2500, retryWait)));
+        // T-26: фоновой вкладке поллинг не нужен (THREAD_BUDGET=8 на стенде) —
+        // паркуемся до возврата; при возврате запрос уходит сразу же.
+        await waitPageVisible();
+        await waitNetOnline();
         if (shouldStop?.()) throw new BusError('cancelled', 'Ожидание остановлено. Задача продолжает выполняться на сервере — результат не сохранится.');
         let response;
         try { response = await request('/jobs/' + encodeURIComponent(id), { headers: headers() }); }
         catch (error) {
-          if (![429, 503].includes(error.status) || failures >= 3) throw error;
-          const fakeResponse = { headers: { get: () => error.retryAfter } };
-          retryWait = retryDelay(fakeResponse, failures++);
+          // 404 — задача исчезла (retention/перезапуск): ретраить бессмысленно (T-14).
+          if (error.status === 404) throw new BusError('job_gone', 'Задача исчезла на сервере (404) — возможно, истёк срок хранения.', 404);
+          // 401 ретраить нет смысла; остальное (сеть, 5xx, очередь) — транзиентное:
+          // держим удар до 5 сбоев подряд с бэкоффом (T-14: один потерянный пакет
+          // больше не рвёт 10-минутную pro-генерацию).
+          if (error.status === 401 || error.name === 'AbortError') throw error;
+          // T-26: известный офлайн — не сбой, а пауза: счётчик не растёт.
+          if (error.code === 'offline') { failures = 0; retryWait = 0; onRetry?.(0); continue; }
+          failures++;
+          if (failures >= 5) throw error;
+          retryWait = retryDelay({ headers: { get: () => error.retryAfter } }, failures - 1);
           if (retryWait > 30000) throw error;
+          onRetry?.(failures);
           continue;
         }
-        failures = 0; retryWait = 0;
+        if (failures) { failures = 0; retryWait = 0; onRetry?.(0); }
         const data = await response.json();
         onStatus?.(data);
         if (data.status === 'ready') {
@@ -168,7 +237,11 @@
           return data;
         }
         if (['error', 'failed', 'cancelled', 'expired'].includes(data.status)) {
-          throw new BusError(data.status, 'Задача не завершена: ' + (data.error?.message || data.status) + '.');
+          // F-53: сырой английский статус не показываем — переводим причину.
+          const reason = data.status === 'expired' ? 'истёк срок хранения файла'
+            : data.status === 'cancelled' ? 'задача отменена'
+            : (data.error?.message || 'сервер не смог завершить задачу');
+          throw new BusError(data.status, 'Задача не завершилась: ' + reason + '.');
         }
       }
       throw new BusError('timeout', 'Задача выполняется слишком долго — ожидание прервано.');
@@ -229,7 +302,10 @@
     profileKeyBtn: $('profileKeyBtn'), profileLogoutBtn: $('profileLogoutBtn'), keyStatus: $('keyStatus'),
     tabs: $('tabs'), lib: $('lib'), sessionsOpen: $('sessionsOpen'), sessionsOverlay: $('sessionsOverlay'),
     sessionsDialog: $('sessionsDialog'), sessionsClose: $('sessionsClose'), sessionsNew: $('sessionsNew'),
-    sessionsList: $('sessionsList'), storageWarning: $('storageWarning')
+    sessionsList: $('sessionsList'), storageWarning: $('storageWarning'),
+    opsOverlay: $('opsOverlay'), opsText: $('opsText'), opsStopLogout: $('opsStopLogout'),
+    opsStay: $('opsStay'), opsCancel: $('opsCancel'), opsBadge: $('opsBadge'),
+    keyRemember: $('keyRemember'), profileWipeBtn: $('profileWipeBtn'), netBanner: $('netBanner')
   };
 
   let mode = 'chat';
@@ -237,12 +313,9 @@
   let instrumental = false; // вокальный контур починен (infra#79) — дефолт снова «Песня»; выбор хранится в браузере
   try { const savedInstr = localStorage.getItem('briix-studio-instrumental'); if (savedInstr !== null) instrumental = savedInstr === '1'; } catch {}
   let advanced = false;
-  let chatActive = false;
-  let musicChatActive = false;
-  // Источник лирики и название трека для transparency-блока и params.title:
-  // выставляются путём, который знает происхождение (наставник/пользователь/автолирика).
-  let pendingLyricsSource = null;
-  let pendingTrackTitle = null;
+  // T-20/F-06: занятость диалога — свойство сессии, а не модуля: стрим в сессии A
+  // не блокирует ввод в сессии B. Ключ — id сессии, значение { kind, stop }.
+  const sessionBusy = new Map();
   const improving = new Set();
   let sessionProfile = null, sessionBackend = null, activeSession = null;
   let storageBlocked = true, storageDirty = false, pendingSaves = 0, saveQueue = Promise.resolve();
@@ -255,6 +328,86 @@
     feedObjectUrls.add(url);
     return url;
   }
+
+  // ---- T-30/T-31: единый LRU-кэш медиа-файлов --------------------------------
+  // Аудио/фото/скачивания делят один кэш: objectURL у каждого файла ОДИН,
+  // выталкивание по давности (≤8 файлов и ≤32 МБ) ревочит URL. Файл, который
+  // прямо сейчас виден (img/audio в DOM) или играется, не выталкиваем.
+  // Прежде: blobCache/blobTypes/blobBytes без предела роста (65 МБ на 50 треков)
+  // плюс одноразовый URL на каждый клик «Скачать», живший до выхода.
+  const MEDIA_CACHE_MAX_FILES = 8;
+  const MEDIA_CACHE_MAX_BYTES = 32 * 1024 * 1024;
+  const mediaFiles = new Map(); // key → { blob, url }; порядок = давность использования
+  let mediaFilesBytes = 0;
+  let mediaTmpSeq = 0;
+  function mediaKey(path) { return currentUser() + '|' + (path || ''); }
+  function mediaCacheGet(key) {
+    const entry = mediaFiles.get(key);
+    if (!entry) return null;
+    mediaFiles.delete(key); mediaFiles.set(key, entry); // касание — в конец
+    return entry;
+  }
+  function mediaCachePut(key, blob) {
+    const existing = mediaFiles.get(key);
+    if (existing) { mediaFiles.delete(key); mediaFiles.set(key, existing); return existing; }
+    const entry = { blob, url: URL.createObjectURL(blob) };
+    mediaFiles.set(key, entry);
+    mediaFilesBytes += blob.size;
+    mediaCacheTrim();
+    return entry;
+  }
+  function mediaCacheDrop(key) {
+    const entry = mediaFiles.get(key);
+    if (!entry) return;
+    mediaFiles.delete(key); mediaFilesBytes -= entry.blob.size;
+    URL.revokeObjectURL(entry.url);
+  }
+  function mediaInUse(url) {
+    if (BriixPlayer.current?.src === url) return true;
+    try { return !!document.querySelector('audio[src="' + url + '"], img[src="' + url + '"]'); } catch { return false; }
+  }
+  function mediaCacheTrim() {
+    for (const [key, entry] of mediaFiles) {
+      if (mediaFiles.size <= MEDIA_CACHE_MAX_FILES && mediaFilesBytes <= MEDIA_CACHE_MAX_BYTES) break;
+      if (mediaInUse(entry.url)) continue; // видимый/играющий файл закреплён
+      mediaCacheDrop(key);
+    }
+  }
+  function mediaCacheClear() {
+    for (const key of [...mediaFiles.keys()]) mediaCacheDrop(key);
+  }
+  // Кэш или загрузка: ключ — путь файла (с пользователем), чтобы чужой профиль
+  // не читал чужие блобы; без пути (in-memory блоб) — временный ключ.
+  function mediaEnsure(path, load) {
+    const key = path ? mediaKey(path) : 'tmp:' + (++mediaTmpSeq);
+    const entry = path ? mediaCacheGet(key) : null;
+    if (entry) return Promise.resolve(entry);
+    return Promise.resolve().then(load).then(blob => mediaCachePut(key, blob));
+  }
+
+  // T-51: единственный активный звук — модуль player.js (лента/библиотека/restore
+  // проходят через BriixPlayer.claim): новое воспроизведение гасит предыдущее,
+  // метаданные MediaSession уходят на экран блокировки.
+  // Мини-плеер (R6): полоса под шапкой — заголовок, таймкод, play/pause;
+  // клик по названию возвращает к карточке трека.
+  const mp = { root: $('miniPlayer'), toggle: $('mpToggle'), title: $('mpTitle'), time: $('mpTime') };
+  BriixPlayer.subscribe(state => {
+    if (!state.audio || !state.audio.isConnected) { mp.root.hidden = true; return; }
+    mp.root.hidden = false;
+    mp.title.textContent = (state.meta?.title || 'Трек') + (state.meta?.artist ? ' — ' + state.meta.artist : '');
+    mp.toggle.textContent = state.playing ? '⏸' : '▶';
+    mp.toggle.setAttribute('aria-label', state.playing ? 'Пауза' : 'Продолжить воспроизведение');
+    mp.time.textContent = BriixPlayer.fmtTime(state.audio.currentTime || 0) + ' / ' + BriixPlayer.fmtTime(state.audio.duration || 0);
+  });
+  mp.toggle.addEventListener('click', () => {
+    const audio = BriixPlayer.current;
+    if (!audio) return;
+    if (audio.paused) audio.play().catch(() => {}); else audio.pause();
+  });
+  mp.title.addEventListener('click', () => {
+    const card = BriixPlayer.current?.closest('.card');
+    if (card) { setView('chat'); card.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+  });
 
   function warnStorage(error) {
     storageDirty = true;
@@ -272,9 +425,51 @@
       els.storageWarning.append(exportButton);
     }
   }
+  // T-28: конфликт ревизий (другая вкладка записала раньше) — выбор версий,
+  // а не липкая плашка: «Заменить своей версией» / «Обновить».
+  let conflictOffered = false;
+  async function reloadProfileInPlace() {
+    const opened = await BriixSessionStore.open(currentUser());
+    sessionProfile = opened.profile; sessionBackend = opened.backend;
+    conflictOffered = false; storageDirty = false;
+    els.storageWarning.hidden = sessionBackend !== 'local';
+    activeSession = sessionProfile.sessions.find(s => s.id === sessionProfile.activeSessionId) || sessionProfile.sessions[0];
+    if (!activeSession) activeSession = sessionProfile.sessions[0] = newSessionRecord();
+    sessionProfile.activeSessionId = activeSession.id;
+    sessionRoots.clear();
+    els.feed.textContent = '';
+    ensureRoot(activeSession);
+    rootFor(activeSession).hidden = false;
+    loadDraft(activeSession);
+    renderOpsBadge();
+  }
+  function handleStorageConflict() {
+    if (conflictOffered) return; // один диалог за раз — не спамить на каждый ход очереди
+    conflictOffered = true;
+    const body = card('notice', 'Конфликт вкладок', 'Данные сессий изменились в другой вкладке. Эта вкладка не может сохранить свои изменения, пока не решён конфликт.', activeSession);
+    const actions = document.createElement('div'); actions.className = 'actions';
+    const mine = document.createElement('button'); mine.type = 'button'; mine.className = 'action'; mine.textContent = 'Заменить своей версией';
+    const refresh = document.createElement('button'); refresh.type = 'button'; refresh.className = 'action'; refresh.textContent = 'Обновить (потерять несохранённое)';
+    mine.addEventListener('click', async () => {
+      try {
+        const opened = await BriixSessionStore.open(currentUser());
+        sessionProfile.revision = opened.profile.revision; // перезаписать версию другой вкладки
+        conflictOffered = false;
+        if (await persistSessions()) body.closest('.card').remove();
+      } catch (error) { warnStorage(error); }
+    });
+    refresh.addEventListener('click', async () => {
+      try { await reloadProfileInPlace(); body.closest('.card').remove(); }
+      catch (error) { warnStorage(error); }
+    });
+    actions.append(mine, refresh); body.append(actions);
+  }
   function persistSessions() {
     if (!sessionProfile) return Promise.resolve(false);
-    const snapshot = JSON.parse(JSON.stringify(sessionProfile));
+    // T-32: structuredClone вместо JSON-раундтрипа — в 2–4 раза быстрее и не
+    // теряет undefined-поля; состояние сессий — только клонируемые данные
+    // (занятость живёт в sessionBusy вне профиля, undo/repeatOf — простые значения).
+    const snapshot = structuredClone(sessionProfile);
     storageDirty = true;
     pendingSaves++;
     saveQueue = saveQueue.then(async () => {
@@ -285,20 +480,69 @@
         els.storageWarning.hidden = sessionBackend !== 'local';
         if (sessionBackend === 'local') els.storageWarning.textContent = 'IndexedDB недоступна: сессии хранятся в localStorage этого браузера, объём ограничен.';
         return true;
-      } catch (error) { warnStorage(error); return false; }
+      } catch (error) {
+        if (error?.code === 'conflict') handleStorageConflict(); // T-28
+        else warnStorage(error);
+        return false;
+      }
       finally { pendingSaves--; }
     });
     return saveQueue;
   }
-  window.addEventListener('beforeunload', e => {
-    if (storageDirty || pendingSaves || producerSaveTimer) { e.preventDefault(); e.returnValue = ''; }
+  // T-25/F-33: черновик композера и продюсера пишутся с дебаунсом; pagehide
+  // флэшит оба таймера — закрытие вкладки больше не теряет последний ввод.
+  let draftSaveTimer = null;
+  function saveDraftSoon() {
+    if (draftSaveTimer || !activeSession) return;
+    draftSaveTimer = setTimeout(() => { draftSaveTimer = null; saveDraft(activeSession); persistSessions(); }, 400);
+  }
+  window.addEventListener('pagehide', () => {
+    if (producerSaveTimer) { clearTimeout(producerSaveTimer); producerSaveTimer = null; persistSessions(); }
+    if (draftSaveTimer) { clearTimeout(draftSaveTimer); draftSaveTimer = null; saveDraft(activeSession); persistSessions(); }
   });
+  // T-29: системный диалог закрытия — только когда реально теряется запись,
+  // которая идёт прямо сейчас. Неудачная запись раньше делала диалог липким
+  // навсегда; теперь об этом говорит только плашка с экспортом внутри страницы.
+  window.addEventListener('beforeunload', e => {
+    if (pendingSaves > 0) { e.preventDefault(); e.returnValue = ''; }
+  });
+
+  // F-35: клавиатура не накрывает композер. На Android Chrome 108+ это делает
+  // meta interactive-widget=resizableViewport (dvh уменьшается вместе с вьюпортом);
+  // на iOS meta не действует — там поднимаем композер сами, по visualViewport.
+  function syncKbInset(vv) {
+    const kb = Math.max(0, Math.round((window.innerHeight || 0) - (vv.height + (vv.offsetTop || 0))));
+    document.documentElement.style.setProperty('--kb-inset', kb > 24 ? kb + 'px' : '0px');
+    return kb;
+  }
+  if (window.visualViewport) {
+    const vv = window.visualViewport;
+    const onVv = () => syncKbInset(vv);
+    window.addEventListener('resize', onVv);
+    vv.addEventListener('resize', onVv);
+    vv.addEventListener('scroll', onVv);
+    onVv();
+    // Фокус в поле — держим каретку в видимой области, пока клавиатура выезжает.
+    document.addEventListener('focusin', e => {
+      if (!e.target.matches || !e.target.matches('textarea, input:not([type="checkbox"])')) return;
+      setTimeout(() => e.target.scrollIntoView({ block: 'nearest' }), 150);
+    });
+  }
+  window.__syncKbInset = syncKbInset; // hook для сюиты (F-35)
   function rootFor(session) { return sessionRoots.get(session.id); }
   function recordSessionJob(session, job, kind, input) {
     if (!session.jobs) session.jobs = [];
     session.jobs.push({ job, kind, input, createdAt: Date.now() });
     session.updatedAt = Date.now();
     persistSessions();
+  }
+  // T-52: выполненная джоба покидает session.jobs — результат уже в ленте (feed),
+  // повторный рендер при следующей загрузке не нужен.
+  function settleSessionJob(session, jobId) {
+    if (!session?.jobs?.length) return;
+    const before = session.jobs.length;
+    session.jobs = session.jobs.filter(x => x.job !== jobId);
+    if (session.jobs.length !== before) { session.updatedAt = Date.now(); persistSessions(); }
   }
   function feedPush(d, session = activeSession) {
     if (!session) return;
@@ -310,60 +554,151 @@
     session.updatedAt = Date.now();
     return persistSessions();
   }
+  // T-33: track — флаг, а не копия текста (раньше ответ хранился дважды:
+  // в text и в track). Старые записи со строкой в track читаются как раньше.
+  const trackBriefOf = d => (d.track === true ? d.text : (typeof d.track === 'string' ? d.track : ''));
   function feedRestore(session) {
-    for (const d of session.feed) {
-      if (!d || typeof d !== 'object') continue;
-      if (d.t === 'producer_draft') {
-        renderProducerDraft(d, session);
-      } else if (d.t === 'music_draft') {
-        renderMusicDraftCard(d, session);
-      } else if (d.t === 'media') {
-        if (d.kind === 'music') {
-          renderTrackCard(session, { who: d.who, job: d.job, cover: d.cover, input: d.input || {}, file: d.file,
-            loadBlob: () => fileBlob(d.file, 0) });
+    // F-39: восстановленная история — не «новые» карточки; пилюля не считается.
+    restoringFeed = true;
+    try {
+      for (const d of session.feed) {
+        if (!d || typeof d !== 'object') continue;
+        if (d.t === 'producer_draft') {
+          renderProducerDraft(d, session);
+        } else if (d.t === 'music_draft') {
+          renderMusicDraftCard(d, session);
+        } else if (d.t === 'media') {
+          if (d.kind === 'music') {
+            renderTrackCard(session, { who: d.who, job: d.job, cover: d.cover, input: d.input || {}, file: d.file,
+              loadBlob: () => fileBlob(d.file, 0) });
+          } else {
+            const body = card('assistant', d.who, '', session);
+            body.textContent = '';
+            // R2/T-18: фото-restore — тот же компонент, что fresh и Библиотека.
+            body.append(photoCard({ file: d.file, loadBlob: () => fileBlob(d.file, 1), alt: d.prompt || '' }).body);
+            if (d.track) addMakeTrackAction(body.closest('.card'), trackBriefOf(d));
+          }
         } else {
-          const body = card('assistant', d.who, '', session);
-          body.textContent = '';
-          const slot = document.createElement('div');
-          body.append(slot);
-          if (d.track) addMakeTrackAction(body.closest('.card'), d.track);
-          const owner = sessionProfile.nick;
-          const load = async () => {
-            slot.textContent = 'Загружаем файл…';
-            try {
-              const blob = await fileBlob(d.file, 1);
-              if (!slot.isConnected || currentUser() !== owner) return;
-              slot.textContent = '';
-              const img = new Image(); img.alt = 'Результат'; img.src = feedObjectURL(blob); slot.append(img);
-              addDownloadAction(body.closest('.card'), blob, 'briix-photo', '⬇ Скачать');
-            } catch (error) {
-              if (!slot.isConnected || currentUser() !== owner) return;
-              slot.textContent = 'Файл недоступен. ' + (error.message || '') + ' ';
-              const retry = document.createElement('button'); retry.type = 'button'; retry.className = 'action';
-              retry.textContent = 'Повторить'; retry.addEventListener('click', load); slot.append(retry);
-            }
-          };
-          slot.textContent = 'Изображение готово';
-          const observer = new IntersectionObserver((records, obs) => {
-            if (!slot.isConnected) { obs.disconnect(); return; }
-            if (records.some(record => record.isIntersecting)) { obs.disconnect(); load(); }
-          }, { rootMargin: '150px' });
-          observer.observe(slot);
+          const body = card(d.t, d.who, d.text, session);
+          if (d.t === 'assistant' && d.track) addMakeTrackAction(body.closest('.card'), trackBriefOf(d));
         }
-      } else {
-        const body = card(d.t, d.who, d.text, session);
-        if (d.t === 'assistant' && d.track) addMakeTrackAction(body.closest('.card'), d.track);
+      }
+    } finally { restoringFeed = false; }
+  }
+  const assistantId = { chat: 'mentor', photo: 'art-dir', music: 'producer' };
+  // T-22: бэкап полей перед «✨ Улучшить» живёт на сессии — undo в сессии B
+  // больше не подставляет текст из сессии A (и переживает перезагрузку).
+  function sessionUndo(session, field, value) {
+    if (!session) return;
+    if (value === undefined) return session.undo?.[field];
+    (session.undo ||= {})[field] = value;
+  }
+
+  // ---- T-52: ожидание переживает перезагрузку -------------------------------
+  // session.jobs пишется при отправке (recordSessionJob). На старте сессии
+  // спрашиваем сервер о судьбе каждой джобы: готовая — карточка результата,
+  // живая — карточка ожидания с поллингом, умершая — заметка. Мёртвые записи
+  // вычищаются, чтобы следующий reload не рисовал их заново.
+  async function resumeSessionJobs(session) {
+    if (!session || session !== activeSession) return;
+    const jobs = Array.isArray(session.jobs) ? session.jobs.slice() : [];
+    for (const rec of jobs) {
+      if (!rec?.job || (rec.kind !== 'music' && rec.kind !== 'photo')) continue;
+      try {
+        const response = await request('/jobs/' + encodeURIComponent(rec.job), { headers: headers() });
+        const data = await response.json();
+        if (data.status === 'ready' && data.result_url) {
+          settleSessionJob(session, rec.job);
+          await finishResumedJob(session, rec, data);
+        } else if (['error', 'failed', 'cancelled', 'expired'].includes(data.status)) {
+          settleSessionJob(session, rec.job);
+          card('notice', 'Генерация не завершена', 'Задача из прошлой сессии завершилась со статусом «' + data.status + '» — результат не сохранён.', session);
+        } else {
+          resumeWaitingJob(session, rec);
+        }
+      } catch (error) {
+        if (error.status === 404) {
+          settleSessionJob(session, rec.job);
+          card('notice', 'Задача исчезла', 'Задача прошлой сессии не найдена на сервере — срок хранения мог истечь.', session);
+        }
+        // транзиентные ошибки: запись остаётся в session.jobs — попробуем при следующей загрузке
       }
     }
   }
-  const assistantId = { chat: 'mentor', photo: 'art-dir', music: 'producer' };
-  const undoBackup = { lyrics: null, musicPrompt: null };
+  async function finishResumedJob(session, rec, data) {
+    if (rec.kind === 'music') {
+      renderTrackCard(session, { who: 'Трек готов', job: rec.job, cover: data.cover_url, input: rec.input || {},
+        file: data.result_url, loadBlob: () => fileBlob(data.result_url, 0) });
+      feedPush({ t: 'media', who: 'Трек готов', kind: 'music', file: data.result_url, job: rec.job, cover: data.cover_url || '', input: rec.input || {} }, session);
+      if (!libEntry(rec.job)) libAdd({ job: rec.job, sessionId: session.id, kind: 'music', prompt: rec.input?.prompt || '',
+        lyrics: rec.input?.lyrics || '', instrumental: rec.input?.instrumental, inputComplete: true, title: rec.input?.title || '',
+        model: rec.input?.model || '', file: data.result_url, cover: data.cover_url || '', created: Date.now(), fav: false });
+    } else {
+      const body = card('assistant', 'Фото готово', '', session);
+      body.textContent = 'Загружаем файл…';
+      try {
+        const blob = await fileBlob(data.result_url, 1);
+        if (session !== activeSession || !body.isConnected) return;
+        body.textContent = '';
+        // R2/T-18: восстановление готовой джобы — единая фото-карточка.
+        body.append(photoCard({ eagerBlob: blob, file: data.result_url }).body);
+      } catch (error) { if (body.isConnected) body.textContent = 'Файл недоступен. ' + (error.message || ''); }
+      feedPush({ t: 'media', who: 'Фото готово', kind: 'photo', file: data.result_url, job: rec.job }, session);
+      if (!libEntry(rec.job)) libAdd({ job: rec.job, sessionId: session.id, kind: 'photo', prompt: rec.input?.prompt || '', file: data.result_url, created: Date.now(), fav: false });
+    }
+  }
+  function resumeWaitingJob(session, rec) {
+    if (session !== activeSession) return;
+    const stageBody = card('stage', rec.kind === 'music' ? 'Музыка (продолжение)' : 'Фото (продолжение)', '', session);
+    const eta = etaNote(rec.kind === 'music' ? (rec.input?.model || '') : 'flux-2-klein-4b', 'продолжение');
+    const wait = waitRow(rec.kind === 'music' ? 'music' : 'image', rec.kind === 'music' ? 'synthesizing' : 'generating', { onTick: eta.update });
+    const handle = trackedHandle('resume', session, rec.kind === 'music' ? 'ожидание трека' : 'ожидание фото');
+    handle.jobId = rec.job;
+    appendStop(wait.row, handle);
+    stageBody.append(wait.row, eta.el);
+    (async () => {
+      try {
+        const result = await pollJob(rec.job, { shouldStop: () => handle.cancelled, onStatus: d => {
+          if (d.stage) stageBody.querySelector('[data-wait]')?.setAttribute('data-wait-stage', d.stage);
+        }, onRetry: n => setStatus(n ? ('Связь прерывается, пробуем снова (' + n + '/5)…') : 'Работаем…', true) });
+        settleSessionJob(session, rec.job);
+        wait.stop();
+        stageBody.closest('.card').remove();
+        await finishResumedJob(session, rec, result);
+      } catch (error) {
+        wait.stop();
+        stageBody.closest('.card').remove();
+        if (error.name === 'AbortError' || error.code === 'cancelled') {
+          const note = card('notice', 'Ожидание остановлено', 'Отменяем задачу на сервере…', session);
+          const applyCancelNote = ok => {
+            if (ok) settleSessionJob(session, rec.job);
+            if (note?.isConnected) note.textContent = ok
+              ? 'Задача отменена на сервере — очередь и GPU освобождены.'
+              : 'Отменить задачу на сервере не удалось. Проверьте результат в библиотеке.';
+          };
+          if (handle.serverCancelled === null) handle.onServerCancel = applyCancelNote; else applyCancelNote(handle.serverCancelled);
+        } else {
+          card('error', 'Ошибка', error.message || 'Неизвестная ошибка.', session);
+        }
+      } finally { handle.unregister?.(); }
+    })();
+  }
 
   // Каждая генерация — независимая: свой контроллер отмены и свой ✕ в карточке.
   // Параллельно можно: писать в чат, запускать новые генерации, менять режимы/модели.
   function makeCancelHandle() {
-    const h = { cancelled: false, controller: new AbortController(), stopBtn: null };
-    h.stop = () => { h.cancelled = true; h.controller.abort(); };
+    const h = { cancelled: false, controller: new AbortController(), stopBtn: null, jobId: null, serverCancelled: null, onServerCancel: null };
+    h.stop = () => {
+      h.cancelled = true;
+      h.controller.abort();
+      // T-05: ✕ гасит не только ожидание, но и саму джобу на сервере, иначе
+      // стенд дожёвывает GPU вхолостую (POST /jobs/{id}/cancel, есть в bff.py).
+      if (h.jobId) {
+        request('/jobs/' + encodeURIComponent(h.jobId) + '/cancel', { method: 'POST', headers: headers() })
+          .then(() => { h.serverCancelled = true; h.onServerCancel?.(true); })
+          .catch(() => { h.serverCancelled = false; h.onServerCancel?.(false); });
+      }
+    };
     return h;
   }
   // ✕ в строке ожидания: гасит только свою генерацию.
@@ -378,6 +713,14 @@
     row.append(b);
     handle.stopBtn = b;
     return b;
+  }
+
+  // T-24: операция с ✕ попадает в реестр (ops.js) — «остановить и выйти» гасит
+  // их все: локальный abort + cancel джобы на сервере (T-05). Снятие — в finally.
+  function trackedHandle(kind, session, title = '') {
+    const handle = makeCancelHandle();
+    handle.unregister = BRIIX_OPS.register({ kind, sessionId: session?.id || '', title, stop: () => handle.stop() });
+    return handle;
   }
 
   function setStatus(text, isBusy) {
@@ -459,22 +802,84 @@
       renderChrome();
     }
   })));
-  attachMenu(els.modelChip, els.modelMenu, () => Object.keys(MUSIC_MODELS).map(q => ({
-    label: MODEL_LABELS[q], sub: MUSIC_MODELS[q], selected: q === quality,
-    onPick: () => { quality = q; renderChrome(); }
-  })));
+  attachMenu(els.modelChip, els.modelMenu, () => {
+    // Честная карточка модели (F-59): идентификатор + замеренный ориентир +
+    // статус из каталога. Каталог может быть не загружен — тогда без статуса.
+    BRIIX_CATALOG.load(server()).catch(() => {});
+    return Object.keys(MUSIC_MODELS).map(q => {
+      const id = MUSIC_MODELS[q];
+      const cat = BRIIX_CATALOG.model(id);
+      const etaS = BRIIX_CATALOG.etaSeconds(id);
+      const bits = [id];
+      if (etaS) bits.push('~' + fmtMinutes(etaS));
+      if (cat && !cat.ready) bits.push('недоступна');
+      return { label: MODEL_LABELS[q], sub: bits.join(' · '), selected: q === quality, onPick: () => { quality = q; renderChrome(); } };
+    });
+  });
 
   // ---- карточки ленты ---------------------------------------------------------
   // Автоскролл только когда лента у низа: читающие выше не выдёргиваются.
   // force — для нового сообщения пользователя (всегда показываем его).
-  function scrollFeed(force = false) {
-    const nearBottom = els.feed.scrollHeight - els.feed.scrollTop - els.feed.clientHeight < 140;
-    if (force || nearBottom) els.feed.scrollTop = els.feed.scrollHeight;
+  function isFeedNearBottom() {
+    return els.feed.scrollHeight - els.feed.scrollTop - els.feed.clientHeight < 140;
   }
+  function scrollFeed(force = false) {
+    if (force || isFeedNearBottom()) els.feed.scrollTop = els.feed.scrollHeight;
+  }
+
+  // ---- F-39: пилюля «↓ N новых» ----------------------------------------------
+  // Читатель выше низа ленты не пропускает готовые треки/фото: пока он не у
+  // низа, живые (не restore) карточки считаются, пилюля у нижней границы
+  // ленты ведёт к ним. Убранные карточки (stage → результат) счёт уменьшают.
+  let newBelowPill = null;
+  const newBelowCards = new Set();
+  function ensurePill() {
+    if (!newBelowPill) {
+      const pill = document.createElement('button');
+      pill.type = 'button';
+      pill.id = 'newBelow';
+      pill.className = 'new-below';
+      pill.hidden = true;
+      pill.addEventListener('click', () => { scrollFeed(true); });
+      newBelowPill = pill;
+    }
+    els.feed.append(newBelowPill); // append переносит узел в конец — за карточками сессии
+    return newBelowPill;
+  }
+  function paintPill() {
+    const n = newBelowCards.size;
+    if (!n || isFeedNearBottom() || els.feed.hidden) {
+      newBelowCards.clear();
+      if (newBelowPill) newBelowPill.hidden = true; // пустой счёт не создаёт узел
+      return;
+    }
+    const pill = ensurePill();
+    pill.textContent = '↓ ' + n + (n === 1 ? ' новое' : ' новых');
+    pill.setAttribute('aria-label', n === 1 ? 'К новому сообщению в ленте' : 'К ' + n + ' новым сообщениям в ленте');
+    pill.hidden = false;
+  }
+  // Уход карточки (stage снят, ошибка убрана) уменьшает счёт; свои сообщения
+  // пользователь видит всегда (force-скролл) — их не считаем.
+  function noteNewCard(cardEl) {
+    newBelowCards.add(cardEl);
+    paintPill();
+  }
+  if (typeof MutationObserver === 'function') {
+    new MutationObserver(() => {
+      let changed = false;
+      for (const el of newBelowCards) if (!el.isConnected) { newBelowCards.delete(el); changed = true; }
+      if (changed) paintPill();
+    }).observe(els.feed, { childList: true, subtree: true });
+  }
+  els.feed.addEventListener('scroll', () => { if (isFeedNearBottom() && newBelowCards.size) paintPill(); }, { passive: true });
+
+  // Флаг «идёт восстановление истории»: старые карточки не считаются новыми.
+  let restoringFeed = false;
 
   function card(kind, who, text, session = activeSession) {
     const div = document.createElement('div');
     div.className = 'card ' + kind;
+    if (kind === 'stage') div.setAttribute('role', 'status'); // F-50: карточка ожидания объявляется скринридеру
     const whoEl = document.createElement('div');
     whoEl.className = 'who';
     whoEl.textContent = who;
@@ -484,8 +889,42 @@
     div.append(whoEl, body);
     const root = session && rootFor(session);
     (root || els.feed).append(div);
-    if (session === activeSession) scrollFeed(kind === 'user');
+    if (session === activeSession) {
+      if (kind === 'user') scrollFeed(true);
+      else if (kind !== 'stage' && !restoringFeed) {
+        // читатель у низа — едем за карточкой; выше низа — пилюля (F-39)
+        if (isFeedNearBottom()) scrollFeed();
+        else noteNewCard(div);
+      } else scrollFeed(kind === 'user');
+    }
     return body;
+  }
+
+  // ---- T-39: стрим без layout thrash -----------------------------------------
+  // Чанки копятся и применяются ОДНИМ requestAnimationFrame — один reflow на
+  // кадр вместо записи+чтения геометрии на каждый токен. Автоскролл — только
+  // если на момент кадра читатель был у низа, и тоже не чаще кадра.
+  function streamSink(textSpan, wait) {
+    let buffer = '', rafId = 0, first = true;
+    const flush = () => {
+      rafId = 0;
+      if (!buffer) return;
+      const stick = isFeedNearBottom(); // геометрию читаем ДО записи текста
+      if (first && wait?.isConnected) { wait.remove(); first = false; }
+      textSpan.textContent += buffer;
+      buffer = '';
+      if (stick) els.feed.scrollTop = els.feed.scrollHeight;
+    };
+    return {
+      push(piece) {
+        buffer += piece;
+        if (!rafId) rafId = requestAnimationFrame(flush);
+      },
+      // Досрочно применить накопленное (отмена/ошибка): недоставленный текст
+      // не должен пропасть из-за того, что кадр не успел наступить.
+      sync() { if (rafId) { cancelAnimationFrame(rafId); flush(); } },
+      dispose() { if (rafId) { cancelAnimationFrame(rafId); rafId = 0; } }
+    };
   }
 
   // Мини-спиннер + ротация фраз живого ожидания (wait-ui.js). Клик по ленте не нужен:
@@ -508,8 +947,41 @@
     const s = Math.floor(ms / 1000);
     return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
   }
+  // Человекочитаемые минуты для ориентира: «минуту» / «2 минуты» / «10 минут».
+  function fmtMinutes(seconds) {
+    const m = Math.round(seconds / 60);
+    if (m <= 1) return 'минуту';
+    const plural = m % 10 >= 2 && m % 10 <= 4 && (m % 100 < 10 || m % 100 >= 20) ? 'ы' : '';
+    return m + ' минут' + plural;
+  }
+  // Тональная зона фраз (F-62): 0–30 с — ранний тон, 30–180 с — рабочий, дальше — долгий.
+  function waitZone(ms) { return ms < 30000 ? 'early' : ms < 180000 ? 'mid' : 'late'; }
+  // Честный ориентир ожидания из каталога моделей (F-59): не процент и не обещание,
+  // а замер стенда + мягкая шкала «прошло X из ~Y». Превышение ×1,5 — смена тона.
+  function etaNote(modelId, humanLabel) {
+    const el = document.createElement('div');
+    el.className = 'stage-eta';
+    const sec = typeof BRIIX_CATALOG !== 'undefined' ? BRIIX_CATALOG.etaSeconds(modelId) : null;
+    if (!sec) { el.hidden = true; return { el, seconds: null, update: () => {} }; }
+    const approx = fmtMinutes(sec);
+    const base = 'Ориентир: ~' + approx + (humanLabel ? ' (' + humanLabel + ')' : '') + ' — по замеру сервера.';
+    el.textContent = base;
+    let shownLate = false;
+    return {
+      el, seconds: sec,
+      update(ms) {
+        const late = ms > sec * 1500;
+        if (late !== shownLate) { shownLate = late; el.classList.toggle('late', late); }
+        el.textContent = late
+          ? 'Дольше обычного (~' + approx + '). Задача продолжается на сервере и появится в библиотеке — можно подождать или остановить (✕).'
+          : (ms < 20000 ? base : 'Прошло ' + fmtElapsed(ms) + ' из ~' + approx + '.');
+      }
+    };
+  }
   // wait-line + секундомер в один ряд; таймер чистится при удалении карточки.
-  function waitRow(type, stage) {
+  // onTick — подписка на ежесекундный тик (ориентир F-59 обновляется тем же тиком);
+  // он же переводит фразы в тональную зону по времени (F-62).
+  function waitRow(type, stage, { onTick } = {}) {
     const t0 = Date.now();
     const elapsed = document.createElement('span');
     elapsed.className = 'stage-elapsed';
@@ -517,10 +989,30 @@
     const row = document.createElement('div');
     row.className = 'wait-row';
     row.append(waitLine(type, stage), elapsed);
-    const timer = setInterval(() => { elapsed.textContent = fmtElapsed(Date.now() - t0); }, 1000);
+    const phrase = () => row.querySelector('[data-wait]');
+    const timer = setInterval(() => {
+      const ms = Date.now() - t0;
+      elapsed.textContent = fmtElapsed(ms);
+      const p = phrase();
+      if (p && p.dataset.waitMock !== '1') {
+        const zone = waitZone(ms);
+        if (p.dataset.waitZone !== zone) p.dataset.waitZone = zone; // смена зоны обновляет фразу
+      }
+      onTick?.(ms);
+    }, 1000);
     return { row, stop: () => clearInterval(timer) };
   }
 
+  // F-55: заголовок карточки ошибки называет тип неполадки — не всё «Ошибка».
+  function errorTitle(error) {
+    if (error.code === 'network') return 'Нет соединения';
+    if (error.code === 'unauthorized') return 'Ключ';
+    if (error.code === 'queue_full' || error.code === 'unavailable') return 'Сервер занят';
+    if (error.code === 'job_gone' || error.code === 'expired') return 'Файл устарел';
+    if (error.code === 'timeout') return 'Долго нет ответа';
+    if (error.code === 'bad_response' || error.code === 'empty_stream') return 'Сервер ответил странно';
+    return 'Ошибка';
+  }
   function errorCard(error, session = activeSession) {
     if (error.name === 'AbortError' || error.code === 'cancelled') {
       card('notice', 'Остановлено', 'Генерацию остановили — текст остался в поле, можно править и запустить снова.', session);
@@ -532,28 +1024,53 @@
       return;
     }
     if (error.code === 'unauthorized' && session === activeSession) { els.keyCard.hidden = false; els.keyInput.focus(); }
-    card('error', 'Ошибка', error.message || 'Неизвестная ошибка.', session);
+    const support = error.requestId ? ' Код запроса для поддержки: ' + error.requestId + '.' : '';
+    // F-54: что случилось → что сделать; F-55: тип в заголовке.
+    const hint = error.code === 'network' ? ' Проверьте интернет и попробуйте снова.'
+      : error.code === 'not_found' || error.code === 'job_gone' ? ' Нажмите «Повторить с правками», чтобы сгенерировать заново.'
+      : '';
+    card('error', errorTitle(error), (error.message || 'Неизвестная ошибка.') + hint + support, session);
   }
 
-  let pendingMusicSource = null;
-  function repeatMusic(entry, input) {
+  async function repeatMusic(entry, input) {
     if (storageBlocked) return;
-    const source = input || { prompt: entry.prompt || '', lyrics: entry.lyrics || '', model: entry.model || '', instrumental: !!entry.instrumental };
-    if (!input && !entry.inputComplete && !confirm('Данные старого трека могут быть неполными: промпт мог быть сокращён. Продолжить с тем, что сохранилось?')) return;
+    const has = v => typeof v === 'string' && v.trim();
+    // F-20: пустой input (серверный трек без локальной сессии) не должен затирать
+    // черновик пользователя пустотой — источник собирается из того, что сохранилось.
+    const source = (input && (has(input.prompt) || has(input.lyrics)))
+      ? { ...input, prompt: input.prompt || entry.prompt || '', lyrics: input.lyrics || entry.lyrics || '', model: input.model || entry.model || '', instrumental: input.instrumental ?? !!entry.instrumental }
+      : { prompt: entry.prompt || '', lyrics: entry.lyrics || '', model: entry.model || '', instrumental: !!entry.instrumental };
+    if (!has(source.prompt) && !has(source.lyrics)) {
+      card('notice', 'Повтор с правками', 'Для этого трека не сохранилось ни промпта, ни лирики — повторять не с чем. Текущий черновик не тронут.');
+      return;
+    }
+    if (input && (has(input.prompt) || has(input.lyrics))) {
+      // inputComplete === false — флаг старых записей библиотеки; у карточек ленты
+      // полного снимка input считается полным.
+      if (entry.inputComplete === false && !(await BRIIX_TOASTS.confirmDialog({ title: 'Повтор с правками', body: 'Данные старого трека могут быть неполными: промпт мог быть сокращён. Продолжить с тем, что сохранилось?', confirmLabel: 'Продолжить' }))) return;
+    } else {
+      // Серверная запись: промпт обрезан до 200 знаков, лирика — до лимита сервера.
+      const what = has(source.prompt) && has(source.lyrics) ? 'промпт и лирика (возможно, сокращённые)'
+        : (has(source.prompt) ? 'только промпт (' + source.prompt.length + ' зн. — сервер хранит сокращённую версию)' : 'только лирика');
+      if (!(await BRIIX_TOASTS.confirmDialog({ title: 'Повтор с правками', body: 'Для этого трека сохранился ' + what + '. Продолжить с тем, что есть?', confirmLabel: 'Продолжить' }))) return;
+    }
     const musicDraft = mode === 'music' ? (els.prompt.value || els.musicPrompt.value || els.lyrics.value) : (drafts.music || els.musicPrompt.value || els.lyrics.value);
-    if (musicDraft.trim() && !confirm('Заменить текущий музыкальный черновик данными этого трека?')) return;
+    if (musicDraft.trim() && !(await BRIIX_TOASTS.confirmDialog({ title: 'Заменить черновик?', body: 'Текущий музыкальный черновик будет заменён данными этого трека. Прежний текст можно вернуть кнопкой ↩ после «Улучшить», но лучше скопировать его сейчас.', confirmLabel: 'Заменить', danger: true }))) return;
     setView('chat'); setMode('music'); advanced = true;
     els.musicPrompt.value = source.prompt || ''; els.lyrics.value = source.lyrics || '';
     instrumental = !!source.instrumental;
     quality = Object.keys(MUSIC_MODELS).find(key => MUSIC_MODELS[key] === source.model) || quality;
-    pendingMusicSource = { sessionId: activeSession.id, jobId: entry.job };
+    // T-21: связь с родительской джобой живёт на сессии (переживает перезагрузку),
+    // а не в глобальной переменной — параллельные запуски не перехватывают её.
+    activeSession.repeatOf = { jobId: entry.job, at: Date.now() };
+    persistSessions();
     renderChrome(); els.musicPrompt.focus();
     card('notice', 'Повтор с правками', 'Проверьте и измените данные перед отправкой. Это новая генерация по тексту, не аудиоремикс.');
   }
-  function createCoverDraft(entry) {
+  async function createCoverDraft(entry) {
     if (storageBlocked) return;
     const photoDraft = mode === 'photo' ? els.prompt.value : drafts.photo;
-    if (photoDraft.trim() && !confirm('Заменить текущий черновик изображения?')) return;
+    if (photoDraft.trim() && !(await BRIIX_TOASTS.confirmDialog({ title: 'Заменить черновик изображения?', body: 'Текущий текст запроса будет заменён заготовкой обложки. Прежний текст лучше скопировать сейчас.', confirmLabel: 'Заменить', danger: true }))) return;
     setView('chat'); setMode('photo');
     els.prompt.value = 'Обложка для трека: ' + (entry.title || entry.prompt || '').slice(0, 200);
     renderChrome(); els.prompt.focus();
@@ -566,10 +1083,26 @@
   function fetchPeaks(job) {
     return request('/files/' + encodeURIComponent(job) + '-peaks.json', { headers: headers() })
       .then(r => r.json())
-      .then(peaks => {
-        if (!Array.isArray(peaks) || !peaks.length) throw new Error('Пики недоступны.');
+      .then(raw => {
+        // Контракт server-contract/README: пики приходят объектом с полем peaks;
+        // ранние стенды отдавали голый массив — принимаем обе формы (T-01).
+        const peaks = Array.isArray(raw) ? raw : (raw && Array.isArray(raw.peaks) ? raw.peaks : null);
+        if (!peaks || !peaks.length) throw new Error('Пики недоступны.');
         return peaks;
       });
+  }
+  // T-37: пики кэшируются в памяти (успех и отказ) — восстановление сессии с
+  // 20 треками больше не даёт лавину параллельных запросов, а 404 не
+  // повторяется при каждом пересоздании карточки.
+  const peaksCache = new Map();
+  function peaksFor(job) {
+    let rec = peaksCache.get(job);
+    if (!rec) {
+      rec = fetchPeaks(job); // резолвит массив пиков
+      peaksCache.set(job, rec);
+      rec.catch(() => {}); // отказ кэшируется: тихая деградация без повторных запросов
+    }
+    return rec;
   }
   // Обложка — единый рендер-путь для fresh и restore: если аудио ещё не загружено
   // (restore после перезагрузки страницы), клик по обложке запускает загрузку и
@@ -599,8 +1132,9 @@
   }
 
   // Единый рендер трек-карточки (лента fresh/restore и Библиотека — один компонент,
-  // класс-маркер .track-card): обложка (или внешняя мини-обложка), волна из серверных
-  // пиков (сразу, до загрузки аудио), аудио-фолбэк, transparency, меню «⋯».
+  // класс-маркер .track-card): обложка (или внешняя мини-обложка), название трека
+  // заголовком (F-18), волна из серверных пиков (сразу, до загрузки аудио),
+  // аудио-фолбэк, transparency, меню «⋯».
   function buildTrackCard({ job, cover, input = {}, file, loadBlob, coverFrame, menuItems }) {
     const wrap = document.createElement('div');
     wrap.className = 'track-card';
@@ -609,12 +1143,28 @@
       addTrackCover(wrap, job, cover);
       frame = wrap.querySelector('.track-cover');
     }
+    // F-18: название трека видно сразу — раньше его не было в интерфейсе вовсе
+    // (только внутри свёрнутого transparency-блока).
+    const trackTitle = String(input.title || input.prompt || '').slice(0, 120).trim();
+    if (trackTitle) {
+      const titleEl = document.createElement('div');
+      titleEl.className = 'track-title';
+      titleEl.textContent = trackTitle;
+      wrap.append(titleEl);
+    }
     const waveSlot = document.createElement('div');
     waveSlot.className = 'waveform-track';
+    const waveHolder = document.createElement('div');
+    waveHolder.className = 'waveform-holder'; // min-height: пустой холдер всё равно «интерсектится» (T-37)
+    // F-25: таймкоды «текущее / длительность» под волной (формат — BriixPlayer.fmtTime).
+    const timeEl = document.createElement('div');
+    timeEl.className = 'waveform-time';
+    timeEl.setAttribute('aria-hidden', 'true');
+    waveSlot.append(waveHolder, timeEl);
     const placeholder = document.createElement('div');
     placeholder.className = 'waveform-ph';
     placeholder.setAttribute('aria-hidden', 'true');
-    waveSlot.append(placeholder);
+    waveHolder.append(placeholder);
     wrap.append(waveSlot);
     const audioSlot = document.createElement('div');
     audioSlot.hidden = true;
@@ -630,41 +1180,61 @@
     let wave = null;
     const loadError = document.createElement('div');
     loadError.className = 'load-error';
-    fetchPeaks(job).then(peaks => {
+    // T-37: пики идут через кэш (успех и отказ кэшируются — 404 не повторяется
+    // при каждом пересоздании карточки). Observer-гейтинг опробован и отложен:
+    // конфликтует со scroll-restoration при восстановлении длинных лент.
+    const attachWave = () => peaksFor(job).then(peaks => {
       if (!frame.isConnected) throw new Error('Карточка недоступна.');
       placeholder.remove();
-      wave = BriixWaveform.attachFromPeaks(peaks, waveSlot, {
+      wave = BriixWaveform.attachFromPeaks(peaks, waveHolder, {
         onSeekPending: () => { if (!state.audio) ensureLoaded(); } // seek до загрузки — грузим трек
       });
       if (state.audio) wave.setAudio(state.audio);
-    }).catch(() => {
-      console.warn('BRIIX waveform: пики недоступны (' + job + ') — только нативный плеер.');
+    }).catch(error => {
+      console.warn('BRIIX waveform: пики недоступны (' + job + ') — только нативный плеер.', error?.message || error);
       placeholder.remove();
     });
+    attachWave();
     let pending = null;
     const ensureLoaded = () => pending ||= (async () => {
       try {
-        const blob = await loadBlob();
+        // T-30/T-31: блоб и objectURL трека — в общем LRU-кэше: повторное
+        // воспроизведение и «Скачать» не создают новых URL (A12).
+        const entry = await mediaEnsure(file, loadBlob);
         if (!frame.isConnected || currentUser() !== sessionProfile?.nick) throw new BusError('cancelled', 'Карточка недоступна.');
-        cardBlob = blob;
+        cardBlob = entry.blob;
         loadError.remove();
         const audio = document.createElement('audio');
         audio.controls = true;
         audio.controlsList = 'nodownload'; // скачивание только через меню «⋯»: имя «Название - Исполнитель»
         audio.preload = 'metadata';
-        audio.src = feedObjectURL(blob);
+        audio.src = entry.url;
         audioSlot.hidden = false;
         audioSlot.append(audio);
         placeholder.remove();
         if (wave) wave.setAudio(audio);
         state.audio = audio;
+        BriixPlayer.claim(audio, { // T-51/R1: эксклюзивный транспорт + MediaSession
+          title: input.title || '',
+          artist: input.artist || currentUser(),
+          artwork: cover || ''
+        });
+        // F-25: таймкоды обновляются событиями аудио, табличные цифры не пляшут.
+        const paintTime = () => {
+          timeEl.textContent = BriixPlayer.fmtTime(audio.currentTime)
+            + ' / ' + BriixPlayer.fmtTime(Number.isFinite(audio.duration) ? audio.duration : 0);
+        };
+        audio.addEventListener('timeupdate', paintTime);
+        audio.addEventListener('loadedmetadata', paintTime);
+        audio.addEventListener('durationchange', paintTime);
+        paintTime();
         audio.addEventListener('play', () => { frame.classList.add('playing'); frame.setAttribute('aria-label', 'Пауза'); });
         audio.addEventListener('pause', () => { frame.classList.remove('playing'); frame.setAttribute('aria-label', 'Слушать трек'); });
         return audio;
       } catch (error) {
         pending = null; // обложка остаётся кнопкой повтора
         if (frame.isConnected && currentUser() === sessionProfile?.nick) {
-          loadError.textContent = 'Файл недоступен. ' + (error.message || '') + ' Повтор — нажатием на обложку.';
+          loadError.textContent = 'Файл недоступен. ' + (error.message || '') + ' Нажмите на обложку — попробуем загрузить ещё раз.';
           waveSlot.append(loadError);
         }
         throw error;
@@ -676,9 +1246,14 @@
 
   // Ленточная обёртка единого компонента (fresh и restore).
   function renderTrackCard(session, opts) {
+    // card() скроллит ещё пустую карточку; после наполнения она вырастает —
+    // если читатель был у низа, доводим до низа ещё раз, иначе волна, ждущая
+    // вьюпорта (T-37), остаётся за складкой.
+    const stick = els.feed.scrollHeight - els.feed.scrollTop - els.feed.clientHeight < 140;
     const body = card('assistant', opts.who, '', session);
     const t = buildTrackCard(opts);
     body.append(t.body);
+    if (stick) scrollFeed(true);
     return { body, ensureLoaded: t.ensureLoaded };
   }
 
@@ -694,10 +1269,24 @@
     return (safe || 'briix-track-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')) + '.' + ext;
   }
 
+  // F-22: единое правило имени файла для ленты и Библиотеки — «что скачано»
+  // не зависит от того, из какой части интерфейса нажали «Скачать».
+  function mediaFileName(kind, meta, blob) {
+    if (kind === 'music') {
+      const title = String(meta.title || meta.prompt || '').trim();
+      return safeFileName(title.length > 2 ? title : 'BRIIX track', meta.artist || currentUser(), extOf(blob));
+    }
+    return 'briix-photo-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.' + extOf(blob);
+  }
+
   async function copyText(value, label) {
     if (!value) return;
-    try { await navigator.clipboard.writeText(value); setStatus('Скопировано: ' + label); }
-    catch { setStatus('Не удалось скопировать: ' + label); }
+    try {
+      await navigator.clipboard.writeText(value);
+      BRIIX_TOASTS.toast('Скопировано: ' + label, { kind: 'done' }); // F-38: видно при любом скролле
+    } catch {
+      BRIIX_TOASTS.toast('Не удалось скопировать: ' + label + '. Выделите текст и нажмите Ctrl+C.', { kind: 'error' });
+    }
   }
 
   function libEntry(job) { return libLoad().find(x => x.job === job); }
@@ -727,15 +1316,28 @@
     });
   }
 
+  // Человекочитаемый размер файла для тостов (F-38/F-21).
+  function fmtBytes(n) {
+    if (!Number.isFinite(n)) return '';
+    if (n < 1024) return n + ' Б';
+    if (n < 1024 * 1024) return (n / 1024).toFixed(0) + ' КБ';
+    return (n / (1024 * 1024)).toFixed(1).replace('.', ',') + ' МБ';
+  }
+
   function trackMenuItems(cardEl, ctx) {
     const input = ctx.input || {};
     const download = async () => {
       try {
-        const blob = ctx.blob || await fileBlob(ctx.file || input.file);
+        // T-30: URL из LRU-кэша — повторные скачивания не плодят objectURL (A12).
+        const entry = ctx.blob
+          ? await mediaEnsure(ctx.file || input.file, () => ctx.blob)
+          : await mediaEnsure(ctx.file || input.file, () => fileBlob(ctx.file || input.file));
+        const name = mediaFileName('music', input, entry.blob); // F-22: единое правило имени
         const link = document.createElement('a');
-        link.href = feedObjectURL(blob);
-        link.download = safeFileName(input.title, input.artist || currentUser(), extOf(blob));
+        link.href = entry.url;
+        link.download = name;
         document.body.append(link); link.click(); link.remove();
+        BRIIX_TOASTS.toast('Скачано: ' + name + ' (' + fmtBytes(entry.blob.size) + ')', { kind: 'done', key: 'download' }); // F-38
       } catch (error) { errorCard(error); }
     };
     const favorite = () => {
@@ -755,28 +1357,37 @@
               } catch (error) { errorCard(error); return; }
             }
             item.fav = next; libSave(list);
+            libApplyFav(ctx.job, next); // T-36: точечная мутация карточки Библиотеки
           } else if (next) {
             libAdd({ job: ctx.job, sessionId: activeSession?.id, kind: 'music', prompt: input.prompt || '',
               lyrics: input.lyrics || '', title: input.title || '', file: ctx.file || '', cover: '', created: Date.now(), fav: true });
           }
-          jobsInFlight.clear();
-          if (!els.lib.hidden) renderLibrary();
+          jobsInFlight.clear(); // серверный favorite изменился — при следующем рендере перечитать
         }
       };
     };
     const remove = {
       label: 'Удалить', danger: true,
       onPick: async () => {
-        if (!confirm('Удалить трек из библиотеки? Файл на стенде останется.')) return;
+        // F-23: подтверждение объясняет, что реально происходит с записью и файлом.
+        const serverEntry = libEntry(ctx.job)?.server;
+        const ok = await BRIIX_TOASTS.confirmDialog({
+          title: 'Удалить трек из библиотеки?',
+          body: serverEntry
+            ? 'Серверная запись будет удалена и на сервере — скачивание этого файла перестанет работать. Отменить будет нельзя; если файл нужен — сначала скачайте его.'
+            : 'Запись исчезнет из библиотеки этого браузера. Файл на сервере не трогаем — карточка останется в ленте, пока жива сессия.',
+          confirmLabel: 'Удалить', danger: true
+        });
+        if (!ok) return;
         const item = libEntry(ctx.job);
         if (item?.server) {
           try { await request('/jobs/' + encodeURIComponent(ctx.job), { method: 'DELETE', headers: headers() }); }
           catch (error) { errorCard(error); return; }
         }
         libSave(libLoad().filter(x => x.job !== ctx.job));
-        if (blobCache.has(ctx.job)) { URL.revokeObjectURL(blobCache.get(ctx.job)); blobCache.delete(ctx.job); }
+        if (ctx.file) mediaCacheDrop(mediaKey(ctx.file)); // T-30: кэш файла тоже чистим
         jobsInFlight.clear();
-        if (!els.lib.hidden) renderLibrary();
+        libControls.get(ctx.job)?.removeSelf(); // T-36: без пересборки Библиотеки
         cardEl.remove();
       }
     };
@@ -842,7 +1453,9 @@
     details.append(summary, text); container.append(details);
   }
 
-  // Кнопка «Скачать» под готовым фото/треком (blob уже в памяти страницы).
+  // Кнопка «Скачать» под готовым фото (blob уже в памяти или догрузится).
+  // T-30/T-31: URL живёт в общем LRU-кэше; при вытеснении клик перезагружает
+  // файл заново — кнопка не ломается и не течёт (одноразовых URL больше нет).
   function extOf(blob) {
     const t = blob.type || '';
     if (t.includes('png')) return 'png';
@@ -851,16 +1464,88 @@
     if (t.includes('mpeg')) return 'mp3';
     return 'm4a'; // audio/mp4 и дефолт
   }
-  function addDownloadAction(container, blob, name, label) {
+  function addDownloadAction(container, ensure, fileNameFor, label) {
     const row = document.createElement('div');
     row.className = 'actions';
     const link = document.createElement('a');
     link.className = 'action';
-    link.href = feedObjectURL(blob);
-    link.download = name + '-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.' + extOf(blob);
+    link.href = '#';
+    link.title = 'Файл сохранится с понятным именем'; // F-21: видно, что именно будет сохранено
     link.textContent = label || '⬇ Скачать';
+    const applyName = blob => {
+      const name = fileNameFor(blob);
+      link.download = name;
+      link.title = name; // F-21
+    };
+    link.addEventListener('click', async event => {
+      event.preventDefault();
+      if (link.dataset.busy === '1') return;
+      link.dataset.busy = '1';
+      try {
+        const entry = await ensure(); // { blob, url } — из кэша или повторной загрузкой
+        applyName(entry.blob);
+        const act = document.createElement('a');
+        act.href = entry.url;
+        act.download = link.download;
+        act.title = link.download;
+        document.body.append(act); act.click(); act.remove();
+        BRIIX_TOASTS.toast('Скачано: ' + link.download + ' (' + fmtBytes(entry.blob.size) + ')', { kind: 'done', key: 'download' });
+      } catch (error) {
+        link.textContent = 'Файл недоступен. ' + (error.message || '');
+      } finally { link.dataset.busy = ''; }
+    });
     row.append(link);
     container.append(row);
+    return { link, applyName };
+  }
+
+  // Единая фото-карточка (R2/T-18): fresh в ленте, restore после перезагрузки,
+  // Библиотека и восстановление готовой джобы — один код: слот, ленивая загрузка
+  // по observer, повтор при ошибке, «Скачать» с датой в имени. Прежде тут было
+  // четыре почти одинаковых рендера с разным поведением.
+  function photoCard({ eagerBlob = null, loadBlob = null, file = '', alt = '' }) {
+    const owner = currentUser();
+    const photoAltText = alt;
+    const wrap = document.createElement('div');
+    wrap.className = 'photo-card';
+    const slot = document.createElement('div');
+    wrap.append(slot);
+    // T-30/T-31: блоб фото — в общем LRU-кэше по пути файла: повторные показы
+    // и скачивания используют один objectURL (A12), вытеснение ревочит.
+    const ensure = () => mediaEnsure(file, () => eagerBlob ? Promise.resolve(eagerBlob) : loadBlob());
+    const load = async () => {
+      slot.textContent = 'Загружаем файл…';
+      try {
+        const entry = await ensure();
+        if (!slot.isConnected || currentUser() !== owner) return;
+        slot.textContent = '';
+        const img = new Image();
+        img.alt = 'Фото: ' + (photoAltText || 'результат генерации'); // F-51: не безликое «Результат»
+        img.className = 'media-in';
+        img.decoding = 'async'; // T-40: декодирование не блокирует главный поток
+        img.src = entry.url;
+        requestAnimationFrame(() => img.classList.add('loaded'));
+        slot.append(img);
+        // Имя известно сразу после загрузки — пользователь видит его до клика (F-21).
+        addDownloadAction(wrap, ensure, blob => mediaFileName('photo', {}, blob)).applyName(entry.blob);
+      } catch (error) {
+        if (!slot.isConnected || currentUser() !== owner) return;
+        slot.textContent = 'Файл недоступен. ' + (error.message || '') + ' ';
+        const retry = document.createElement('button');
+        retry.type = 'button'; retry.className = 'action';
+        retry.textContent = 'Повторить';
+        retry.addEventListener('click', load); slot.append(retry);
+      }
+    };
+    // Оба пути через observer: он срабатывает только когда карточка уже в DOM
+    // (eager-вызов до подключения молча умирал на isConnected-гарде).
+    if (!eagerBlob) slot.textContent = 'Изображение готово';
+    const observer = new IntersectionObserver((records, obs) => {
+      if (!slot.isConnected) { obs.disconnect(); return; }
+      if (records.some(r => r.isIntersecting)) { obs.disconnect(); load(); }
+    }, { rootMargin: '150px' });
+    observer.observe(slot);
+    return { body: wrap };
   }
 
   // ---- режим/состояния ---------------------------------------------------------
@@ -888,7 +1573,12 @@
     els.modelName.textContent = MODEL_LABELS[quality];
     els.vocalSeg.querySelectorAll('.seg-btn').forEach(b => b.setAttribute('aria-pressed', String(Number(b.dataset.vocal) === (instrumental ? 1 : 0))));
     els.tuneToggle.setAttribute('aria-pressed', String(advanced));
-    els.prepareMusic.textContent = instrumental ? '✦ Подготовить трек' : '✦ Подготовить песню';
+    // F-37: подпись зависит от режима (песня/инструментал); на узких экранах
+    // виден короткий лейбл, полный — всегда в aria-label и title.
+    els.prepareMusic.setAttribute('aria-label', instrumental ? 'Подготовить трек' : 'Подготовить песню');
+    const prepareFull = els.prepareMusic.querySelector('.lbl-full');
+    if (prepareFull) prepareFull.textContent = instrumental ? '✦ Подготовить трек' : '✦ Подготовить песню';
+    else els.prepareMusic.textContent = instrumental ? '✦ Подготовить трек' : '✦ Подготовить песню';
     meta();
     updateEnabled();
   }
@@ -903,8 +1593,10 @@
 
   function updateEnabled() {
     // Один ход диалога за раз (чат и разговорный музыкальный режим): генерации медиа не блокируют.
+    // T-20/F-06: занятость привязана к сессии — стрим в другой сессии не блокирует ввод здесь.
     const hasInput = Boolean(promptValue() || (mode === 'music' && advanced && els.lyrics.value.trim()));
-    const dialogBusy = (mode === 'chat' && chatActive) || (mode === 'music' && !advanced && musicChatActive);
+    const busyKind = sessionBusy.get(activeSession?.id)?.kind;
+    const dialogBusy = (mode === 'chat' && busyKind === 'chat') || (mode === 'music' && !advanced && busyKind === 'music-chat');
     els.send.disabled = storageBlocked || !hasInput || dialogBusy;
     $('chatPending').hidden = !dialogBusy;
     els.genTrack.disabled = storageBlocked || mode !== 'music' || !hasInput;
@@ -923,11 +1615,26 @@
     updateEnabled();
   }
 
+  // F-42: одинаковые предупреждения не стакаются — по ключу обновляется живая
+  // карточка (A2: две неудачные попытки без ключа = одна карточка, не две).
+  function noticeOnce(key, who, text, session = activeSession) {
+    const root = session && rootFor(session);
+    const existing = root && [...root.querySelectorAll('.card.notice')].find(c => c.dataset.noticeKey === key);
+    if (existing?.isConnected) {
+      const body = existing.querySelector('.body');
+      if (body) body.textContent = text;
+      return;
+    }
+    const body = card('notice', who, text, session);
+    const holder = body.closest('.card');
+    if (holder) holder.dataset.noticeKey = key;
+  }
+
   function needKey() {
     if (token()) return true;
     els.keyCard.hidden = false;
     els.keyInput.focus();
-    card('notice', 'Ключ', 'Вставьте ключ приватного стенда — тот же, что в Настройках демо.');
+    noticeOnce('need-key', 'Ключ', 'Вставьте ключ приватного доступа — тот же, что в Настройках демо.');
     return false;
   }
 
@@ -935,11 +1642,13 @@
   function renderKeyChip() {
     const has = Boolean(token());
     els.profileNick.textContent = currentUser() || '';
-    els.profileBtn.title = has ? 'Профиль — ключ стенда сохранён' : 'Профиль — ключ стенда не задан';
+    els.profileBtn.title = has ? 'Профиль — ключ доступа сохранён' : 'Профиль — ключ доступа не задан';
     // статус ключа виден всегда: в пункте меню и внутри карточки ключа
-    els.profileKeyBtn.textContent = has ? 'Ключ стенда ✓' : 'Ключ стенда…';
+    els.profileKeyBtn.textContent = has ? 'Ключ доступа ✓' : 'Ключ доступа…';
     if (els.keyStatus) els.keyStatus.textContent = has
-      ? 'Ключ сохранён ✓ — хранится только в этом браузере.'
+      ? (tokenRemembered()
+        ? 'Ключ сохранён ✓ — запомнен в этом браузере.'
+        : 'Ключ сохранён ✓ — до закрытия вкладки.')
       : 'Ключ ещё не задан.';
   }
 
@@ -947,7 +1656,7 @@
   async function create() {
     if (storageBlocked || !activeSession || !needKey()) return;
     const text = promptValue();
-    if ((!text && !(mode === 'music' && advanced && els.lyrics.value.trim())) || (mode === 'chat' && chatActive)) return;
+    if ((!text && !(mode === 'music' && advanced && els.lyrics.value.trim())) || (mode === 'chat' && sessionBusy.get(activeSession?.id)?.kind === 'chat')) return;
     if (mode === 'chat') return createChat(text);
     if (mode === 'photo') return createPhoto(text);
     // Решение владельца 15.11: в Simple-режиме send = разговор с наставником
@@ -959,7 +1668,6 @@
 
   async function createChat(text) {
     const session = activeSession;
-    chatActive = true;
     const turn = { role: 'user', content: text };
     const assistant = currentAssistant();
     card('user', 'Вы', text, session);
@@ -968,7 +1676,8 @@
     updateEnabled();
     const who = assistant.name;
     const body = card('assistant', who, '', session);
-    const handle = makeCancelHandle(); // ✕ в карточке гасит только этот стрим
+    const handle = trackedHandle('chat', session, who); // ✕ в карточке гасит только этот стрим
+    sessionBusy.set(session.id, { kind: 'chat', stop: () => handle.stop() });
     const textSpan = document.createElement('span'); // текст отдельно от ✕, чтобы не перемешивались
     const wait = waitLine('chat'); // мгновенный отклик: видно, что запрос ушёл
     const stopRow = document.createElement('div');
@@ -977,22 +1686,23 @@
     appendStop(stopRow, handle);
     body.append(textSpan, stopRow);
     body.classList.add('streaming');
+    body.closest('.card')?.setAttribute('aria-busy', 'true'); // F-49: лента молчит, карточка занята
     setBusy(true, who + ' печатает…');
+    let sink = null; // T-39: создаётся в try, досрочно синхронизируется в catch
     try {
       const messages = [{ role: 'system', content: assistant.system }, ...session.history.filter(m => m && ['user', 'assistant'].includes(m.role) && typeof m.content === 'string').slice(-80), turn];
-      let first = true;
-      const full = await chatStream({ messages, signal: handle.controller.signal, onChunk: piece => {
-        if (first) { wait.remove(); first = false; } // ждущий блок уступает место стриму, ✕ остаётся
-        textSpan.textContent += piece;
-        scrollFeed();
-      } });
+      // T-39: чанки копятся и применяются одним кадром (без layout thrash).
+      sink = streamSink(textSpan, wait);
+      const full = await chatStream({ messages, signal: handle.controller.signal, onChunk: piece => sink.push(piece) });
+      sink.dispose();
       stopRow.remove();
       body.textContent = full; // чистый текст вместо служебных узлов
       session.history.push(turn, { role: 'assistant', content: full });
-      feedPush({ t: 'assistant', who, text: full, track: full }, session); // track = бриф «Сделать из этого трек»
+      feedPush({ t: 'assistant', who, text: full, track: true }, session); // T-33: флаг вместо копии текста
       addMakeTrackAction(body.closest('.card'), full);
     } catch (error) {
       stopRow.remove();
+      sink?.sync(); // T-39: недоставленный в кадр текст не пропадает
       if (error.name === 'AbortError') {
         if (body.textContent.trim()) { // частичный ответ остаётся в ленте
           const note = document.createElement('div');
@@ -1006,7 +1716,13 @@
         else if (session === activeSession && mode !== 'chat' && !drafts.chat.trim()) drafts.chat = text;
         errorCard(error, session);
       }
-    } finally { chatActive = false; body.classList.remove('streaming'); setBusy(false); updateEnabled(); }
+    } finally {
+      sessionBusy.delete(session.id);
+      handle.unregister?.();
+      body.classList.remove('streaming');
+      body.closest('.card')?.removeAttribute('aria-busy');
+      setBusy(false); updateEnabled();
+    }
   }
 
   // ---- разговорный музыкальный режим (вариант B «Студия-агент») -----------------
@@ -1056,8 +1772,7 @@
 
   async function createMusicChat(text) {
     const session = activeSession;
-    if (musicChatActive) return;
-    musicChatActive = true;
+    if (sessionBusy.get(session.id)?.kind === 'music-chat') return;
     const assistant = currentAssistant();
     // Один наставник на диалог: смена роли обнуляет историю (делается и в чипе).
     if (!session.musicChat || session.musicChat.assistant !== assistant.id) {
@@ -1071,7 +1786,8 @@
     updateEnabled();
     const who = assistant.name;
     const body = card('assistant', who, '', session);
-    const handle = makeCancelHandle(); // ✕ в карточке гасит только этот стрим
+    const handle = trackedHandle('music-chat', session, who); // ✕ в карточке гасит только этот стрим
+    sessionBusy.set(session.id, { kind: 'music-chat', stop: () => handle.stop() });
     const textSpan = document.createElement('span');
     const wait = waitLine('chat');
     const stopRow = document.createElement('div');
@@ -1080,19 +1796,18 @@
     appendStop(stopRow, handle);
     body.append(textSpan, stopRow);
     body.classList.add('streaming');
+    body.closest('.card')?.setAttribute('aria-busy', 'true'); // F-49
     setBusy(true, who + ' печатает…');
+    let sink = null; // T-39
     try {
       const messages = [
         { role: 'system', content: assistant.system + musicDraftInstruction + '\n\n' + musicSessionContext() },
         ...history.filter(m => m && ['user', 'assistant'].includes(m.role) && typeof m.content === 'string').slice(-40),
         { role: 'user', content: text }
       ];
-      let first = true;
-      const full = await chatStream({ messages, signal: handle.controller.signal, onChunk: piece => {
-        if (first) { wait.remove(); first = false; }
-        textSpan.textContent += piece;
-        scrollFeed();
-      } });
+      sink = streamSink(textSpan, wait); // T-39: один reflow на кадр
+      const full = await chatStream({ messages, signal: handle.controller.signal, onChunk: piece => sink.push(piece) });
+      sink.dispose();
       stopRow.remove();
       body.classList.remove('streaming');
       const parsed = parseMusicDraft(full, snapshot.instrumental);
@@ -1105,6 +1820,7 @@
       feedPush(entry, session);
     } catch (error) {
       stopRow.remove();
+      sink?.sync(); // T-39
       if (error.name === 'AbortError') {
         if (body.textContent.trim()) {
           const note = document.createElement('div');
@@ -1117,11 +1833,31 @@
         if (session === activeSession && mode === 'music' && !advanced && !els.prompt.value.trim()) els.prompt.value = text;
         errorCard(error, session);
       }
-    } finally { musicChatActive = false; setBusy(false); updateEnabled(); }
+    } finally {
+      sessionBusy.delete(session.id);
+      handle.unregister?.();
+      body.classList.remove('streaming');
+      body.closest('.card')?.removeAttribute('aria-busy'); // F-49
+      setBusy(false); updateEnabled();
+    }
+  }
+
+  // F-12: после «Принять в поля» — автопереход в advanced и подсветка полей,
+  // куда попал черновик (вместо подсказки «показать: Тонко настроить»).
+  function flashDraftFields() {
+    for (const el of [els.musicPrompt, els.lyrics]) {
+      el.classList.remove('field-flash');
+      void el.offsetWidth; // перезапуск анимации
+      el.classList.add('field-flash');
+      setTimeout(() => el.classList.remove('field-flash'), 3400);
+    }
+    els.musicPrompt.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    els.musicPrompt.focus({ preventScroll: true });
   }
 
   // Draft-блок наставника: компактные поля + «Принять в поля» (с бэкапом/откатом,
   // паттерн renderProducerDraft) + «Сгенерировать трек» (явная генерация).
+  // F-11: формулировки и набор действий совпадают с продюсерским черновиком.
   function renderMusicDraftContent(body, entry, session) {
     body.classList.add('producer-draft', 'music-draft');
     const note = document.createElement('p'); note.className = 'producer-note';
@@ -1149,7 +1885,7 @@
     body.append(state);
     const actions = document.createElement('div'); actions.className = 'producer-actions';
     const apply = document.createElement('button'); apply.type = 'button'; apply.className = 'action'; apply.textContent = 'Принять в поля';
-    const revert = document.createElement('button'); revert.type = 'button'; revert.className = 'action'; revert.textContent = 'Вернуть поля';
+    const revert = document.createElement('button'); revert.type = 'button'; revert.className = 'action'; revert.textContent = 'Вернуть как было';
     revert.hidden = !entry.beforeApply;
     const generate = document.createElement('button'); generate.type = 'button'; generate.className = 'action'; generate.textContent = 'Сгенерировать трек';
     let running = false;
@@ -1174,21 +1910,32 @@
       if (!promptField.value.trim() && !(lyricsField && lyricsField.value.trim())) { state.textContent = 'Черновик пуст.'; return; }
       if ((els.musicPrompt.value.trim() && els.musicPrompt.value !== promptField.value) ||
           (els.lyrics.value.trim() && lyricsField && els.lyrics.value !== lyricsField.value)) {
-        if (!confirm('Заменить текущий стиль и лирику черновиком наставника? Текущие значения сохранятся для возврата.')) return;
+        if (!(await BRIIX_TOASTS.confirmDialog({ title: 'Заменить поля черновиком наставника?', body: 'Текущие стиль и лирика будут заменены. Прежние значения сохранятся для возврата кнопкой «Вернуть как было».', confirmLabel: 'Заменить' }))) return;
       }
       backupFields();
       // Persist backup before touching the form.
       if (!(await persistSessions())) { state.textContent = 'Не удалось сохранить резервную копию; поля не изменены.'; return; }
       entry.applied = true;
       writeFields();
-      pendingTrackTitle = titleField.value.trim() || null;
+      // T-21: название черновика — на сессии, не в глобале: переживёт смену
+      // сессии и не перехватывается параллельной генерацией из другой сессии.
+      session.pendingDraftTitle = titleField.value.trim() || null;
+      saveDraft(session);
       await persistSessions();
       revert.hidden = false;
-      state.textContent = 'Поля заполнены (показать: «Тонко настроить»). Генерация запускается отдельно.';
+      state.textContent = 'Поля заполнены.';
+      // F-12: автопереход в advanced ломал бы диалог с наставником (второй ход
+      // «поправь припев» превратился бы в генерацию) — вместо него карточка
+      // с явной кнопкой «Показать поля».
+      const showNote = card('notice', 'Черновик принят', 'Поля заполнены. Следующий ход диалога можно продолжать здесь, а генерация — кнопкой «Сгенерировать трек».', session);
+      const showBtn = document.createElement('button');
+      showBtn.type = 'button'; showBtn.className = 'action'; showBtn.textContent = 'Показать поля';
+      showBtn.addEventListener('click', () => { advanced = true; renderChrome(); flashDraftFields(); showBtn.closest('.card')?.remove(); });
+      showNote.append(showBtn);
     }));
     revert.addEventListener('click', runOnce(async () => {
       if (storageBlocked || activeSession !== session || mode !== 'music' || !entry.beforeApply) { state.textContent = 'Откройте эту сессию и режим «Музыка».'; return; }
-      if (!confirm('Вернуть поля до принятия? Текущие изменения полей будут заменены.')) return;
+      if (!(await BRIIX_TOASTS.confirmDialog({ title: 'Вернуть поля до принятия?', body: 'Текущие изменения полей будут заменены сохранёнными значениями. То, что вы правили после принятия, сохранится в списке резервных копий карточки.', confirmLabel: 'Вернуть' }))) return;
       entry.beforeRevert = { style: els.musicPrompt.value, lyrics: els.lyrics.value, advanced };
       (entry.backups ||= []).push(entry.beforeRevert);
       if (!(await persistSessions())) { state.textContent = 'Не удалось сохранить текущие поля.'; return; }
@@ -1204,11 +1951,11 @@
       entry.applied = true;
       writeFields();
       advanced = true; renderChrome();
-      pendingLyricsSource = 'наставник: ' + entry.who;
-      pendingTrackTitle = titleField.value.trim() || null;
       await persistSessions();
       revert.hidden = false;
-      await createMusic(els.musicPrompt.value); // promptReady-путь: английский промпт черновика уходит как есть
+      // T-21: контекст идёт аргументом — параллельная генерация B не подхватит
+      // название/источник лирики черновика A.
+      await createMusic(els.musicPrompt.value, { title: titleField.value.trim() || null, lyricsSource: 'наставник: ' + entry.who }); // promptReady-путь: английский промпт черновика уходит как есть
     }));
     actions.append(apply, revert, generate); body.append(actions);
   }
@@ -1230,41 +1977,52 @@
     const skel = document.createElement('div');
     skel.className = 'skeleton-img';
     stageBody.append(skel);
-    const wait = waitRow('image', 'generating');
-    const handle = makeCancelHandle(); // ✕ гасит только эту джобу
+    const eta = etaNote('flux-2-klein-4b', 'фото');
+    const wait = waitRow('image', 'generating', { onTick: eta.update });
+    const handle = trackedHandle('photo', session); // ✕ гасит только эту джобу
     appendStop(wait.row, handle);
-    stageBody.append(wait.row);
+    stageBody.append(wait.row, eta.el);
     try {
-      const id = await submitJob({ type: 'image', prompt: text });
+      const id = await submitJob({ type: 'image', prompt: text, params: { artist: currentUser() } }); // T-41: фото-джоба атрибутируема в общем списке /jobs
+      handle.jobId = id; // ✕ после отправки отменяет джобу и на сервере (T-05)
       recordSessionJob(session, id, 'photo', { prompt: text });
       const result = await pollJob(id, { shouldStop: () => handle.cancelled, onStatus: d => {
         if (d.stage) stageBody.querySelector('[data-wait]')?.setAttribute('data-wait-stage', d.stage);
-      } });
+      }, onRetry: n => setStatus(n ? ('Связь прерывается, пробуем снова (' + n + '/5)…') : 'Работаем…', true) });
+      settleSessionJob(session, id);
       wait.stop();
       stageBody.closest('.card').remove();
-      const item = document.createElement('img');
-      item.alt = 'Результат';
-      const blob = await fileBlob(result.result_url);
-      item.src = feedObjectURL(blob);
-      item.className = 'media-in';
-      requestAnimationFrame(() => item.classList.add('loaded'));
+      // T-27: загрузка файла отменяема вместе с операцией (✕ / смена сессии).
+      const blob = await fileBlob(result.result_url, 1, handle.controller.signal);
+      // R2/T-18: единая фото-карточка (fresh = restore = Библиотека).
       const wrap = card('assistant', 'Фото готово', '', session);
       wrap.textContent = '';
-      wrap.append(item);
-      addDownloadAction(wrap.closest('.card'), blob, 'briix-photo');
-      feedPush({ t: 'media', who: 'Фото готово', kind: 'photo', file: result.result_url, job: id }, session);
+      wrap.append(photoCard({ eagerBlob: blob, file: result.result_url, alt: text }).body);
+      feedPush({ t: 'media', who: 'Фото готово', kind: 'photo', file: result.result_url, job: id, prompt: text }, session); // prompt → alt при restore (F-51)
       libAdd({ job: id, sessionId: session.id, kind: 'photo', prompt: text, file: result.result_url, created: Date.now(), fav: false });
     } catch (error) {
       wait.stop();
       stageBody.closest('.card').remove();
       if (error.name === 'AbortError' || error.code === 'cancelled') {
-        card('notice', 'Ожидание остановлено', 'Задача может продолжаться на сервере. Проверьте результат в библиотеке.', session);
+        let stoppedNote;
+        if (!handle.jobId) {
+          stoppedNote = card('notice', 'Ожидание остановлено', 'Генерация остановлена до отправки задачи на сервер.', session);
+        } else {
+          stoppedNote = card('notice', 'Ожидание остановлено', 'Отменяем задачу на сервере…', session);
+          const applyCancelNote = ok => {
+            if (ok) settleSessionJob(session, handle.jobId);
+            if (stoppedNote?.isConnected) stoppedNote.textContent = ok
+              ? 'Задача отменена на сервере — очередь и GPU освобождены.'
+              : 'Отменить задачу на сервере не удалось (она могла уже завершиться). Проверьте результат в библиотеке.';
+          };
+          if (handle.serverCancelled === null) handle.onServerCancel = applyCancelNote; else applyCancelNote(handle.serverCancelled);
+        }
       } else {
         if (session === activeSession && mode === 'photo' && !els.prompt.value.trim()) els.prompt.value = text;
         else if (session === activeSession && mode !== 'photo' && !drafts.photo.trim()) drafts.photo = text;
         errorCard(error, session);
       }
-    } finally { setBusy(false); updateEnabled(); }
+    } finally { handle.unregister?.(); setBusy(false); updateEnabled(); }
   }
 
   // Brain-теги приоритетнее: добавляем к переводу только те, которых ещё нет.
@@ -1314,22 +2072,28 @@
     return BriixProducer.latinizeTags(BriixProducer.sanitize(full)).slice(0, 8000);
   }
 
-  async function createMusic(description) {
+  async function createMusic(description, ctx = {}) {
     const session = activeSession;
+    // T-21: контекст генерации (название, источник лирики, родительская джоба) —
+    // аргумент источника запуска, а не глобальные pending-переменные: параллельные
+    // запуски не перехватывают чужое название/источник. repeatOf (после «Повторить
+    // с правками») живёт на сессии и потребляется этим запуском.
+    const parentJobId = ctx.parentJobId || session.repeatOf?.jobId || null;
+    if (parentJobId) session.repeatOf = null;
     // Зафиксировать настройки до автолирики: пользователь может менять их во время ожидания.
-    const snapshot = { advanced, quality, instrumental, parentJobId: pendingMusicSource?.sessionId === session.id ? pendingMusicSource.jobId : null };
-    if (snapshot.parentJobId) pendingMusicSource = null;
-    // Источник лирики/название выставлены путём запуска (наставник/поля/автолирика).
-    const draftSource = pendingLyricsSource; pendingLyricsSource = null;
-    const draftTitle = pendingTrackTitle; pendingTrackTitle = null;
+    const snapshot = { advanced, quality, instrumental, parentJobId };
+    const draftSource = ctx.lyricsSource || null;
+    // Название из «Принять в поля» живёт на сессии до первого запуска генерации.
+    const draftTitle = ctx.title ?? session.pendingDraftTitle ?? null;
+    session.pendingDraftTitle = null;
     // Сборка (#109): исходная идея пользователя сохраняется неизменной (в карточку
     // и журнал идёт она), а в модель уходит чистая сборка без markdown и болтовни.
     const rawIdea = snapshot.advanced ? els.musicPrompt.value.trim() : description;
     const style = BriixProducer.sanitize(rawIdea); // снимает только markdown-обрамление и служебные обёртки
     let lyrics = snapshot.advanced ? BriixProducer.latinizeTags(BriixProducer.sanitize(els.lyrics.value)) : '';
     const vocal = !snapshot.instrumental;
-    if (!style && !lyrics) { card('notice', 'Музыка', 'Опишите трек — стиль или лирику.'); return; }
-    if (vocal && !lyrics && !style) { card('notice', 'Музыка', 'Опишите трек — о чём песня?'); return; }
+    if (!style && !lyrics) { noticeOnce('music-empty', 'Музыка', 'Опишите трек — стиль или лирику.'); return; }
+    if (vocal && !lyrics && !style) { noticeOnce('music-empty', 'Музыка', 'Опишите трек — о чём песня?'); return; }
     if (!snapshot.advanced) els.prompt.value = '';
     else els.musicPrompt.value = '';
     updateEnabled();
@@ -1345,16 +2109,24 @@
     card('user', 'Вы', requestText, session);
     feedPush({ t: 'user', who: 'Вы', text: requestText }, session);
     const stageBody = card('stage', 'Музыка', '', session); // мгновенно, включая фазу автолирики
-    const wait = waitRow('music', vocal && !lyrics ? 'writing-lyrics' : 'synthesizing');
-    const handle = makeCancelHandle(); // ✕ гасит автолирику и поллинг этой джобы
+    const eta = etaNote(MUSIC_MODELS[snapshot.quality], MODEL_LABELS[snapshot.quality]);
+    const wait = waitRow('music', !vocal ? 'model-warmup' : (vocal && !lyrics ? 'writing-lyrics' : 'synthesizing'), { onTick: eta.update });
+    const handle = trackedHandle('music', session); // ✕ гасит автолирику и поллинг этой джобы
     appendStop(wait.row, handle);
     stageBody.append(wait.row);
     // Индикатор стадий показывает серверный этап, а не выдуманный процент.
-    const stages = ['writing-lyrics', 'synthesizing', 'album-cover'];
-    const stageNames = { 'writing-lyrics': 'лирика', 'synthesizing': 'синтез', 'album-cover': 'обложка' };
+    // Словари по контракту bff: vocal — writing-lyrics → synthesizing → album-cover,
+    // instrumental — model-warmup → generating → album-cover (T-02).
+    const stages = vocal ? ['writing-lyrics', 'synthesizing', 'album-cover'] : ['model-warmup', 'generating', 'album-cover'];
+    const stageNames = { 'writing-lyrics': 'лирика', 'synthesizing': 'синтез', 'model-warmup': 'разогрев модели', 'generating': 'генерация', 'album-cover': 'обложка' };
     let curStage = stageBody.querySelector('[data-wait]')?.getAttribute('data-wait-stage') || stages[0];
     const bar = document.createElement('div');
     bar.className = 'stage-progress';
+    // F-15: полоса — настоящий progressbar; объявляется этап и время, а не проценты.
+    bar.setAttribute('role', 'progressbar');
+    bar.setAttribute('aria-label', 'Генерация трека');
+    bar.setAttribute('aria-valuemin', '0');
+    bar.setAttribute('aria-valuemax', String(stages.length));
     const segs = stages.map(s => {
       const seg = document.createElement('div');
       seg.className = 'sp-seg';
@@ -1367,6 +2139,7 @@
     });
     const barLabel = document.createElement('div');
     barLabel.className = 'stage-progress-label';
+    barLabel.setAttribute('role', 'status'); // F-15: озвучивается только смена этапа
     const paint = () => {
       const idx = stages.indexOf(curStage);
       segs.forEach((s, i) => {
@@ -1374,10 +2147,13 @@
         s.el.classList.toggle('active', i === idx);
         s.fill.style.width = i <= idx ? '100%' : '0%';
       });
-      barLabel.textContent = stageNames[curStage] ? 'Этап: ' + stageNames[curStage] : 'Задача выполняется';
+      const label = stageNames[curStage] ? 'Этап: ' + stageNames[curStage] : 'Задача выполняется';
+      barLabel.textContent = label;
+      bar.setAttribute('aria-valuenow', String(Math.max(0, idx)));
+      bar.setAttribute('aria-valuetext', label);
     };
     paint();
-    stageBody.append(bar, barLabel);
+    stageBody.append(bar, barLabel, eta.el);
     const watchStage = new MutationObserver(() => {
       const now = stageBody.querySelector('[data-wait]')?.getAttribute('data-wait-stage');
       if (now && now !== curStage) { curStage = now; paint(); }
@@ -1437,10 +2213,23 @@
       // наставника или первой осмысленной строки лирики, fallback по дате.
       // Сервер (параллельная INFRA-задача) пишет params.title/artist в теги M4A
       // и Content-Disposition — контрактное ожидание, см. server-contract/README.md.
-      const titleSource = (lyrics || style || '').split('\n').map(s => s.trim()).find(s => s.length > 2) || '';
+      // Структурный тег ([Intro]/[Verse 1]/…) — не название песни: в пути автолирики
+      // первая строка лирики — это [Intro], и имя файла не должно становиться
+      // «[Intro] - ник.m4a» (T-53).
+      const isSectionTag = s => /^\[[^\]\n]{1,32}\]$/.test(s);
+      const titleSource = (lyrics || style || '').split('\n').map(s => s.trim()).find(s => s.length > 2 && !isSectionTag(s)) || '';
       const trackTitle = BriixProducer.sanitize(draftTitle || titleSource).slice(0, BriixProducer.MAX_TITLE) || ('BRIIX track ' + new Date().toISOString().slice(0, 10));
       const params = { model: MUSIC_MODELS[snapshot.quality], title: trackTitle, artist: currentUser() };
       if (snapshot.instrumental) params.instrumental = true;
+      else {
+        // T-03: bff ждёт params.language (ru|en) — без поля русский вокал уходит в
+        // модель английским. Явная просьба («на русском») или кириллическая лирика
+        // (осознанный выбор автора) = ru; французский bff не валидирует — не шлём.
+        const explicit = BriixProducer.detectExplicitLanguage(rawIdea) || BriixProducer.detectExplicitLanguage(lyrics || '');
+        if (explicit === 'ru' || explicit === 'en') params.language = explicit;
+        else if (!explicit && lyrics && /[\u0400-\u04FF]/.test(lyrics)) params.language = 'ru';
+        else if (!explicit) params.language = 'en';
+      }
       if (lyrics) params.lyrics = lyrics;
       // В карточку/сессию — исходная идея без изменений (правило #109),
       // promptSent — ровно то, что ушло в модель; повтор подставляет исходную идею.
@@ -1449,14 +2238,17 @@
         title: trackTitle, artist: currentUser(),
         lyricsSource: draftSource || (snapshot.advanced ? 'написал пользователь' : (vocal && !lyrics ? 'автолирика (автор песен)' : 'написал пользователь')) };
       const id = await submitJob({ type: 'music', prompt: finalPrompt, params });
+      handle.jobId = id; // ✕ после отправки отменяет джобу и на сервере (T-05)
       recordSessionJob(session, id, 'music', input);
       const result = await pollJob(id, { shouldStop: () => handle.cancelled, onStatus: d => {
         if (d.stage) stageBody.querySelector('[data-wait]')?.setAttribute('data-wait-stage', d.stage);
-      } });
+      }, onRetry: n => setStatus(n ? ('Связь прерывается, пробуем снова (' + n + '/5)…') : 'Работаем…', true) });
+      settleSessionJob(session, id);
       wait.stop();
       watchStage.disconnect();
       stageBody.closest('.card').remove();
-      const blob = await fileBlob(result.result_url);
+      // T-27: загрузка файла отменяема вместе с операцией (✕ / смена сессии).
+      const blob = await fileBlob(result.result_url, 1, handle.controller.signal);
       // Единый рендер-путь с restore-карточкой: обложка = PLAY, волна, меню «⋯».
       const trackCard = renderTrackCard(session, {
         who: 'Трек готов (' + MODEL_LABELS[snapshot.quality] + ')',
@@ -1475,13 +2267,25 @@
       wait.stop(); watchStage.disconnect();
       stageBody.closest('.card').remove();
       if (error.name === 'AbortError' || error.code === 'cancelled') {
-        card('notice', 'Ожидание остановлено', 'Задача может продолжаться на сервере. Проверьте результат в библиотеке.', session);
+        let stoppedNote;
+        if (!handle.jobId) {
+          stoppedNote = card('notice', 'Ожидание остановлено', 'Генерация остановлена до отправки задачи на сервер.', session);
+        } else {
+          stoppedNote = card('notice', 'Ожидание остановлено', 'Отменяем задачу на сервере…', session);
+          const applyCancelNote = ok => {
+            if (ok) settleSessionJob(session, handle.jobId);
+            if (stoppedNote?.isConnected) stoppedNote.textContent = ok
+              ? 'Задача отменена на сервере — очередь и GPU освобождены.'
+              : 'Отменить задачу на сервере не удалось (она могла уже завершиться). Проверьте результат в библиотеке.';
+          };
+          if (handle.serverCancelled === null) handle.onServerCancel = applyCancelNote; else applyCancelNote(handle.serverCancelled);
+        }
       } else {
         // текст остаётся в полях для правки (в т.ч. после 422)
         restoreMusicDraft();
         errorCard(error, session);
       }
-    } finally { setBusy(false); updateEnabled(); }
+    } finally { handle.unregister?.(); setBusy(false); updateEnabled(); }
   }
 
   // All authenticated file transfers share two slots. Interactive requests can pass
@@ -1505,7 +2309,40 @@
     const delay = Number.isFinite(seconds) ? seconds : Number.isFinite(date) ? Math.max(0, date) : 1000 * (2 ** attempt);
     return delay + Math.random() * 150;
   }
-  function fileBlob(pathOrUrl, priority = 0) {
+  // T-27: таймаут на загрузку файла. Зависший сервер больше не держит слот
+  // общей очереди (их всего 2) до бесконечности: 60 с — и соединение рвётся
+  // с честным текстом. Прокидываем и signal операции (✕ / смена сессии).
+  const FILE_TIMEOUT_MS = 60000;
+  function fetchWithTimeout(url, options, signal, ms) {
+    const controller = new AbortController();
+    const state = { timedOut: false };
+    const timer = setTimeout(() => { state.timedOut = true; controller.abort(); }, ms);
+    const onAbort = () => controller.abort();
+    if (signal) {
+      if (signal.aborted) onAbort();
+      else signal.addEventListener('abort', onAbort, { once: true });
+    }
+    return fetch(url, { ...options, signal: controller.signal }).finally(() => {
+      clearTimeout(timer);
+      if (signal) signal.removeEventListener('abort', onAbort);
+    }).catch(error => {
+      if (state.timedOut) {
+        const e = new BusError('timeout', 'Сервер не отдал файл за ' + Math.round(ms / 1000) + ' с — соединение прервано, попробуйте ещё раз.');
+        e.timedOut = true;
+        throw e;
+      }
+      throw error;
+    });
+  }
+  // T-27: смена профиля/выход — очередь не дорабатывает загрузки прежнего
+  // пользователя: ожидающие задачи снимаются сразу, слоты освобождаются.
+  function resetFileQueue() {
+    for (const item of fileQueue.splice(0)) {
+      try { item.reject(new BusError('cancelled', 'Сессия завершена — загрузки отменены.')); } catch { /* потребитель уже ушёл */ }
+    }
+    fileInFlight.clear();
+  }
+  function fileBlob(pathOrUrl, priority = 0, signal) {
     let url, trusted;
     try {
       trusted = new URL(server());
@@ -1518,6 +2355,8 @@
         url.search || url.hash || !/^[a-zA-Z0-9._-]+$/.test(fileName) || fileName === '.' || fileName === '..') {
       return Promise.reject(new BusError('unsafe_url', 'Недоверенный адрес файла.'));
     }
+    // T-26: известный офлайн — сразу честная ошибка, слот очереди не занимается.
+    if (!netOnline) return Promise.reject(new BusError('offline', 'Нет соединения с сервером. Проверьте сеть и повторите.'));
     const owner = currentUser(), credential = token(), origin = server();
     const key = JSON.stringify([owner, credential, url.href]);
     if (fileInFlight.has(key)) return fileInFlight.get(key);
@@ -1527,15 +2366,19 @@
           if (currentUser() !== owner || token() !== credential || server() !== origin) throw new BusError('cancelled', 'Профиль или ключ изменился.');
           try {
             // Never follow redirects with the bearer: the destination may be another origin.
-            const result = await fetch(url.href, { headers: { Authorization: 'Bearer ' + credential }, redirect: 'error' });
+            const result = await fetchWithTimeout(url.href, { headers: { Authorization: 'Bearer ' + credential }, redirect: 'error' }, signal, FILE_TIMEOUT_MS);
             return { response: result, blob: result.ok ? await result.blob() : null };
-          } catch (error) { throw new BusError('network', 'Файл недоступен: проверьте подключение или адрес.'); }
+          } catch (error) {
+            if (error.timedOut) throw error; // T-27: текст про 60 с уже внутри
+            if (signal?.aborted) throw new BusError('cancelled', 'Загрузка файла отменена.');
+            throw new BusError('network', 'Файл недоступен: проверьте подключение или адрес.');
+          }
         }, priority);
         if (response.blob) return response.blob;
         const status = response.response.status;
         if ((status !== 429 && status !== 503) || attempt >= 3) {
           if (status === 429) throw new BusError('rate_limited', 'Слишком много запросов (429). Повторите через минуту.', 429);
-          if (status === 401) throw new BusError('unauthorized', 'Ключ стенда не принят (401).', 401);
+          if (status === 401) throw new BusError('unauthorized', 'Ключ не принят (401). Проверьте ключ в профиле.', 401);
           if (status === 404) throw new BusError('not_found', 'Файл не найден (404); срок хранения мог истечь.', 404);
           throw new BusError('http', 'Файл не получен (' + status + ').', status);
         }
@@ -1559,7 +2402,7 @@
     if (snapshot.idea.length > BriixProducer.MAX_IDEA || snapshot.lyrics.length > BriixProducer.MAX_LYRICS) {
       card('notice', 'Продюсер', 'Идея или текст слишком длинные для подготовки. Сократите их самостоятельно.'); return;
     }
-    const handle = makeCancelHandle();
+    const handle = trackedHandle('producer', session, 'подготовка черновика');
     producerRequests.set(session.id, handle);
     const stage = card('stage', 'Музыкальный продюсер', '', session);
     const wait = waitRow('music', 'writing-lyrics');
@@ -1596,7 +2439,7 @@
       }
     } finally {
       clearTimeout(timer); wait.stop(); stage.closest('.card')?.remove();
-      producerRequests.delete(session.id); setBusy(false);
+      producerRequests.delete(session.id); handle.unregister?.(); setBusy(false);
     }
   }
 
@@ -1658,24 +2501,27 @@
       body.append(brainNote);
     }
     const state = document.createElement('p'); state.className = 'producer-note'; state.setAttribute('role', 'status');
-    state.textContent = entry.applied ? 'Черновик был принят. Генерация запускается отдельно.' : 'Пока ничего не изменено в полях генерации.';
+    state.textContent = entry.applied ? 'Поля заполнены из черновика.' : 'Пока ничего не изменено в полях генерации.';
     body.append(state);
     const actions = document.createElement('div'); actions.className = 'producer-actions';
-    const apply = document.createElement('button'); apply.type = 'button'; apply.className = 'action'; apply.textContent = 'Принять в поля студии';
-    const revert = document.createElement('button'); revert.type = 'button'; revert.className = 'action'; revert.textContent = 'Вернуть поля до принятия';
+    // F-11: тот же набор действий и формулировки, что у черновика наставника —
+    // включая кнопку генерации (раньше её не было и путь лежал через композер).
+    const apply = document.createElement('button'); apply.type = 'button'; apply.className = 'action'; apply.textContent = 'Принять в поля';
+    const revert = document.createElement('button'); revert.type = 'button'; revert.className = 'action'; revert.textContent = 'Вернуть как было';
+    const generate = document.createElement('button'); generate.type = 'button'; generate.className = 'action'; generate.textContent = 'Сгенерировать трек';
     revert.hidden = !entry.beforeApply;
     let applying = false;
     const runOnce = action => async () => {
       if (applying) return;
-      applying = true; apply.disabled = true; revert.disabled = true;
-      try { await action(); } finally { applying = false; apply.disabled = false; revert.disabled = false; }
+      applying = true; apply.disabled = true; revert.disabled = true; generate.disabled = true;
+      try { await action(); } finally { applying = false; apply.disabled = false; revert.disabled = false; generate.disabled = false; }
     };
     apply.addEventListener('click', runOnce(async () => {
       if (storageBlocked || activeSession !== session || mode !== 'music') { state.textContent = 'Откройте эту сессию и режим «Музыка», чтобы принять черновик.'; return; }
       if (!title.value.trim() || !style.value.trim() || (lyrics && !lyrics.value.trim())) { state.textContent = 'Заполните название, звучание и текст песни.'; return; }
       if (instrumental !== entry.snapshot.instrumental) { state.textContent = 'Режим песни изменился. Верните исходный режим, чтобы принять черновик.'; return; }
       const changed = els.prompt.value !== entry.snapshot.quick || els.musicPrompt.value !== entry.snapshot.style || els.lyrics.value !== entry.snapshot.lyrics || (!entry.snapshot.advanced && (!!els.musicPrompt.value.trim() || (!entry.snapshot.instrumental && !!els.lyrics.value.trim())));
-      if (changed && !confirm('В студии есть изменённые или скрытые поля. Заменить стиль и лирику подготовленным черновиком? Текущие поля сохранятся для возврата.')) return;
+      if (changed && !(await BRIIX_TOASTS.confirmDialog({ title: 'Заменить поля подготовленным черновиком?', body: 'В студии есть изменённые или скрытые поля. Текущие значения сохранятся для возврата кнопкой «Вернуть как было».', confirmLabel: 'Заменить' }))) return;
       entry.beforeApply = { quick: els.prompt.value, style: els.musicPrompt.value, lyrics: els.lyrics.value, advanced };
       (entry.backups ||= []).push(entry.beforeApply); refreshBackups();
       // Persist backup before touching the form. If saving fails the form remains unchanged.
@@ -1688,12 +2534,12 @@
       els.musicPrompt.value = style.value;
       if (lyrics) els.lyrics.value = lyrics.value;
       advanced = true; renderChrome(); saveDraft(session); await persistSessions();
-      revert.hidden = false; state.textContent = 'Поля заполнены. Проверьте их и отдельно нажмите «Создать».';
-      els.musicPrompt.focus();
+      revert.hidden = false; state.textContent = 'Поля заполнены — проверьте их в композере.';
+      flashDraftFields(); // F-12
     }));
     revert.addEventListener('click', runOnce(async () => {
       if (storageBlocked || activeSession !== session || mode !== 'music' || !entry.beforeApply) { state.textContent = 'Откройте эту сессию и режим «Музыка».'; return; }
-      if (!confirm('Вернуть поля до принятия? Текущие изменения полей будут заменены.')) return;
+      if (!(await BRIIX_TOASTS.confirmDialog({ title: 'Вернуть поля до принятия?', body: 'Текущие изменения полей будут заменены сохранёнными значениями. То, что вы правили после принятия, сохранится в списке резервных копий карточки.', confirmLabel: 'Вернуть' }))) return;
       // Preserve what is being replaced as another recoverable snapshot.
       entry.beforeRevert = { quick: els.prompt.value, style: els.musicPrompt.value, lyrics: els.lyrics.value, advanced };
       (entry.backups ||= []).push(entry.beforeRevert); refreshBackups();
@@ -1705,7 +2551,26 @@
       advanced = entry.beforeApply.advanced; entry.applied = false; renderChrome(); saveDraft(session); await persistSessions();
       state.textContent = 'Поля восстановлены. Подготовленный черновик остался в этой карточке.';
     }));
-    actions.append(apply, revert); body.append(actions);
+    // F-11: генерация прямо из продюсерского черновика — тот же контракт ctx (T-21),
+    // что и у черновика наставника.
+    generate.addEventListener('click', runOnce(async () => {
+      if (storageBlocked || activeSession !== session || mode !== 'music' || !needKey()) return;
+      if (instrumental !== entry.snapshot.instrumental) { state.textContent = 'Режим трека изменился. Верните исходный режим, чтобы сгенерировать черновик.'; return; }
+      if (!style.value.trim() && !(lyrics && lyrics.value.trim())) { state.textContent = 'Черновик пуст.'; return; }
+      if (!entry.applied) {
+        entry.beforeApply = { quick: els.prompt.value, style: els.musicPrompt.value, lyrics: els.lyrics.value, advanced };
+        (entry.backups ||= []).push(entry.beforeApply); refreshBackups();
+        if (!(await persistSessions())) { state.textContent = 'Не удалось сохранить резервную копию; генерация не запущена.'; return; }
+      }
+      entry.applied = true;
+      els.musicPrompt.value = style.value;
+      if (lyrics) els.lyrics.value = lyrics.value;
+      advanced = true; renderChrome(); saveDraft(session);
+      await persistSessions();
+      revert.hidden = false;
+      await createMusic(els.musicPrompt.value, { title: title.value.trim() || null, lyricsSource: 'продюсер' });
+    }));
+    actions.append(apply, revert, generate); body.append(actions);
   }
 
   async function improve(field) {
@@ -1725,16 +2590,17 @@
         feedPush({ t: 'notice', who: 'Предложение помощника', text: improved.trim() }, session);
         return;
       }
-      undoBackup[field] = original;
+      sessionUndo(session, field, original);
       el.value = improved.trim();
       (field === 'lyrics' ? els.undoLyrics : els.undoPrompt).hidden = false;
     } catch (error) { errorCard(error, session); } finally { improving.delete(field); button.classList.remove('busy'); setBusy(false); }
   }
 
   function undo(field) {
-    if (undoBackup[field] == null) return;
-    (field === 'lyrics' ? els.lyrics : els.musicPrompt).value = undoBackup[field];
-    undoBackup[field] = null;
+    const backup = sessionUndo(activeSession, field);
+    if (backup == null) return;
+    (field === 'lyrics' ? els.lyrics : els.musicPrompt).value = backup;
+    delete activeSession.undo[field];
     (field === 'lyrics' ? els.undoLyrics : els.undoPrompt).hidden = true;
     updateEnabled();
   }
@@ -1761,7 +2627,7 @@
         feedPush({ t: 'notice', who: 'Предложение арт-директора', text: improved.trim() }, session);
         return;
       }
-      undoBackup.prompt = original;
+      sessionUndo(session, 'prompt', original);
       els.prompt.value = improved.trim();
       els.undoPhoto.hidden = false;
     } catch (error) { errorCard(error, session); }
@@ -1769,9 +2635,10 @@
   }
 
   function undoPhoto() {
-    if (undoBackup.prompt == null) return;
-    els.prompt.value = undoBackup.prompt;
-    undoBackup.prompt = null;
+    const backup = sessionUndo(activeSession, 'prompt');
+    if (backup == null) return;
+    els.prompt.value = backup;
+    delete activeSession.undo.prompt;
     els.undoPhoto.hidden = true;
     updateEnabled();
   }
@@ -1790,6 +2657,10 @@
     mode = ['chat', 'photo', 'music'].includes(draft.mode) ? draft.mode : 'chat';
     advanced = !!draft.advanced;
     els.prompt.value = drafts[mode]; els.lyrics.value = draft.lyrics || ''; els.musicPrompt.value = draft.musicPrompt || '';
+    // T-22: кнопки возврата отражают бэкапы именно этой сессии.
+    els.undoLyrics.hidden = session.undo?.lyrics == null;
+    els.undoPrompt.hidden = session.undo?.musicPrompt == null;
+    els.undoPhoto.hidden = session.undo?.prompt == null;
     renderChrome();
   }
   function ensureRoot(session) {
@@ -1813,7 +2684,9 @@
     loadDraft(session);
     setView('chat');
     closeSessions();
+    renderOpsBadge(); // T-20: чужая занятость меняется при смене сессии
     persistSessions();
+    resumeSessionJobs(session); // T-52: незакрытые генерации сессии продолжают ждать
   }
   async function selectSession(session) {
     if (!session || storageBlocked || sessionTransition) return;
@@ -1825,7 +2698,11 @@
     sessionTransition = true;
     try {
       saveDraft(activeSession);
-      if (!(await persistSessions())) return;
+      if (!(await persistSessions())) {
+        // T-29/A14: ошибка записи больше не запирает «Новый чат»: сессия
+        // создаётся в памяти этой вкладки, плашка с экспортом уже видна.
+        card('notice', 'Новый чат', 'Сессия создаётся в этой вкладке — сохранение в хранилище сейчас не работает (см. предупреждение сверху). Несохранённое можно скачать кнопкой в плашке.');
+      }
       if (!activeSession.feed.length && !activeSession.history.length) { closeSessions(); return; }
       const session = newSessionRecord();
       sessionProfile.sessions.push(session);
@@ -1891,7 +2768,13 @@
       dot.className = 'pd' + (i < pinBuf.length ? ' on' : '');
       els.pinDots.append(dot);
     }
+    // F-02: состояние PIN озвучивается — role=status читает эту строку.
+    const announce = document.createElement('span');
+    announce.className = 'sr-only';
+    announce.textContent = pinBuf.length ? 'Введено ' + pinBuf.length + ' ' + pinDigitsWord(pinBuf.length) : 'PIN не начат';
+    els.pinDots.append(announce);
   }
+  function pinDigitsWord(n) { return n % 10 === 1 && n % 100 !== 11 ? 'цифра' : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? 'цифры' : 'цифр'); }
   function gateHint(text) { els.gateHint.textContent = text; }
 
   async function enterGate() {
@@ -1951,29 +2834,88 @@
       els.storageWarning.textContent = 'Не удалось открыть сессии: ' + (error.message || 'ошибка хранилища') + ' Старые данные не удалены. Обновите страницу или освободите место.';
     }
     updateEnabled(); renderKeyChip();
+    resumeSessionJobs(activeSession); // T-52: судьба джоб прошлой сессии — в ленту
   }
 
+  // T-20/F-06: индикатор в шапке — «в другой сессии идёт работа»; клик переносит
+  // туда, где живёт ✕ (остановить стрим из чужой сессии иначе невозможно).
+  function renderOpsBadge() {
+    const summary = BRIIX_OPS.running();
+    const foreign = summary.ops.filter(op => op.sessionId && op.sessionId !== activeSession?.id);
+    if (!foreign.length) { els.opsBadge.hidden = true; return; }
+    const session = sessionProfile?.sessions.find(s => s.id === foreign[0].sessionId);
+    els.opsBadge.textContent = (OP_KIND_LABELS[foreign[0].kind] || 'работа')
+      + (foreign.length > 1 ? ' (+' + (foreign.length - 1) + ')' : '')
+      + (session ? ' · ' + (session.title || 'Новый чат') : '');
+    els.opsBadge.hidden = false;
+  }
+  BRIIX_OPS.subscribe(renderOpsBadge);
+  els.opsBadge.addEventListener('click', () => {
+    const summary = BRIIX_OPS.running();
+    const target = summary.ops.find(op => op.sessionId && op.sessionId !== activeSession?.id);
+    const session = target && sessionProfile?.sessions.find(s => s.id === target.sessionId);
+    if (session) selectSession(session);
+  });
+
+  // T-24: выход при живых операциях — явный выбор «остановить и выйти / остаться»,
+  // а не тихий отказ (A20: refusal-карточка была невидима на вкладке «Библиотека»).
+  const OP_KIND_LABELS = {
+    chat: 'ответ наставника', 'music-chat': 'разговор с наставником',
+    music: 'генерация музыки', photo: 'генерация фото',
+    producer: 'подготовка черновика', resume: 'ожидание генерации'
+  };
+  function opsSummaryLine(summary) {
+    return Object.entries(summary.byKind).map(([kind, n]) => (OP_KIND_LABELS[kind] || kind) + (n > 1 ? ' ×' + n : '')).join(', ');
+  }
   async function logout() {
     if (sessionTransition) return;
-    if (runningOps) { card('notice', 'Выход', 'Сначала дождитесь завершения активных операций или остановите их.'); return; }
+    const running = BRIIX_OPS.running();
+    if (running.count) {
+      els.opsText.textContent = 'Прямо сейчас выполняются: ' + opsSummaryLine(running)
+        + '. «Остановить и выйти» отменит их на сервере — очереди и GPU освободятся; несохранённые тексты полей будут потеряны.';
+      els.opsOverlay.hidden = false;
+      els.opsStopLogout.focus();
+      return;
+    }
+    await doLogout();
+  }
+  els.opsStay.addEventListener('click', () => { els.opsOverlay.hidden = true; els.profileBtn.focus(); });
+  els.opsCancel.addEventListener('click', () => { els.opsOverlay.hidden = true; els.profileBtn.focus(); });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && !els.opsOverlay.hidden) { els.opsOverlay.hidden = true; els.profileBtn.focus(); }
+  });
+  els.opsStopLogout.addEventListener('click', async () => {
+    els.opsStopLogout.disabled = true;
+    try {
+      BRIIX_OPS.stopAll(); // abort локально + cancel каждой джобы на сервере (T-05)
+      await new Promise(r => setTimeout(r, 150)); // дать отменам уйти
+      await doLogout();
+    } finally { els.opsStopLogout.disabled = false; }
+  });
+  async function doLogout() {
+    els.opsOverlay.hidden = true;
+    if (sessionTransition) return;
     if (sessionProfile) { saveDraft(activeSession); if (!(await persistSessions())) return; }
     libSeq++;
     if (producerSaveTimer) { clearTimeout(producerSaveTimer); producerSaveTimer = null; }
+    resetFileQueue(); // T-27: очередь не дорабатывает загрузки ушедшего профиля
     sessionProfile = null; activeSession = null; storageBlocked = true; sessionRoots.clear();
     els.feed.innerHTML = ''; els.lib.innerHTML = '';
     els.prompt.value = ''; els.lyrics.value = ''; els.musicPrompt.value = '';
     Object.keys(drafts).forEach(k => { drafts[k] = ''; });
-    blobCache.forEach(url => URL.revokeObjectURL(url)); blobCache.clear(); blobTypes.clear(); blobBytes.clear();
+    mediaCacheClear(); // T-30/T-31: LRU-кэш медиа — все objectURL ревочатся
+    coverUrlCache.forEach(url => URL.revokeObjectURL(url)); coverUrlCache.clear();
     feedObjectUrls.forEach(url => URL.revokeObjectURL(url)); feedObjectUrls.clear();
+    newBelowCards.clear(); // F-39
+    if (newBelowPill) newBelowPill.hidden = true;
+    els.netBanner.hidden = true; // T-26
     localStorage.removeItem(USER_KEY);
     els.studio.hidden = true; els.gate.hidden = false; els.nickInput.value = '';
     pinBuf = ''; renderDots(); gateHint('PIN — 4–6 цифр. Новый ник регистрируется при первом входе.'); els.nickInput.focus();
   }
 
   // ---- библиотека (клиентская; переезд на GET /jobs — INFRA #77) ----------------
-  const blobCache = new Map(); // job_id → objectURL
-  const blobTypes = new Map();
-  const blobBytes = new Map();
+  const coverUrlCache = new Map(); // путь обложки → objectURL (T-36, LRU 60)
   let libFilter = 'all';
 
   function libLoad() {
@@ -1983,7 +2925,10 @@
   }
   function libSave(list) {
     const nick = currentUser();
-    if (nick) { try { localStorage.setItem(libKey(nick), JSON.stringify(list)); } catch { /* переполнение */ } }
+    if (nick) {
+      try { localStorage.setItem(libKey(nick), JSON.stringify(list)); } catch { /* переполнение */ }
+      broadcast('lib'); // T-26: соседняя вкладка перерисует библиотеку без storage-событий
+    }
   }
   function libAdd(entry) {
     const list = libLoad();
@@ -2017,64 +2962,102 @@
     return work;
   }
 
-  function renderLibrary() {
-    els.lib.innerHTML = '';
+  // T-36: скелет и карточки Библиотеки живут между вызовами — renderLibrary
+  // больше не начинается с innerHTML='' (замер A11: 100 пересозданных обсерверов
+  // и 75 повторных загрузок обложек на один клик ♥). Полная пересборка — только
+  // при входе/выходе/смене профиля;.favorite/delete — точечные мутации.
+  const libState = { built: false, owner: '', filterRow: null, privacy: null, note: null, results: null, cards: new Map() };
+  const libControls = new Map(); // job → { applyFav, removeSelf } — точечные мутации карточек
+  // Сигнатура нормализует optional-поля (undefined ≡ ''): серверная сверка не
+  // должна пересобирать живую карточку из-за приведения типов (T-36).
+  const libSignature = entry => JSON.stringify([entry.kind, entry.prompt || '', entry.model || '', entry.created || 0, entry.lyrics || '',
+    entry.fav ? 1 : 0, entry.file || '', entry.cover || '', entry.sessionId || '', entry.title || '']);
+
+  function libSkeleton() {
+    if (libState.built && libState.results?.isConnected && libState.owner === currentUser()) return;
+    libState.built = false;
+    libState.cards.clear();
+    libControls.clear();
+    els.lib.textContent = '';
     const filterRow = document.createElement('div');
     filterRow.className = 'lib-filters';
     for (const [value, label] of FILTERS) {
       const chip = document.createElement('button');
       chip.className = 'tag';
       chip.textContent = label;
-      chip.setAttribute('aria-pressed', String(libFilter === value));
+      chip.dataset.filter = value;
       chip.addEventListener('click', () => { libFilter = value; renderLibrary(); });
       filterRow.append(chip);
     }
-    els.lib.append(filterRow);
+    // T-41: плашка приватности — серверный список /jobs общий до серверного скоупинга
+    // (INFRA, §2.8 аудита); клиент прячет только атрибутируемых чужих.
+    const privacy = document.createElement('div');
+    privacy.className = 'lib-privacy';
+    privacy.setAttribute('role', 'status');
+    privacy.hidden = true;
     const results = document.createElement('div');
     results.className = 'lib-results';
-    const cards = new Map();
-    const render = (list, note) => {
-      if (list.length && note) note.hidden = true;
+    const note = document.createElement('div');
+    note.className = 'card notice';
+    note.textContent = 'Загружаем библиотеку…';
+    els.lib.append(filterRow, privacy, note, results);
+    Object.assign(libState, { built: true, owner: currentUser(), filterRow, privacy, note, results });
+  }
+
+  // Точечная мутация избранного: класс карточки, подпись кнопки, сигнатура
+  // диффинга — без пересборки списка и без повторных загрузок (T-36).
+  function libApplyFav(job, next) {
+    const item = libState.cards.get(job);
+    if (item) { item.entry.fav = next; item.signature = libSignature(item.entry); }
+    libControls.get(job)?.applyFav(next);
+  }
+
+  function renderLibrary() {
+    libSkeleton();
+    for (const chip of libState.filterRow.querySelectorAll('.tag')) {
+      chip.setAttribute('aria-pressed', String(chip.dataset.filter === libFilter));
+    }
+    const { cards, note, results, privacy } = libState;
+    const render = (list) => {
+      if (list.length) note.hidden = true;
       if (!list.length) {
-        for (const item of cards.values()) item.node.remove();
+        for (const item of cards.values()) { item.node.remove(); libControls.delete(item.entry.job); }
         cards.clear();
-        if (note) { note.hidden = false; note.textContent = libFilter === 'all'
+        note.hidden = false;
+        note.textContent = libFilter === 'all'
           ? 'Пока пусто — создайте фото или трек в чате, они появятся здесь.'
-          : 'В этом фильтре пусто.'; }
+          : 'В этом фильтре пусто.';
         return;
       }
       const wanted = new Set();
       list.forEach((entry, index) => {
-        const signature = JSON.stringify([entry.kind, entry.prompt, entry.model, entry.created, entry.lyrics,
-          entry.fav, entry.file, entry.cover, entry.sessionId]);
+        const signature = libSignature(entry);
         let item = cards.get(entry.job);
         if (!item || item.signature !== signature) {
           const node = libCard(entry);
           if (item) item.node.replaceWith(node);
           item = { node, signature, entry }; cards.set(entry.job, item);
         } else {
-          // Keep the existing player and handlers, but update server mutation capability.
+          // Карточка жива: обновляем данные (серверная мутабельность), узел не трогаем.
           Object.assign(item.entry, entry);
         }
         wanted.add(entry.job);
         if (results.children[index] !== item.node) results.insertBefore(item.node, results.children[index] || null);
       });
-      for (const [job, item] of cards) if (!wanted.has(job)) { item.node.remove(); cards.delete(job); }
+      for (const [job, item] of cards) if (!wanted.has(job)) { item.node.remove(); cards.delete(job); libControls.delete(job); }
     };
     // мгновенно — клиентские записи, чтобы вкладка не мигала пустотой
     const local = libLoad().filter(e => libFilter === 'all' ? true : libFilter === 'fav' ? e.fav : e.kind === libFilter);
-    const note = document.createElement('div');
-    note.className = 'card notice';
-    note.textContent = 'Загружаем библиотеку…';
-    els.lib.append(note, results);
-    render(local, note);
+    render(local);
     // затем серверный список поверх (объединение по job id)
     const seq = ++libSeq;
     serverJobs().then(items => {
       if (seq !== libSeq) return; // устаревший прогон рендера
       const byId = new Map();
+      const owner = currentUser();
       for (const e of libLoad()) byId.set(e.job, e);
       const merged = [];
+      let foreignHidden = 0;
       for (const j of items) {
         const kind = j.type === 'image' ? 'photo' : j.type === 'music' ? 'music' : j.type;
         const localEntry = byId.get(j.id);
@@ -2087,22 +3070,35 @@
           merged.push(localEntry);
           byId.delete(j.id);
         } else if (j.result_url) {
+          // T-41: общий ключ = общий список. Чужая запись (params.artist ≠ ник)
+          // не показывается и не может быть удалена/лайкнута из этого профиля.
+          // Записи без artist (старые стенды, фото до 15.11) неатрибутируемы —
+          // показываем, как раньше: серверного признака владельца нет.
+          const artist = typeof j.params?.artist === 'string' ? j.params.artist : '';
+          if (artist && artist !== owner) { foreignHidden++; continue; }
           merged.push({
             job: j.id, kind, prompt: j.prompt || '',
             file: j.result_url, cover: j.cover_url || '',
             created: (j.created_at || 0) * 1000, fav: !!j.favorite, server: true,
-            lyrics: j.params?.lyrics || '', model: j.params?.model || ''
+            lyrics: j.params?.lyrics || '', model: j.params?.model || '',
+            title: typeof j.params?.title === 'string' ? j.params.title : ''
           });
         }
       }
       for (const e of byId.values()) merged.push(e);
       merged.sort((a, b) => (b.created || 0) - (a.created || 0));
-      render(merged.filter(e => libFilter === 'all' ? true : libFilter === 'fav' ? e.fav : e.kind === libFilter), note);
+      // Серверное изменение favorite (с другого устройства) меняет сигнатуру —
+      // render пересоберёт только эту карточку; свои клики ♥ идут мимо рендера.
+      render(merged.filter(e => libFilter === 'all' ? true : libFilter === 'fav' ? e.fav : e.kind === libFilter));
+      privacy.hidden = !foreignHidden;
+      privacy.textContent = foreignHidden
+        ? 'Показаны только ваши треки: скрыто чужих — ' + foreignHidden + '. Серверный список общий до серверного разграничения.'
+        : '';
     }).catch((error) => {
       if (seq !== libSeq) return;
       note.hidden = false;
       note.textContent = error instanceof BusError && error.status === 401
-        ? 'Серверная библиотека недоступна: проверьте ключ (профиль → «Ключ стенда…»).'
+        ? 'Серверная библиотека недоступна: проверьте ключ (профиль → «Ключ доступа…»).'
         : 'Серверная библиотека недоступна — показаны локальные записи.';
     });
   }
@@ -2114,7 +3110,7 @@
   }
 
   // Обложки и медиа используют общую ограниченную очередь; ошибку 429 повторяет fileBlob.
-  function addTrackCover(container, job, cover, miniature = false) {
+  function addTrackCover(container, job, cover, miniature = false, coverTitle = '') {
     const frame = document.createElement('div');
     const owner = currentUser();
     frame.className = miniature ? 'lib-cover' : 'track-cover';
@@ -2129,13 +3125,20 @@
         try {
           const path = cover || (await serverJobs()).find(item => item.id === job)?.cover_url;
           if (!path || !frame.isConnected || currentUser() !== owner) return;
-          const blob = await fileBlob(path, 2);
-          if (!frame.isConnected || currentUser() !== owner) return;
-          const image = new Image(); image.alt = 'Обложка трека';
-          const url = URL.createObjectURL(blob);
-          image.onload = () => URL.revokeObjectURL(url);
+          // T-36: кэш проверяется ДО загрузки — повторная карточка (Библиотека
+          // после ленты) не качает обложку заново и не занимает слот очереди.
+          let url = coverUrlCache.get(path);
+          if (!url) {
+            const blob = await fileBlob(path, 2);
+            if (!frame.isConnected || currentUser() !== owner) return;
+            url = URL.createObjectURL(blob);
+            coverUrlCache.set(path, url);
+            if (coverUrlCache.size > 60) { const oldest = coverUrlCache.keys().next().value; URL.revokeObjectURL(coverUrlCache.get(oldest)); coverUrlCache.delete(oldest); }
+          }
+          const image = new Image(); image.alt = coverTitle ? 'Обложка трека «' + coverTitle + '»' : 'Обложка трека'; // F-51
+          image.decoding = 'async'; // T-40
           image.onerror = () => {
-            URL.revokeObjectURL(url);
+            coverUrlCache.delete(path);
             if (frame.contains(image)) { frame.textContent = '♫'; frame.setAttribute('aria-label', 'Обложка недоступна'); }
           };
           image.src = url; frame.textContent = ''; frame.removeAttribute('aria-label'); frame.append(image);
@@ -2167,7 +3170,11 @@
     const who = document.createElement('div');
     who.className = 'who';
     let whoText = KIND_LABELS[entry.kind] || entry.kind;
-    if (entry.kind === 'music' && entry.model) whoText += ' · ' + entry.model;
+    // F-19: человекое имя модели (Flash/Pro), а не сырой id из контракта.
+    if (entry.kind === 'music' && entry.model) {
+      const modelKey = Object.keys(MUSIC_MODELS).find(key => MUSIC_MODELS[key] === entry.model);
+      whoText += ' · ' + (MODEL_LABELS[modelKey] || entry.model);
+    }
     whoText += ' · ' + new Date(entry.created).toLocaleString('ru-RU');
     who.textContent = whoText;
     const row = document.createElement('div');
@@ -2178,23 +3185,30 @@
     download.href = '#';
     download.addEventListener('click', async e => {
       e.preventDefault();
+      if (download.classList.contains('busy')) return;
       try {
-        let url = blobCache.get(entry.job);
-        if (!url) {
-          const blob = await fileBlob(entry.file);
-          if (currentUser() !== owner) return;
-          url = URL.createObjectURL(blob);
-          blobCache.set(entry.job, url); blobTypes.set(entry.job, blob.type); blobBytes.set(entry.job, blob);
+        // T-30/T-31: кэш по пути файла (LRU ≤8/32 МБ) — повторное скачивание
+        // не качает файл заново и не плодит objectURL (A12).
+        let entry2 = mediaCacheGet(mediaKey(entry.file));
+        if (!entry2) {
+          // F-21: честное «Загружаем…» вместо молчаливого ожидания очереди файлов.
+          download.classList.add('busy');
+          const idleLabel = download.textContent;
+          download.textContent = '⬇ Загружаем…';
+          try {
+            const blob = await fileBlob(entry.file);
+            if (currentUser() !== owner) return;
+            entry2 = mediaCachePut(mediaKey(entry.file), blob);
+          } finally { download.classList.remove('busy'); download.textContent = idleLabel; }
         }
         const link = document.createElement('a');
-        link.href = url;
-        // Имя файла: «Название - Исполнитель» для треков (кириллица сохраняется),
-        // fallback — прежняя схема briix-<kind>-<date>.
-        link.download = entry.kind === 'music' && (entry.title || entry.prompt)
-          ? safeFileName(entry.title || entry.prompt, currentUser(), extOf({ type: blobTypes.get(entry.job) || '' }))
-          : 'briix-' + entry.kind + '-' + new Date(entry.created).toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.' + extOf({ type: blobTypes.get(entry.job) || '' });
+        link.href = entry2.url;
+        // F-22: единое правило имени — как из ленты: «Название - Исполнитель.ext».
+        link.download = mediaFileName(entry.kind, entry, { type: entry2.blob.type || '' });
+        link.title = link.download;
         document.body.append(link); link.click(); link.remove();
-      } catch { showLibError(div, 'Не удалось скачать файл. Проверьте подключение и попробуйте снова.'); }
+        BRIIX_TOASTS.toast('Скачано: ' + link.download + ' (' + fmtBytes(entry2.blob.size) + ')', { kind: 'done', key: 'download' });
+      } catch (error) { showLibError(div, 'Не удалось скачать файл. ' + (error.message || 'Проверьте подключение и попробуйте снова.')); }
     });
     const fav = document.createElement('button');
     fav.type = 'button';
@@ -2214,34 +3228,56 @@
       const list = libLoad();
       const item = list.find(x => x.job === entry.job);
       if (item) { item.fav = next; libSave(list); }
-      jobsInFlight.clear();
-      renderLibrary();
+      libApplyFav(entry.job, next); // T-36: точечная мутация вместо полного ре-рендера
+      fav.disabled = false;
     });
     const del = document.createElement('button');
     del.type = 'button';
     del.className = 'action';
     del.textContent = '🗑 Удалить';
     del.addEventListener('click', async () => {
-      if (!confirm('Удалить из библиотеки? Файл на стенде останется.')) return;
+      // F-23: честное объяснение последствий для серверной и локальной записи.
+      const ok = await BRIIX_TOASTS.confirmDialog({
+        title: 'Удалить из библиотеки?',
+        body: entry.server
+          ? 'Серверная запись будет удалена и на сервере — скачивание этого файла перестанет работать. Если файл нужен — сначала скачайте его.'
+          : 'Запись исчезнет из библиотеки этого браузера. Файл на сервере не трогаем.',
+        confirmLabel: 'Удалить', danger: true
+      });
+      if (!ok) return;
       if (entry.server) {
         try { await request('/jobs/' + encodeURIComponent(entry.job), { method: 'DELETE', headers: headers() }); }
         catch { showLibError(div, 'Не удалось удалить запись.'); return; }
       }
       if (currentUser() !== owner) return;
       libSave(libLoad().filter(x => x.job !== entry.job));
-      if (blobCache.has(entry.job)) URL.revokeObjectURL(blobCache.get(entry.job));
-      blobCache.delete(entry.job); blobTypes.delete(entry.job); blobBytes.delete(entry.job);
-      jobsInFlight.clear();
-      renderLibrary();
+      mediaCacheDrop(mediaKey(entry.file)); // T-30: objectURL файла ревочится
+      jobsInFlight.clear(); // серверный список изменился — при следующем рендере перечитать
+      libControls.get(entry.job)?.removeSelf(); // T-36: точечное удаление без пересборки
     });
     const sourceSession = sessionProfile?.sessions.find(s => s.id === entry.sessionId || s.feed.some(item => item && item.job === entry.job) || s.jobs?.some(item => item.job === entry.job));
+    // T-36: регистрируем точечные мутации этой карточки (♥/удаление без пересборки).
+    libControls.set(entry.job, {
+      applyFav: next => {
+        entry.fav = next;
+        div.classList.toggle('fav', next);
+        fav.textContent = next ? '★ В избранном' : '☆ В избранное';
+        if (libFilter === 'fav' && !next) { div.remove(); libState.cards.delete(entry.job); libControls.delete(entry.job); }
+      },
+      removeSelf: () => { div.remove(); libState.cards.delete(entry.job); libControls.delete(entry.job); }
+    });
     if (entry.kind !== 'music') {
       const promptEl = document.createElement('div');
       promptEl.className = 'body lib-prompt';
       promptEl.textContent = entry.prompt || '';
       const media = document.createElement('div');
       media.className = 'lib-media';
-      libMedia(entry, media);
+      // R2/T-18: фото Библиотеки — та же единая фото-карточка, что в ленте;
+      // скачанный однажды файл не качается повторно — общий LRU-кэш (T-31).
+      media.append(photoCard({
+        file: entry.file,
+        loadBlob: () => fileBlob(entry.file, 1)
+      }).body);
       row.append(download, fav, del);
       main.append(who, promptEl, media, row);
       div.append(main);
@@ -2249,7 +3285,7 @@
     }
     // Музыкальная карточка библиотеки = тот же единый компонент, что и в ленте
     // (.track-card): обложка-мини = PLAY, волна из пиков, lazy-загрузка по клику.
-    addTrackCover(div, entry.job, entry.cover, true);
+    addTrackCover(div, entry.job, entry.cover, true, entry.title || entry.prompt || '');
     const sourceInput = sourceSession?.feed.find(item => item && item.job === entry.job)?.input || sourceSession?.jobs?.find(item => item.job === entry.job)?.input || {};
     const input = {
       ...sourceInput,
@@ -2315,37 +3351,6 @@
       task().finally(() => { libActive--; libPump(); });
     }
   }
-  function libMedia(entry, container) {
-    const owner = currentUser();
-    const cached = blobCache.get(entry.job);
-    if (cached) return renderMedia(entry, container, cached);
-    const load = async () => {
-      container.textContent = 'Загружаем…';
-      try {
-        const blob = await fileBlob(entry.file, entry.kind === 'music' ? 0 : 1);
-        if (currentUser() !== owner || !container.isConnected) return;
-        let url = blobCache.get(entry.job);
-        if (!url) {
-          url = URL.createObjectURL(blob);
-          blobCache.set(entry.job, url); blobTypes.set(entry.job, blob.type); blobBytes.set(entry.job, blob);
-        }
-        const audio = renderMedia(entry, container, url);
-        if (audio) tryPlay(audio, container);
-      } catch (error) {
-        if (currentUser() !== owner || !container.isConnected) return;
-        container.textContent = (error.message || 'Файл недоступен.') + ' ';
-        const retry = document.createElement('button'); retry.type = 'button'; retry.className = 'action';
-        retry.textContent = 'Повторить'; retry.addEventListener('click', load); container.append(retry);
-      }
-    };
-    if (entry.kind === 'music') return;
-    container.textContent = 'Изображение готово';
-    const observer = new IntersectionObserver((records, obs) => {
-      if (!container.isConnected) { obs.disconnect(); return; }
-      if (records.some(r => r.isIntersecting)) { obs.disconnect(); load(); }
-    }, { rootMargin: '150px' });
-    observer.observe(container);
-  }
 
   function tryPlay(audio, container) {
     if (!audio.isConnected || audio.closest('[hidden]')) return;
@@ -2357,23 +3362,6 @@
       container.append(hint);
     });
   }
-  function renderMedia(entry, container, url) {
-    container.textContent = '';
-    if (entry.kind === 'photo') {
-      const img = new Image();
-      img.alt = 'Результат';
-      img.src = url;
-      container.append(img);
-      return null;
-    }
-    const audio = document.createElement('audio');
-    audio.controls = true;
-    audio.controlsList = 'nodownload';
-    audio.preload = 'metadata';
-    audio.src = url;
-    container.append(audio);
-    return audio;
-  }
 
   // ---- вкладки: Чат / Библиотека -------------------------------------------------
   function setView(next) {
@@ -2382,7 +3370,83 @@
     els.lib.hidden = next !== 'library';
     els.composer.hidden = next !== 'chat';
     if (next === 'library') renderLibrary();
+    if (next === 'chat') paintPill(); // F-39: после возврата из Библиотеки счёт жив
   }
+
+  // ---- T-26: сеть, видимость вкладки, синхронизация вкладок ---------------------
+  // Поллинг не долбит стенд из фоновой вкладки; возврат в вкладку/сеть —
+  // немедленный опрос и перечитывание библиотеки; вторая вкладка видит
+  // изменения первой без перезагрузки (BroadcastChannel).
+  let netOnline = typeof navigator !== 'undefined' ? navigator.onLine !== false : true;
+  let pageHidden = typeof document !== 'undefined' && document.hidden;
+  let hiddenSince = 0, hiddenTotalMs = 0;
+  const visibleWaiters = new Set();
+  const onlineWaiters = new Set();
+  function hiddenMs() { return hiddenTotalMs + (hiddenSince ? Date.now() - hiddenSince : 0); }
+  function waitPageVisible() {
+    if (!pageHidden) return Promise.resolve();
+    return new Promise(resolve => visibleWaiters.add(resolve));
+  }
+  function waitNetOnline() {
+    if (netOnline) return Promise.resolve();
+    return new Promise(resolve => onlineWaiters.add(resolve));
+  }
+  function refreshAfterReturn() {
+    // Библиотека/статус могли измениться, пока вкладка спала: серверный список
+    // перечитывается, открытая Библиотека перерисовывается.
+    if (!currentUser() || storageBlocked) return;
+    jobsInFlight.clear();
+    if (!els.lib.hidden) renderLibrary();
+  }
+  document.addEventListener('visibilitychange', () => {
+    const nowHidden = document.hidden;
+    if (nowHidden && !hiddenSince) hiddenSince = Date.now();
+    if (!nowHidden && hiddenSince) { hiddenTotalMs += Date.now() - hiddenSince; hiddenSince = 0; }
+    const was = pageHidden;
+    pageHidden = nowHidden;
+    if (was && !nowHidden) {
+      for (const resolve of visibleWaiters) resolve();
+      visibleWaiters.clear();
+      refreshAfterReturn();
+    }
+  });
+  // Баннер «Нет соединения» — единственное место, где пользователь видит
+  // состояние сети; запросы при этом падают сразу и с понятным текстом (T-26).
+  function paintNetBanner() {
+    els.netBanner.hidden = netOnline;
+    els.netBanner.textContent = 'Нет соединения с сервером. Отправка и генерации приостановлены — они продолжатся, когда сеть вернётся.';
+  }
+  window.addEventListener('offline', () => {
+    netOnline = false;
+    paintNetBanner();
+  });
+  window.addEventListener('online', () => {
+    netOnline = true;
+    paintNetBanner();
+    for (const resolve of onlineWaiters) resolve();
+    onlineWaiters.clear();
+    refreshAfterReturn();
+  });
+  // BroadcastChannel('briix-studio'): сессии/библиотека синхронизируются между
+  // вкладками одного браузера (сейчас вторая вкладка видит чужие изменения
+  // только после перезагрузки).
+  let studioChannel = null;
+  function broadcast(type) {
+    try { studioChannel?.postMessage({ type, user: currentUser() }); } catch { /* канал закрыт */ }
+  }
+  try {
+    if ('BroadcastChannel' in window) {
+      studioChannel = new BroadcastChannel('briix-studio');
+      studioChannel.addEventListener('message', event => {
+        const data = event.data;
+        if (!data || data.user !== currentUser()) return;
+        if (data.type === 'lib') {
+          jobsInFlight.clear();
+          if (!els.lib.hidden) renderLibrary();
+        }
+      });
+    }
+  } catch { /* нет канала — вкладки просто не синхронизируются */ }
   // ---- wiring -------------------------------------------------------------------
   els.modes.addEventListener('click', e => {
     const button = e.target.closest('.mode');
@@ -2408,8 +3472,13 @@
     await createMusic(promptValue());
   });
   els.prepareMusic.addEventListener('click', prepareMusic);
+  // F-33: черновик композера пишется на вводе (дебаунс 400 мс) — раньше
+  // набранный текст терялся при закрытии вкладки без смены сессии.
+  for (const el of [els.prompt, els.lyrics, els.musicPrompt]) el.addEventListener('input', saveDraftSoon);
   els.improveLyrics.addEventListener('click', () => improve('lyrics'));
-  els.improvePrompt.addEventListener('click', () => improve('prompt'));
+  // Ключ 'musicPrompt' (а не 'prompt'): undo('musicPrompt') читает тот же ключ —
+  // раньше кнопка возврата стиля была видима, но не работала (запись шла в 'prompt').
+  els.improvePrompt.addEventListener('click', () => improve('musicPrompt'));
   els.undoLyrics.addEventListener('click', () => undo('lyrics'));
   els.undoPrompt.addEventListener('click', () => undo('musicPrompt'));
   els.improvePhoto.addEventListener('click', improvePhoto);
@@ -2442,12 +3511,28 @@
   els.lyrics.addEventListener('input', updateEnabled);
   els.musicPrompt.addEventListener('input', updateEnabled);
 
-  els.keySave.addEventListener('click', () => {
-    setToken(els.keyInput.value);
+  els.keySave.addEventListener('click', async () => {
+    const value = els.keyInput.value.trim();
+    if (!value) {
+      // F-43: пустое поле — это удаление ключа, а не «сохранение пустоты».
+      if (!token()) { els.keyCard.hidden = true; return; }
+      const ok = await BRIIX_TOASTS.confirmDialog({
+        title: 'Удалить сохранённый ключ?',
+        body: 'Запросы к серверу перестанут проходить, пока не введёте новый ключ. Сессии и библиотека останутся.',
+        confirmLabel: 'Удалить', danger: true
+      });
+      if (!ok) return;
+      setToken('');
+      BRIIX_TOASTS.toast('Ключ удалён.', { kind: 'info' });
+    } else {
+      setToken(value, { remember: els.keyRemember.checked });
+      BRIIX_TOASTS.toast(els.keyRemember.checked
+        ? 'Ключ сохранён — запомнен в этом браузере.'
+        : 'Ключ сохранён — до закрытия этой вкладки.', { kind: 'done' });
+    }
     els.keyInput.value = '';
     els.keyCard.hidden = true;
     renderKeyChip();
-    card('notice', 'Ключ', 'Ключ сохранён в этом браузере.');
   });
 
   // Профиль-меню в панели вкладок: пункты статичные, меню руками (не attachMenu).
@@ -2466,9 +3551,45 @@
     els.keyCard.hidden = false;
     els.keyInput.focus();
   });
-  els.profileLogoutBtn.addEventListener('click', () => {
+  els.profileLogoutBtn.addEventListener('click', async () => {
     closeMenus();
-    if (confirm('Выйти из профиля ' + currentUser() + '?')) logout();
+    if (await BRIIX_TOASTS.confirmDialog({
+      title: 'Выйти из профиля?',
+      body: 'Профиль «' + currentUser() + '» останется в этом браузере вместе с сессиями и библиотекой; ключ доступа не удаляется. Идущие генерации можно остановить на следующем шаге.',
+      confirmLabel: 'Выйти', danger: true
+    })) logout();
+  });
+  // T-43: «Выйти и очистить это устройство» — для общих устройств: удаляет
+  // ключ, профили, сессии (IndexedDB), библиотеки и настройки. Файлы на
+  // сервере не трогаем (их всё равно удаляет retention).
+  els.profileWipeBtn.addEventListener('click', async () => {
+    closeMenus();
+    const ok = await BRIIX_TOASTS.confirmDialog({
+      title: 'Выйти и очистить это устройство?',
+      body: 'Будут удалены: ключ доступа, все профили и PIN, сессии и история диалогов, библиотеки и настройки. Отменить будет нельзя — скачайте нужное заранее. Файлы на сервере не трогаем.',
+      confirmLabel: 'Очистить и выйти', danger: true
+    });
+    if (!ok) return;
+    BRIIX_OPS.stopAll();
+    els.opsOverlay.hidden = true;
+    try { await BriixSessionStore.wipe(); } catch { /* даже если база занята — локальное чистим */ }
+    for (const key of Object.keys(localStorage)) {
+      if (/^briix-/.test(key)) localStorage.removeItem(key);
+    }
+    sessionStorage.removeItem(TOKEN_SESSION_KEY);
+    sessionProfile = null; activeSession = null; storageBlocked = true; sessionRoots.clear();
+    els.feed.textContent = ''; els.lib.textContent = '';
+    els.prompt.value = ''; els.lyrics.value = ''; els.musicPrompt.value = '';
+    Object.keys(drafts).forEach(k => { drafts[k] = ''; });
+    sessionBusy.clear();
+    mediaCacheClear(); // T-30/T-31
+    coverUrlCache.forEach(url => URL.revokeObjectURL(url)); coverUrlCache.clear();
+    feedObjectUrls.forEach(url => URL.revokeObjectURL(url)); feedObjectUrls.clear();
+    renderOpsBadge();
+    els.studio.hidden = true; els.gate.hidden = false;
+    els.nickInput.value = '';
+    pinBuf = ''; renderDots(); gateHint('PIN — 4–6 цифр. Общее устройство? После работы используйте «Выйти и очистить это устройство».');
+    els.nickInput.focus();
   });
 
   // пин-пад: цифры и backspace
@@ -2492,8 +3613,9 @@
   });
 
   // Enter отправляет в чате, Shift+Enter — перенос строки (как в обычном мессенджере).
+  // F-50: единое поведение во всех режимах (раньше в фото/музыке Enter молча делал перенос).
   els.prompt.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && mode === 'chat') {
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
       e.preventDefault();
       create();
     }
@@ -2509,4 +3631,9 @@
   const savedUser = currentUser();
   if (savedUser && profiles()[savedUser]) startSession(savedUser);
   else { els.gate.hidden = false; els.nickInput.focus(); }
+  // Кеш-самолечение (хвост T-35): инлайн-сторож в index.html по этому маркеру
+  // (и видимым гейту/студии) понимает, что бут прошёл, и чистит счётчик
+  // перезагрузок + служебный ?_b= в адресе. Без маркера живая страница
+  // через 9 с считала бы себя сломанной и перезагрузилась бы.
+  document.documentElement.setAttribute('data-booted', '1');
 })();

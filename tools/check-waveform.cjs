@@ -35,6 +35,15 @@ const { launch } = require('./browser-env.cjs');
     // Волна построена мгновенно из пиков — аудио ещё не существует вовсе.
     await page.waitForSelector('#a canvas');
     assert.equal(await page.locator('#a audio').count(), 0, 'wave exists before any audio element');
+    // R4/T-38: два слоя — статичные бары + акцентный прогресс; тач-зона ≥44px (F-26).
+    assert.equal(await page.locator('#a .waveform canvas').count(), 2, 'static base + accent progress layers (T-38)');
+    const hitBox = await page.evaluate(() => document.querySelector('#a .waveform').getBoundingClientRect().height);
+    assert.ok(hitBox >= 44, 'wave hit area >= 44px (F-26): ' + hitBox);
+    const dprGeo = await page.evaluate(() => {
+      const c = document.querySelector('#a .waveform-canvas');
+      return { backing: c.width, css: c.clientWidth, dpr: Math.min(3, window.devicePixelRatio || 1) };
+    });
+    assert.ok(dprGeo.backing >= dprGeo.css * dprGeo.dpr - 2, 'canvas backing store = CSS size * devicePixelRatio (T-38): ' + JSON.stringify(dprGeo));
     // Привязываем настоящее аудио и проверяем клик-seek и подсветку прогресса.
     await page.evaluate(() => {
       const NativeAudio = window.AudioContext;
@@ -70,14 +79,25 @@ const { launch } = require('./browser-env.cjs');
     });
     assert.ok(Math.abs(sliderInfo.currentTime - 1.5) < 0.1, 'hidden a11y slider still seeks native audio');
     assert.match(sliderInfo.label, /Позиция/);
-    // Прогресс подсвечен: на волне есть и акцентные, и приглушённые бары.
+    // Прогресс подсвечен: на слоях есть и акцентные, и приглушённые бары —
+    // прогресс открывается CSS-клипом акцентного слоя (T-38), без repaint баров.
     await page.waitForFunction(() => {
-      const canvas = document.querySelector('#a canvas'), ctx = canvas.getContext('2d');
-      const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      const canvases = document.querySelectorAll('#a canvas');
       const seen = new Set();
-      for (let i = 3; i < pixels.length; i += 4) if (pixels[i]) seen.add(pixels[i - 3] + ',' + pixels[i - 2] + ',' + pixels[i - 1]);
+      for (const canvas of canvases) {
+        const ctx = canvas.getContext('2d');
+        const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+        for (let i = 3; i < pixels.length; i += 4) if (pixels[i]) seen.add(pixels[i - 3] + ',' + pixels[i - 2] + ',' + pixels[i - 1]);
+      }
       return seen.size >= 2;
     }, {}, { timeout: 5000 });
+    assert.match(await page.evaluate(() => document.querySelector('#a .waveform-progress').style.clipPath), /inset\(0/, 'progress moves via CSS clip, not repaint (T-38)');
+    // T-38: смена ширины пересобирает backing store (ResizeObserver).
+    const widthBefore = await page.evaluate(() => document.querySelector('#a .waveform-canvas').width);
+    await page.setViewportSize({ width: 500, height: 400 });
+    await page.waitForFunction(w => document.querySelector('#a .waveform-canvas').width !== w, widthBefore, { timeout: 5000 });
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.waitForFunction(w => document.querySelector('#a .waveform-canvas').width === w, widthBefore, { timeout: 5000 });
     // Pending-seek: волна без аудио — клик вызывает onSeekPending и применяется при setAudio.
     await page.evaluate(() => {
       window.pending = [];
@@ -107,6 +127,6 @@ const { launch } = require('./browser-env.cjs');
       BriixWaveform.attachFromPeaks(Array.from({ length: 160 }, (_, i) => Math.abs(Math.sin(i / 7))), container, {}).setAudio(audio);
     }, m4a);
     await page.waitForSelector('#m4a canvas');
-    console.log('PASS peaks waveform: instant draw from peaks before any audio, click seek, a11y slider, progress highlight, pending seek applied on setAudio, zero AudioContext', JSON.stringify(peaks));
+    console.log('PASS peaks waveform: instant draw, DPR+ResizeObserver, two layers with CSS-clip progress, click seek, a11y slider, pending seek, zero AudioContext', JSON.stringify(peaks));
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
