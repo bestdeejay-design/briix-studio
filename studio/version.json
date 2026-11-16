@@ -1,8 +1,15 @@
 {
+<<<<<<< HEAD
   "build": "52c7f0cce3",
   "assets": {
     "studio.css": "a4b3be1aca",
     "studio.js": "d07dac7ddd",
+=======
+  "build": "de0e9dcb43",
+  "assets": {
+    "studio.css": "a4b3be1aca",
+    "studio.js": "65f1eaf8eb",
+>>>>>>> 2069381 (chore(assets): ?v= под новые studio.js и music-brain.js (T-35))
     "wait-ui.js": "8c1753e686",
     "catalog.js": "a9dd9e6116",
     "ops.js": "760bf48ea0",
@@ -10,7 +17,11 @@
     "session-store.js": "9f617ae645",
     "waveform.js": "0ee97fc2a9",
     "player.js": "778d4b4c76",
+<<<<<<< HEAD
     "producer-brain.js": "9b3f7d0a72",
+=======
+    "producer-brain.js": "f82a6e65db",
+>>>>>>> 2069381 (chore(assets): ?v= под новые studio.js и music-brain.js (T-35))
     "music-brain.js": "ff50826eb6",
     "wait-phrases.js": "d6abab3594"
   }
