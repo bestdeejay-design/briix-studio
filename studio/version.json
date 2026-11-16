@@ -1,13 +1,13 @@
 {
-  "build": "adba617caf",
+  "build": "c103fa42f5",
   "assets": {
     "studio.css": "a4b3be1aca",
-    "studio.js": "72df14836c",
+    "studio.js": "6df863ac6c",
     "wait-ui.js": "8c1753e686",
     "catalog.js": "a9dd9e6116",
     "ops.js": "760bf48ea0",
     "toasts.js": "50285e4a33",
-    "session-store.js": "0938ca5557",
+    "session-store.js": "9f617ae645",
     "waveform.js": "0ee97fc2a9",
     "player.js": "778d4b4c76",
     "producer-brain.js": "f82a6e65db",
