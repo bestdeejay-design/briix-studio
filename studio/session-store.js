@@ -99,6 +99,46 @@
     });
   }
 
+  // Хотфикс #23: запись сессии из чужой/старой версии или повреждённого хранилища
+  // может оказаться null или без обязательных полей — раньше это роняло студию
+  // на «Cannot read properties of null (reading 'title')». Валидные записи не
+  // трогаем (тот же объект), null/не-объекты выбрасываем, битые чиним до
+  // валидной пустой сессии (id и title сохраняем, если они осмысленны).
+  function newEmptySession(id, now) {
+    return { id, title: 'Новый чат', titleSet: false, createdAt: now, updatedAt: now, feed: [], history: [] };
+  }
+  function sanitizeSession(raw, now) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+    const fixed = { ...raw };
+    if (typeof fixed.id !== 'string' || !fixed.id) {
+      fixed.id = (globalThis.crypto && crypto.randomUUID) ? crypto.randomUUID() : 's-' + now + '-' + Math.random().toString(36).slice(2);
+    }
+    if (typeof fixed.title !== 'string' || !fixed.title) { fixed.title = 'Новый чат'; fixed.titleSet = false; }
+    if (!Array.isArray(fixed.feed)) fixed.feed = [];
+    if (!Array.isArray(fixed.history)) fixed.history = [];
+    // Находка ревью PR #25: null-ЭЛЕМЕНТЫ внутри feed/history тоже роняли бут
+    // (ensureRoot читает item.t у null). Чистим мусор, валидные элементы не трогаем.
+    fixed.feed = fixed.feed.filter(item => item && typeof item === 'object');
+    fixed.history = fixed.history.filter(item => item && typeof item === 'object');
+    if (!Number.isFinite(fixed.createdAt)) fixed.createdAt = now;
+    if (!Number.isFinite(fixed.updatedAt)) fixed.updatedAt = fixed.createdAt;
+    return fixed;
+  }
+  function sanitizeProfile(profile) {
+    if (!profile || typeof profile !== 'object') return null;
+    const now = Date.now();
+    const rawSessions = Array.isArray(profile.sessions) ? profile.sessions : [];
+    const sessions = [];
+    let changed = !Array.isArray(profile.sessions);
+    for (const raw of rawSessions) {
+      const fixed = sanitizeSession(raw, now);
+      if (!fixed) { changed = true; continue; } // null/мусор — выбросить
+      if (fixed !== raw) changed = true;
+      sessions.push(fixed);
+    }
+    return { profile: { ...profile, sessions }, changed };
+  }
+
   async function openProfile(nick, options = {}) {
     if (typeof nick !== 'string' || !nick) throw new SessionStoreError('invalid_nick', 'Нужен ник профиля.');
     const db = await openDatabase(options.indexedDB === undefined ? globalThis.indexedDB : options.indexedDB);
@@ -111,7 +151,14 @@
         if (get.result !== undefined) {
           if (get.result.schemaVersion !== SCHEMA_VERSION) {
             fail(new SessionStoreError('schema_unsupported', 'Версия данных сессий не поддерживается.'));
-          } else done(get.result);
+            return;
+          }
+          // Хотфикс #23: санированный профиль сразу записываем обратно,
+          // чтобы битые записи не жили вечно.
+          const sanitized = sanitizeProfile(get.result);
+          if (!sanitized) { fail(new SessionStoreError('schema_unsupported', 'Неизвестный формат данных сессий.')); return; }
+          if (sanitized.changed) store.put(sanitized.profile);
+          done(sanitized.profile);
           return;
         }
         try {
@@ -205,7 +252,11 @@
         if (!profile || profile.nick !== nick || profile.schemaVersion !== SCHEMA_VERSION || !Array.isArray(profile.sessions)) {
           throw new SessionStoreError('schema_unsupported', 'Неизвестный формат локальных сессий.');
         }
-        return { backend: mode, profile };
+        // Хотфикс #23: локальный бэкенд санируем так же, как IDB.
+        const sanitized = sanitizeProfile(profile);
+        if (!sanitized) throw new SessionStoreError('schema_unsupported', 'Неизвестный формат локальных сессий.');
+        if (sanitized.changed) localWrite(storage, fallbackKey(nick), JSON.stringify(sanitized.profile));
+        return { backend: mode, profile: sanitized.profile };
       }
       const profile = legacyProfile(nick, storage);
       localWrite(storage, fallbackKey(nick), JSON.stringify(profile));
