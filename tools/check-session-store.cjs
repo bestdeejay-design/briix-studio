@@ -10,7 +10,7 @@ const { launch } = require('./browser-env.cjs');
 (async () => {
   const script = fs.readFileSync(path.join(__dirname, '../studio/session-store.js'));
   const server = http.createServer((req, res) => {
-    if (req.url === '/session-store.js') { res.writeHead(200, { 'Content-Type': 'text/javascript' }); res.end(script); }
+    if (req.url === '/session-store.js') { res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8' }); res.end(script); }
     else { res.writeHead(200, { 'Content-Type': 'text/html' }); res.end('<!doctype html><script src="/session-store.js"></script>'); }
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -107,6 +107,67 @@ const { launch } = require('./browser-env.cjs');
     });
     assert.ok(measured.jsonBytes > 0);
     console.log('Storage estimate for 100 synthetic events (whole origin, approximate):', JSON.stringify(measured));
+
+    // Хотфикс #23: профиль с [null, битая-без-feed, валидная] санируется при openProfile,
+    // валидная запись остаётся нетронутой, санированный профиль записывается обратно.
+    const sanitizeIdb = await page.evaluate(async () => {
+      const valid = { id: 'valid-1', title: 'Живой чат', titleSet: true, createdAt: 1, updatedAt: 2,
+        feed: [{ t: 'user', who: 'Вы', text: 'привет' }], history: [{ role: 'user', content: 'привет' }] };
+      const broken = { id: 'broken-1', title: 'Битая' }; // есть id и title, нет feed/history
+      const noTitle = { title: null }; // нет ни id, ни валидного title
+      const raw = { schemaVersion: 1, nick: 'санирование', revision: 3, activeSessionId: 'broken-1', sessions: [null, noTitle, broken, valid], legacyBackup: null };
+      const rawWrite = () => new Promise((resolve, reject) => {
+        const req = indexedDB.open('briix-studio-sessions', 1);
+        req.onsuccess = () => {
+          const db = req.result;
+          const tx = db.transaction('profiles', 'readwrite');
+          tx.objectStore('profiles').put(raw);
+          tx.oncomplete = () => { db.close(); resolve(); };
+          tx.onerror = () => reject(tx.error);
+        };
+      });
+      const storedRead = () => new Promise((resolve, reject) => {
+        const req = indexedDB.open('briix-studio-sessions', 1);
+        req.onsuccess = () => {
+          const db = req.result;
+          const tx = db.transaction('profiles', 'readonly');
+          const get = tx.objectStore('profiles').get('санирование');
+          tx.oncomplete = () => { db.close(); resolve(get.result); };
+          tx.onerror = () => reject(tx.error);
+        };
+      });
+      await rawWrite();
+      const opened = await BriixSessionStore.openProfile('санирование');
+      return { opened, stored: await storedRead(), valid };
+    });
+    assert.equal(sanitizeIdb.opened.sessions.length, 3, 'null-запись выброшена, остальные три починены/сохранены');
+    const [repairedNoTitle, repaired, validKept] = sanitizeIdb.opened.sessions;
+    assert.equal(repairedNoTitle.id.length > 0, true, 'записи без id сгенерирован новый id');
+    assert.equal(repairedNoTitle.title, 'Новый чат', 'записи без title проставлен дефолтный title');
+    assert.deepEqual(repairedNoTitle.feed, [], 'починенной записи проставлен пустой feed');
+    assert.deepEqual(repairedNoTitle.history, [], 'починенной записи проставлен пустой history');
+    assert.equal(repaired.id, 'broken-1', 'битой записи сохранён её id');
+    assert.equal(repaired.title, 'Битая', 'валидный title битой записи сохранён, не затёрт дефолтом');
+    assert.deepEqual(repaired.feed, [], 'битой записи проставлен пустой feed');
+    assert.deepEqual(repaired.history, [], 'битой записи проставлен пустой history');
+    assert.deepEqual(validKept, sanitizeIdb.valid, 'валидная запись не тронута');
+    assert.equal(sanitizeIdb.stored.sessions.length, 3, 'санированный профиль записан обратно в IDB');
+    assert.equal(sanitizeIdb.stored.revision, 3, 'revision при санитизации не меняется');
+    assert.equal(sanitizeIdb.stored.sessions[2].title, 'Живой чат', 'валидная запись цела и в хранилище');
+
+    // Тот же сценарий на локальном бэкенде (fallback-путь open()).
+    const sanitizeLocal = await page.evaluate(async () => {
+      localStorage.setItem('briix-studio-sessions-backend-локал-сан', 'local');
+      localStorage.setItem('briix-studio-sessions-v1-локал-сан', JSON.stringify({
+        schemaVersion: 1, nick: 'локал-сан', revision: 0, activeSessionId: 'b',
+        sessions: [null, { id: 'b', title: 'битая' }], legacyBackup: null
+      }));
+      const opened = await BriixSessionStore.open('локал-сан');
+      return { profile: opened.profile, stored: JSON.parse(localStorage.getItem('briix-studio-sessions-v1-локал-сан')) };
+    });
+    assert.equal(sanitizeLocal.profile.sessions.length, 1, 'local: null-запись выброшена');
+    assert.deepEqual(sanitizeLocal.profile.sessions[0].feed, [], 'local: битая запись починена');
+    assert.equal(sanitizeLocal.stored.sessions.length, 1, 'local: санированный профиль записан обратно');
     await context.close();
     console.log('PASS session storage: migration, backup, fallback, isolation, conflicts and failures');
   } finally {

@@ -433,8 +433,12 @@
     sessionProfile = opened.profile; sessionBackend = opened.backend;
     conflictOffered = false; storageDirty = false;
     els.storageWarning.hidden = sessionBackend !== 'local';
-    activeSession = sessionProfile.sessions.find(s => s.id === sessionProfile.activeSessionId) || sessionProfile.sessions[0];
-    if (!activeSession) activeSession = sessionProfile.sessions[0] = newSessionRecord();
+    activeSession = sessionProfile.sessions.find(s => s && s.id === sessionProfile.activeSessionId) || sessionProfile.sessions[0];
+    // Хотфикс #23: как в startSession — битая запись заменяется пустой сессией, а не крашит восстановление.
+    if (!activeSession || typeof activeSession !== 'object' || !activeSession.id || !Array.isArray(activeSession.feed)) {
+      activeSession = newSessionRecord();
+      sessionProfile.sessions.push(activeSession);
+    }
     sessionProfile.activeSessionId = activeSession.id;
     sessionRoots.clear();
     els.feed.textContent = '';
@@ -2714,10 +2718,11 @@
     const sessions = [...sessionProfile.sessions].sort((a, b) => b.updatedAt - a.updatedAt);
     if (!sessions.length) { els.sessionsList.textContent = 'Здесь появятся ваши диалоги.'; return; }
     for (const session of sessions) {
+      if (!session) continue; // хотфикс #23: мусорная запись не роняет рендер
       const button = document.createElement('button'); button.type = 'button'; button.className = 'session-item';
       button.setAttribute('aria-current', String(session === activeSession));
-      const title = document.createElement('span'); title.textContent = session.title || 'Новый чат';
-      const date = document.createElement('time'); date.textContent = new Date(session.updatedAt || session.createdAt).toLocaleString('ru-RU');
+      const title = document.createElement('span'); title.textContent = session?.title || 'Новый чат';
+      const date = document.createElement('time'); date.textContent = new Date(session?.updatedAt || session?.createdAt || Date.now()).toLocaleString('ru-RU');
       button.append(title, date); button.addEventListener('click', () => selectSession(session)); els.sessionsList.append(button);
     }
   }
@@ -2820,7 +2825,12 @@
       const opened = await BriixSessionStore.open(nick);
       sessionProfile = opened.profile; sessionBackend = opened.backend;
       if (!sessionProfile.sessions.length) sessionProfile.sessions.push(newSessionRecord());
-      activeSession = sessionProfile.sessions.find(x => x.id === sessionProfile.activeSessionId) || sessionProfile.sessions[0];
+      activeSession = sessionProfile.sessions.find(x => x && x.id === sessionProfile.activeSessionId) || sessionProfile.sessions[0];
+      // Хотфикс #23: битая запись не должна ронять вход — вместо краша создаём пустую сессию.
+      if (!activeSession || typeof activeSession !== 'object' || !activeSession.id || !Array.isArray(activeSession.feed)) {
+        activeSession = newSessionRecord();
+        sessionProfile.sessions.push(activeSession);
+      }
       sessionProfile.activeSessionId = activeSession.id;
       ensureRoot(activeSession); rootFor(activeSession).hidden = false; loadDraft(activeSession);
       storageBlocked = false;
@@ -2846,7 +2856,7 @@
     const session = sessionProfile?.sessions.find(s => s.id === foreign[0].sessionId);
     els.opsBadge.textContent = (OP_KIND_LABELS[foreign[0].kind] || 'работа')
       + (foreign.length > 1 ? ' (+' + (foreign.length - 1) + ')' : '')
-      + (session ? ' · ' + (session.title || 'Новый чат') : '');
+      + (session ? ' · ' + (session?.title || 'Новый чат') : '');
     els.opsBadge.hidden = false;
   }
   BRIIX_OPS.subscribe(renderOpsBadge);
@@ -3311,14 +3321,14 @@
         { label: 'Создать обложку', onPick: () => createCoverDraft(entry) },
         { label: entry.fav ? 'Убрать из избранного' : 'В избранное', onPick: () => fav.click() },
         { label: 'Удалить', danger: true, onPick: () => del.click() },
-        ...(sourceSession ? [{ label: 'Открыть сессию: ' + sourceSession.title, onPick: () => selectSession(sourceSession) }] : [])
+        ...(sourceSession ? [{ label: 'Открыть сессию: ' + (sourceSession?.title || 'Новый чат'), onPick: () => selectSession(sourceSession) }] : [])
       ]
     });
     main.append(who);
     // «Сессия: …» — только когда сессия известна локально; «Сессия неизвестна» не показываем.
     if (sourceSession) {
       const origin = document.createElement('div'); origin.className = 'hint';
-      origin.textContent = 'Сессия: ' + sourceSession.title;
+      origin.textContent = 'Сессия: ' + (sourceSession?.title || 'Новый чат');
       main.append(origin);
     }
     // Текст песни — раскрывающим блоком из меню «⋯», отдельной строки в карточке нет.

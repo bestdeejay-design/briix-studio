@@ -2228,6 +2228,55 @@ function bffServer(port) {
   ok('defer + content-hash versions + favicon/manifest/theme-color + lazy wait-phrases (T-35)');
   await p.close();
 
+  // Хотфикс #23: профиль с [null, битой, валидной] записями не роняет вход —
+  // баннер «Не удалось открыть сессии» не показывается, студия открыта.
+  resetBff();
+  p = await page({ user: '' }); // путь через гейт, как у владельца на проде
+  const seeded = await p.evaluate(async () => {
+    const valid = { id: 'valid-1', title: 'Живой чат', titleSet: true, createdAt: 1, updatedAt: 2,
+      feed: [{ t: 'user', who: 'Вы', text: 'привет из живой сессии' }],
+      history: [{ role: 'user', content: 'привет из живой сессии' }] };
+    const broken = { id: 'broken-1', title: 'Битая' }; // нет feed/history
+    const raw = { schemaVersion: 1, nick: 'сломан', revision: 0, activeSessionId: 'broken-1', sessions: [null, broken, valid], legacyBackup: null };
+    await new Promise((resolve, reject) => {
+      const req = indexedDB.open('briix-studio-sessions', 1);
+      req.onupgradeneeded = () => { if (!req.result.objectStoreNames.contains('profiles')) req.result.createObjectStore('profiles', { keyPath: 'nick' }); };
+      req.onsuccess = () => {
+        const db = req.result;
+        const tx = db.transaction('profiles', 'readwrite');
+        tx.objectStore('profiles').put(raw);
+        tx.oncomplete = () => { db.close(); resolve(); };
+        tx.onerror = () => reject(tx.error);
+      };
+    });
+    return true;
+  });
+  assert.equal(seeded, true, 'битый профиль посеян в IDB');
+  await p.locator('#nickInput').fill('сломан');
+  for (const digit of '1234') await p.locator(`.pk[data-digit="${digit}"]`).click();
+  await p.locator('#enterBtn').click();
+  await p.waitForSelector('#studio:not([hidden])');
+  await p.waitForFunction(() => document.getElementById('storageWarning').hidden, {}, { timeout: 10000 });
+  assert.equal(await p.locator('#storageWarning').innerText().then(t => t.trim()), '', 'баннер «Не удалось открыть сессии» не показывается');
+  const boot = await p.evaluate(async () => {
+    const opened = await BriixSessionStore.open('сломан');
+    return opened.profile.sessions.map(s => ({ id: s.id, title: s.title, feedIsArray: Array.isArray(s.feed), historyIsArray: Array.isArray(s.history) }));
+  });
+  assert.equal(boot.length, 2, 'null-запись выброшена, осталось две сессии');
+  assert.ok(boot.every(s => s.feedIsArray && s.historyIsArray), 'все записи санированы: feed/history — массивы');
+  assert.ok(boot.some(s => s.title === 'Живой чат'), 'валидная сессия цела');
+  assert.ok(boot.some(s => s.id === 'broken-1' && s.title === 'Битая' && s.feedIsArray), 'битая запись починена с сохранением id');
+  // Лента живой сессии доступна: открываем список сессий и переходим в «Живой чат».
+  await p.locator('#sessionsOpen').click();
+  await p.waitForSelector('#sessionsOverlay:not([hidden])');
+  const items = await p.locator('.session-item').allInnerTexts();
+  assert.ok(items.some(t => t.includes('Живой чат')), 'список сессий показывает валидную сессию: ' + JSON.stringify(items));
+  await p.locator('.session-item', { hasText: 'Живой чат' }).click();
+  await p.waitForSelector('#feed .card.user', { timeout: 10000 });
+  assert.match(await p.locator('#feed .card.user .body').first().innerText(), /привет из живой сессии/, 'лента валидной сессии восстановлена');
+  ok('restore с null/битой записью: бут не падает, баннера нет, сессии санированы (#23)');
+  await p.close();
+
   assert.deepEqual(errors, [], 'no page errors anywhere');
   await browser.close();
   staticSrv.close();
