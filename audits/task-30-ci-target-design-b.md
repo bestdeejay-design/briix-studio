@@ -70,6 +70,10 @@ enforce_admins=false, allow_force_pushes=false, allow_deletions=false
   включает ci.yml/package.json → deployable=true → полный tests на PR. Чисто docs-only PR
   (дифф только docs/audits/*.md) получит tests=skipped + docs-check — эта ветка условий
   считается по логике фильтров, но живым прогоном ещё не проверена (см. §3).
+- Финальный прогон 43934455332 (после правки отчёта): tests pass 6m5s, changes pass,
+  docs-check/deploy-stand skipping — и `gh pr checks` показывает MERGEABLE при включённой
+  branch protection (required tests). REVIEWER_KICK #1 живьём: skipped-джобы НЕ вешают
+  PR в Pending; `paths-ignore` на workflow не используется вовсе.
 - `check-md-links.cjs`: полный прогон по репо — 40 ссылок / 37 файлов, 19 cross-repo refs снимка, 0 битых.
 
 ## 3. Что осталось непроверенным
