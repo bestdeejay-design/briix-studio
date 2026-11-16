@@ -1,0 +1,176 @@
+
+===== A1 · холодный старт и вход (гейт, a11y-семантика, запросы) =====
+запросов к сети до входа: 0
+gate виден: true | studio скрыт: true
+h1 в документе: 0 | h2: 1
+pinDots: role=— aria-live=— | точек=4
+gateHint role=—
+aria-label у pinpad: Пин-пад | у цифр: 1,2,3,4,5,6,7,8,9,,0,Стереть
+feed aria-live= polite | #status role= —
+favicon link: 0 | manifest: 0 | theme-color: 0
+viewport: width=device-width, initial-scale=1, viewport-fit=cover
+после входа: studio виден true | карточек в ленте 0
+пустая лента: .session-feed пуст? 0 | display у .session-feed задаётся только в CSS (display:contents) — jsdom не грузит CSS
+запросов после входа: 0 []
+
+===== A2 · ключ стенда: ?key= в URL, пустое сохранение, дубли notices =====
+токен из ?key= сохранён в localStorage: true
+location.search очищен (history.replaceState)? "?key=test-token"
+одинаковых карточек «Ключ» после двух попыток: 2
+keyInput пуст → токен: null | текст карточки: КлючКлюч сохранён в этом браузере.
+keyStatus: Ключ ещё не задан.
+
+===== A3 · чат-стрим: дубли текста в хранилище, «Сделать из этого трек» на каждом ответе =====
+backend: idb
+профиль в IDB (localStorage-фолбэк не использован) — читаем через сессию
+карточек: 2 | кнопок «Сделать из этого трек»: 1
+текст ответа (первые 60): Наставник (общий)Соберём трек по шагам: сначала тёплый анало
+байт в истории (history): 2139 | байт в ленте (feed): 3201 | весь профиль: 5758
+ответ модели длиной 1026 символов встречается в профиле 18 раз (history.content + feed.text + feed.track) → профиль 5758 символов
+стоимость одного хода в хранилище: ~6 КиБ; 50 таких ходов ≈ 281 КиБ (localStorage-фолбэк ограничен ~5 МБ)
+
+===== A4 · POST /jobs: params.language / seed / parent_job_id / Idempotency-Key / title =====
+тело POST /jobs: {
+ "type": "music",
+ "prompt": "psychedelic soul, night city neon, female vocals, warm analog tape, slow groove, Russian lyrics, atmospheric",
+ "params": {
+  "model": "ace-step-flash",
+  "title": "[Intro]",
+  "artist": "audit",
+  "lyrics": "[Intro]\n\n[Verse 1]\nГород дышит неоном, стекло и бензин,\nЯ иду по проспекту, где каждый второй — чужой.\n\n[Pre-Chorus]\nСердце держит ритм, фонари считают такт.\n\n[Chorus]\nНочной город, пой со мной,\nПсиходелик-соул и дым над водой.\n\n[Bridge]\nТише, слышишь: бас ведёт домой.\n\n[Outro]\nГаснет свет, остаётся мотив."
+ }
+}
+params.language присутствует? false (bff: vocal_language = params.get("language","en") → всегда en)
+params.seed присутствует? false
+params.parent_job_id присутствует? false
+заголовок Idempotency-Key (bff поддерживает, окно 10 мин): {"Authorization":"Bearer test-token","Content-Type":"application/json"}
+params.title = "[Intro]" ← первая строка автолирики = структурный тег
+имя файла при скачивании (safeFileName из studio.js): [Intro] - audit.m4a
+transparency-блок: Что уехало в модельПромпт в модель: psychedelic soul, night city neon, female vocals, warm analog tape, slow groove, Russian lyrics, atmospheric Исходная идея: психоделик соул про ночной город, женский вокал, на русском Название: [Intro] Исполнитель: audit Текст песни: [Intro] [Verse 1] Город дышит 
+есть ли в transparency seed/provenance/ttl/битрейт? нет
+waveform узлов: 1 (пики отдавались голым массивом — как в check-studio.cjs)
+audio узлов: 1 | objectURL live: 1 | intervals live: 0
+поллингов: 4 | сервер отдавал provenance/ttl_seconds/mime/size/checksum — клиент их читает?
+карточка трека: Трек готов (Flash)Что уехало в модельПромпт в модель: psychedelic soul, night city neon, female vocals, warm a
+
+===== A5 · стадии инструментала: реальный словарь bff (model-warmup → generating → album-cover) =====
+снимок 1 (стадия model-warmup): {"segs":["sp-seg","sp-seg","sp-seg"],"active":0,"done":0,"widths":["0%","0%","0%"],"label":"Задача выполняется","phrase":"Музыка собирается. Обычно это дольше, чем кажется.","stage":"generating"}
+снимок 2 (стадия generating): {"segs":[],"active":0,"done":0,"widths":[]}
+пул фраз для стадии generating существует? {"key":"music:any","staged":null,"listLen":25}
+пул для model-warmup: {"key":"music:model-warmup","staged":"model-warmup","listLen":35}
+после готовности: waveform 1 | audio 1 | warns []
+
+===== A6 · контракт peaks.json: объект {id,duration,peaks} (README) против голого массива (тест-мок) =====
+peaks=object: .waveform узлов 0 | canvas 0 | audio 1 | warn BRIIX waveform: пики недоступны (job-audit-1) — только нативный плеер. | запросов peaks 1
+  placeholder .waveform-ph остался: 0
+peaks=array: .waveform узлов 1 | canvas 1 | audio 1 | warn — | запросов peaks 1
+  placeholder .waveform-ph остался: 0
+
+===== A7 · ✕ «Остановить»: отменяется ли джоба на сервере (POST /jobs/{id}/cancel)? =====
+кнопка ✕ найдена: true | aria-label: Остановить генерацию
+запросов на /cancel: 0 (контракт: POST /jobs/{id}/cancel существует)
+карточки: [{"cls":"card user","text":"Выdark trip-hop instrumental, no vocals"},{"cls":"card stage","text":"МузыкаСверяем текст с вашим брифом: настроение то самое.0:00✕Этап: лирика"}]
+джоба на сервере в статусе: ["running"]
+интервалов живо после остановки: 2 | objectURL live: 0
+локальная библиотека (localStorage): null
+
+===== A8 · один сбойный поллинг (502 upstream_error) рвёт генерацию =====
+карточки: [{"cls":"card user","text":"Выambient instrumental, slow"},{"cls":"card error","text":"ОшибкаСервер ответил 502."}]
+поллингов сделано: 1 (ошибка не ретраится: pollJob повторяет только 429/503)
+/cancel отправлен? 0
+статус джобы на сервере: ["running"]
+текст в поле вернули? "ambient instrumental, slow"
+request_id из ответа сервера показан пользователю? false
+
+===== A9 · reload во время генерации: возобновляется ли ожидание? =====
+до reload: stage-карточек 1 | поллингов 0
+после reload: карточек в ленте 1 | stage-карточек 0 | новых поллингов 0
+записи jobs в профиле: "job-audit-1" → клиент их не поллит и не показывает (нет resume)
+
+===== A10 · смена сессии во время стрима: флаг занятости глобальный =====
+стрим идёт: chatPending виден true | send disabled true
+переключились на сессию B. send disabled? true | chatPending виден? true | подсказка: Дождитесь ответа или остановите его, чтобы отправить следующ
+после ввода в B: send disabled? true | chatPending виден? true | подсказка: Дождитесь ответа или остановите его, чтобы отправить следующий вопрос.
+стрим сессии A ещё идёт (карточка .streaming в скрытом корне): 1
+стрим сессии A дописался в скрытый корень: 1 карточек в hidden-корне
+send disabled после завершения: false
+
+===== A11 · Библиотека: 100 серверных треков (объём DOM, запросы, ре-рендер) =====
+первый кадр библиотеки за 260 мс; карточек: 100
+после стабилизации 1498 мс: DOM-узлов всего 1681 | .lib-item 100 | canvas 0 | IntersectionObserver создано 100
+запросы: GET /jobs 1 | peaks 0 | cover(-cover.png) 75 | фото-файлы 25 | аудио 0
+objectURL live (обложки ревочатся в onload): 25 created 100 revoked 75
+меню «⋯» открыто, пунктов: 6 | пункты: Копировать промпт / Копировать лирику / Повторить с правками / Создать обложку / В избранное / Удалить
+после одного клика «В избранное»: DOM-узлов 1681 → 1681 | новых cover-запросов 75 | новых GET /jobs 1 | новых peaks 0
+первая карточка пересоздана (тот же узел в документе)? false → false = полный ре-рендер всех 100 карточек
+objectURL: created 175 revoked 150 live 25
+аудио-элементов в библиотеке: 0 | canvas: 0 (волна в библиотеке строится только после загрузки файла)
+
+===== A12 · утечки: objectURL/интервалы после скачиваний и выхода во время джобы =====
+после генерации: objectURL live 1 | intervals live 0
+после 3 скачиваний: objectURL live 4 (ссылки на скачивание не ревочатся до выхода)
+вторая джоба идёт: stage-карточек 1 | intervals live 2
+выход во время генерации: gate виден false
+интервалов живо ПОСЛЕ выхода: 0 | objectURL live: 5 | активных поллингов (запросов /jobs/ за последние 2 с): 8
+запросов /cancel при выходе: 0
+ещё 40 тиков спустя интервалов живо: 0 (секундомер сцены крутится на удалённом узле)
+
+===== A13 · черновик композера не переживает перезагрузку (нет сохранения на input/pagehide) =====
+draft в хранилище после pagehide: null
+beforeunload вызвал диалог (returnValue)? (проверяется по storageDirty/producerSaveTimer — см. A14)
+
+===== A14 · отказ IndexedDB → липкий beforeunload, блокировка смены сессий =====
+до сбоя: storageWarning скрыт true | send disabled true
+storageWarning виден: true
+текст предупреждения: Сессии не сохранены: Не удалось открыть IndexedDB. Не закрывайте вкладку; сохраните важный текст отдельно. Скачать данные сессий
+кнопка экспорта данных в предупреждении: 1
+beforeunload.defaultPrevented = true → браузер показывает «Покинуть сайт?» на каждом обновлении, пока ошибка не уйдёт (сброса флага нет)
+«Новый чат» при отказе хранилища: сессий в списке 1 | диалог истории открыт? true → activateSession выходит раньше времени, диалог не закрывается
+send disabled: true | карточек в ленте: 2
+
+===== A15 · «Повторить с правками» из библиотеки для серверного трека без сессии =====
+пункты меню в библиотеке: Копировать промпт / Копировать лирику / Повторить с правками / Создать обложку / В избранное / Удалить
+вернулись в чат: musicPrompt = "" | lyrics = ""
+confirm вызывался? 1 ["Заменить текущий музыкальный черновик данными этог"]
+карточка-подсказка: [{"cls":"card notice","text":"Повтор с правкамиПроверьте и измените данные перед отправкой. Это новая генерация по тексту, не аудиоремикс."}]
+качество (модель) в чипе: Flash | ожидалось Pro из params.model серверной записи
+
+===== A16 · плеер: автоплей после генерации, наложение треков, вкладка «Библиотека» =====
+после генерации №1 (neo soul ballad, f…) состояние всех аудио: ИГРАЕТ
+после генерации №2 (lo-fi instrumental…) состояние всех аудио: ИГРАЕТ, ИГРАЕТ
+после генерации №3 (ambient piano, nig…) состояние всех аудио: ИГРАЕТ, ИГРАЕТ, ИГРАЕТ
+обложек с классом playing: 3 из 3
+→ три трека играют одновременно: нет эксклюзивного плеера (Spotify/SoundCloud гасят предыдущий трек)
+клик по обложке трека №2: трек №1 ПРОДОЛЖАЕТ играть (тогглится только свой audio)
+перешли в Библиотеку: feed.hidden true | играют: ИГРАЕТ,пауза,ИГРАЕТ | контролов в зоне видимости: 0
+мини-плеер/«сейчас играет» в документе: 0
+видимая волна в ленте (canvas): 3 | у волны есть текстовый таймкод? 0
+
+===== A17 · черновик наставника (music-chat): Принять / Сгенерировать / params =====
+карточка черновика: [{"cls":"card assistant","text":"ПродюсерСобрал черновик.Черновик наставника. Проверьте смысл, язык и ограничения — помощник может ошибаться.На"}]
+поля черновика: ["title=\"Неон и вода\"","prompt=\"psychedelic soul, female vocals, warm ta\"","lyrics=\"[Intro]\\n\\n[Verse 1]\\nГород дышит неоном, с\""]
+POST /jobs: {"type":"music","prompt":"psychedelic soul, female vocals, warm tape","params":{"model":"ace-step-flash","title":"Неон и вода","artist":"audit","lyrics":"[Intro]\n\n[Verse 1]\nГород дышит неоном, стекло и бензин,\nЯ иду по проспекту, где каждый второй — чужой.\n\n[Pre-Chorus]\nСердце держит ритм, фонари считают такт.\n\n[Chorus]\nНочной город, пой со мной,\nПсиходелик-соул и дым над водой.\n\n[Bridge]\nТише, слышишь: бас ведёт домой.\n\n[Outro]\nГаснет свет, остаётся мотив."}}
+params.language? false | lyricsSource в transparency: true
+transparency: Что уехало в модельПромпт в модель: psychedelic soul, female vocals, warm tape Название: Неон и вода Исполнитель: audit Текст песни: [Intro] [Verse 1] Город дышит неоном, стекло и бензин, Я иду по проспекту, где каждый второй — чужой. [Pre-Chorus] Сердце держи
+
+===== A18 · «Улучшить» (few-shot): отмена, таймаут, размер базы =====
+кнопка «Улучшить» включена: true
+creative-base.json загружен (запросов): 1 | размер файла: 79628 байт (префикс-загрузка не делается)
+лирика после улучшения: "Улучшенный текст для аудита" | undo виден: true
+системный промпт few-shot, байт: 2010 | max_tokens: 600 | signal/abort у запроса: нет (улучшение нельзя остановить)
+сервер игнорирует max_tokens (bff payload без num_predict) — ограничение длины не действует
+
+===== A19 · одна и та же английская идея: Simple против «Тонко настроить» (brain-теги) =====
+Simple     : prompt в модель = "lofi hip hop, rainy night, mellow piano, dusty vinyl crackle, 82 BPM, vocals, English lyrics, atmospheric"
+              brain-теги добавлены? да (+37 симв.)
+Тонко настроить: prompt в модель = "lofi hip hop, rainy night, mellow piano, dusty vinyl crackle, 82 BPM"
+              brain-теги добавлены? НЕТ
+
+===== A20 · выход во время генерации; stop-кнопка в композере; статус-строка =====
+джоба идёт; #status: "Пишем текст песни…" | класс busy: status busy
+кнопка send получила класс busy/stop (CSS .send.busy/.send.stop существуют)? "send"
+в композере есть элемент остановки? 0
+выход с вкладки «Библиотека» во время генерации: gate виден false
+карточка-отказ (в ленте, её сейчас не видно): ["ВыходСначала дождитесь завершения активных операций или остановите их."]
+видна ли она пользователю на вкладке Библиотека? feed.hidden = true
+после остановки: gate виден true | интервалов живо 0 | objectURL live 0 | /cancel 0

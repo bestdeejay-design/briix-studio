@@ -1,0 +1,17 @@
+{
+  "name": "briix-audit-repro",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Симулятор браузера (jsdom + фейковый media-bff) для воспроизведения находок аудита audits/audit-full-arena-2026-11.md. Не часть рантайма студии.",
+  "scripts": {
+    "dynamic": "node audit-dynamic.cjs",
+    "static": "node audit-static.cjs",
+    "micro": "node micro.cjs",
+    "title": "node dbg-title.cjs",
+    "all": "node audit-dynamic.cjs && node audit-static.cjs && node micro.cjs && node dbg-title.cjs"
+  },
+  "dependencies": {
+    "fake-indexeddb": "^6.0.0",
+    "jsdom": "^25.0.1"
+  }
+}

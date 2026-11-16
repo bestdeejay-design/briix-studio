@@ -1,0 +1,211 @@
+
+===== S1 · пулы фраз ожидания (wait-phrases.js) =====
+тип «music»: пулов 5 (model-warmup:10, writing-lyrics:21, synthesizing:21, album-cover:15, any:25), фраз 92, уникальных 92, дублей 0, mock-зоны: start:4,middle:4,final:4
+   длина фраз: мин 28, макс 59, медиана 44 симв.
+тип «image»: пулов 1 (any:59), фраз 59, уникальных 59, дублей 0, mock-зоны: start:4,middle:4,final:4
+   длина фраз: мин 26, макс 58, медиана 39 симв.
+тип «video»: пулов 1 (any:42), фраз 42, уникальных 42, дублей 0, mock-зоны: start:4,middle:4,final:4
+   длина фраз: мин 19, макс 60, медиана 35 симв.
+тип «chat»: пулов 1 (any:47), фраз 47, уникальных 47, дублей 0, mock-зон НЕТ
+   длина фраз: мин 16, макс 54, медиана 34 симв.
+
+===== S1.1 · анти-повтор (NO_REPEAT=15 в wait-ui.js) против размера пула стадии =====
+«music.model-warmup»: своих фраз 10 < окна 15 → при STAGED_PROBABILITY=0.65 окно съедает пул, фолбэк возвращает повторы
+
+===== S1.2 · лексика фраз (правило из шапки wait-phrases.js: «без магии нейросетей», тон тёплый) =====
+стенд: 3 совпад.
+   image.any: «Картинка считается на вашем стенде.»
+   video.any: «Сцена считается на вашем стенде.»
+   chat.any: «Ответ считается на вашем стенде.»
+нейросеть/модель: 14 совпад.
+   music.mock.start: «Локальный мок: собираем черновик, не работу нейросети.»
+   music.writing-lyrics: «Нейросеть-поэт подбирает строки под ваш ритм.»
+   music.writing-lyrics: «Модель расставляет теги куплетов и припева по смыслу.»
+   music.writing-lyrics: «Строки ложатся на ритм: модель слышит структуру песни.»
+   music.synthesizing: «Скрипач сегодня не смог — партию играет модель.»
+   music.album-cover: «Художник-нейросеть рисует обложку под настроение трека.»
+диффузия/коды (техн.): 5 совпад.
+   music.synthesizing: «Аудио-коды превращаются в волну: синтезатор на службе.»
+   music.synthesizing: «Диффузия звука: из шума проявляется мелодия.»
+   music.synthesizing: «Миллионы отсчётов звука выстраиваются в порядок.»
+   image.any: «Пиксели собираются в картину: диффузия на полной мощности.»
+   image.any: «Каждый шаг диффузии добавляет резкости вашему замыслу.»
+сервер: 11 совпад.
+   music.mock.start: «Ставим задачу в локальную очередь — это демо без сервера.»
+   music.model-warmup: «Будим музыкантов: они ночевали прямо в сервере.»
+   music.model-warmup: «Настраиваем струны: сервер любит точность.»
+   music.synthesizing: «Внутри сервера растёт звуковая волна вашего трека.»
+   music.any: «Пока звучит тишина, сервер делает громкую работу.»
+   music.any: «Секундомер в карточке покажет, сколько сервер уже трудится.»
+обещание срока («почти готово», «скоро»): 16 совпад.
+   music.mock.final: «Заканчиваем заглушку — скоро можно нажать «плей».»
+   music.mock.final: «Мок почти готов: это проверка интерфейса, не музыки.»
+   music.writing-lyrics: «Убираем лишние эпитеты — осталось главное.»
+   music.album-cover: «Рисуем обложку — трек уже почти готов.»
+   music.any: «Скоро можно будет нажать «плей» и оценить.»
+   image.mock.final: «Скоро покажем демо-результат: это проверка интерфейса.»
+мок/демо (честность): 25 совпад.
+   music.mock.start: «Ставим задачу в локальную очередь — это демо без сервера.»
+   music.mock.start: «Готовим звуковую заглушку в браузере.»
+   music.mock.start: «Локальный мок: собираем черновик, не работу нейросети.»
+   music.mock.middle: «Мок рисует волну — звук будет простым, зато честным.»
+   music.mock.middle: «Собираем заглушку по вашему брифу.»
+   music.mock.final: «Заканчиваем заглушку — скоро можно нажать «плей».»
+
+===== S1.3 · соответствие стадий bff и пулов =====
+стадии в bff.py: album-cover, generating, ssh, -q
+стадии-ключи в пулах music: model-warmup, writing-lyrics, synthesizing, album-cover, any
+стадии в progress-bar студии (studio.js): const stages = ['writing-lyrics', 'synthesizing', 'album-cover']
+НЕТ пула для стадии «generating» → фолбэк на music.any (потеря смысла стадии)
+НЕТ пула для стадии «ssh» → фолбэк на music.any (потеря смысла стадии)
+НЕТ пула для стадии «-q» → фолбэк на music.any (потеря смысла стадии)
+
+===== S2 · контраст текста (WCAG 2.2 AA) — токены палитры studio.css =====
+пара (текст/фон) → контраст, вердикт AA (4.5:1 обычный, 3:1 крупный ≥18.66px bold/24px)
+  --faint на --surface-1: 2.91:1 — НЕ ПРОХОДИТ ✗  [.hint, .stopped-note, .stage-elapsed, .menu .sub, .ta::placeholder (11–13px)]
+  --faint на --surface-2: 2.91:1 — НЕ ПРОХОДИТ ✗  [.tag/.lib-cover на surface-2, .waveform dim-бары]
+  --faint на --canvas: 2.87:1 — НЕ ПРОХОДИТ ✗  [.lib-media на canvas]
+  --muted на --surface-1: 6.16:1 — AA ✓  [.card .who, .meta, .composer-hint, .producer-note (11–13px)]
+  --muted на --surface-2: 5.96:1 — AA ✓  [.lib-prompt, .mode (12–14px)]
+  --muted на --canvas: 6.29:1 — AA ✓  [.feed:empty::after (14px)]
+  --placeholder на --surface-1: 3.01:1 — AA только для крупного текста ⚠  [.prompt::placeholder (16px)]
+  --ink на --canvas: 17.23:1 — AA ✓  [основной текст]
+  --ink на --surface-1: 16.29:1 — AA ✓  [основной текст карточек]
+  --accent на --surface-1: 5.85:1 — AA ✓  [.gen-track, .tool.toggle[aria-pressed] (13px)]
+  --accent на --accent-soft: 5.39:1 — AA ✓  [ссылка/акцент на мягкой подложке]
+  --accent-ink на --accent: 6.06:1 — AA ✓  [.send, .save, .brand-mark (текст на акценте)]
+  --danger на --danger-soft: 8.91:1 — AA ✓  [.card.error (13px)]
+  --amber на --amber-soft: 10.23:1 — AA ✓  [.card.notice, .undo (12–13px)]
+  --blue на --blue-soft: 9.62:1 — AA ✓  [.card.stage (13px)]
+
+===== S2.1 · тач-таргеты из CSS (минимум 44px на ≤480px, 24px AA на десктопе) =====
+десктопные min-height < 36px: [[".improve",32],[".undo",32],[".tag",28],[".seg-btn",34],[".meta",24],[".wait-line",20],[".pin-dots",12],[".gate .hint",18],[".lib-item .lib-media",20],[".lib-item .action",32]]
+десктопные min-height 36–43px: [".mode=36",".tool=40",".menu button=36",".action=36",".tab=40",".studio-header=38"]
+мобильный блок @media(max-width:480px) покрывает: .studio, .feed, .mode, .tool, .seg-btn, .tool, .tool.chip, .send, .menu button, .action, .improve, .undo, .tag, .prompt | .studio-header, .header-note, .advanced, .studio.is-advanced .feed:empty::after, #lyrics, #musicPrompt, .toolbar, .tool.icon-only, .tab, .track-cover, .action, .lib-item .action | .track-menu | .lib-results, .lib-item, .lib-item .lib-cover, .lib-item .who, .35; }
+  .lib-item .lib-prompt, .lib-item .actions, .lib-item .action, .session-item | .lib-filters, .lib-filters .tag, .lib-item .who
+
+===== S2.2 · prefers-reduced-motion и анимации =====
+анимаций/keyframes: 6 8 использований animation
+блоков prefers-reduced-motion: 3 | глобальный гаситель (*{animation:none}) есть: true
+transition объявлено: 24
+
+===== S2.3 · мёртвые/дублирующиеся правила CSS =====
+  .feed-cover: в CSS 1 раз | класс «feed-cover» в studio/index.html 0 раз
+  .lib-more: в CSS 6 раз | класс «lib-more» в studio/index.html 0 раз
+  .header-note: в CSS 2 раз | класс «header-note» в studio/index.html 0 раз
+  .music-draft .draft-note: в CSS 1 раз | класс «draft-note» в studio/index.html 0 раз
+  .send.busy: в CSS 1 раз | класс «busy» в studio/index.html 7 раз
+  .send.stop: в CSS 2 раз | класс «stop» в studio/index.html 34 раз
+  .lib-results: в CSS 3 раз | класс «lib-results» в studio/index.html 1 раз
+  .waveform-seek: в CSS 2 раз | класс «waveform-seek» в studio/index.html 0 раз
+  .send.busy/.send.stop: классы в studio.js — НЕТ (кнопка отправки никогда не становится «стоп»)
+  .lib-more: упоминаний в JS — НЕТ (правила мертвы; «показать ещё» в библиотеке не реализовано)
+  :focus-visible объявлен дважды с разными свойствами: 3 раз
+
+===== S3 · метрики кода =====
+  index.html: строк 203, комментариев 1, байт 12568, gzip ~3951
+  music-brain.js: строк 247, комментариев 43, байт 13577, gzip ~4988
+  producer-brain.js: строк 212, комментариев 26, байт 15331, gzip ~5554
+  session-store.js: строк 229, комментариев 6, байт 12556, gzip ~3288
+  studio.css: строк 624, комментариев 38, байт 33263, gzip ~7916
+  studio.js: строк 2502, комментариев 124, байт 148956, gzip ~39807
+  wait-phrases.js: строк 339, комментариев 6, байт 24605, gzip ~6563
+  wait-ui.js: строк 156, комментариев 13, байт 6914, gzip ~2765
+  waveform.js: строк 88, комментариев 9, байт 4662, gzip ~1971
+  всего строк в studio/: 4600
+  функций в studio.js: 107 | стрелочных: 203
+  addEventListener: 65 | removeEventListener: 0
+  setInterval: 1 | clearInterval: 1 | setTimeout: 6 | clearTimeout: 4
+  IntersectionObserver: 3 | MutationObserver: 1 | disconnect(): 9
+  createObjectURL: 5 | revokeObjectURL: 7
+  confirm(): 10 | alert(): 0
+  textContent: 120 | innerHTML: 6 (все innerHTML — только очистка '')
+  try/catch блоков: 48 | пустых catch: 2
+  обращений к localStorage: 13
+  fetch( в studio.js: 4
+  AbortSignal.timeout/any: 4 | fetch с signal: 3
+
+===== S4 · что утверждают тесты (имена проверок) и чего в них нет =====
+  check-assembly.cjs: ok()=0, assert=47, строк=165
+  check-producer.cjs: ok()=0, assert=12, строк=24
+  check-session-store.cjs: ok()=0, assert=20, строк=117
+  check-studio-storage.cjs: ok()=0, assert=7, строк=63
+  check-studio.cjs: ok()=49, assert=260, строк=1323
+      • loads clean, 3 modes, assistant chip menus per mode, music toolbar
+      • missing key shows inline card, saved to localStorage
+      • chat SSE stream lands in the feed with system prompt + make-track action
+      • make-track switches to music with the brief prefilled
+      • lyrics improve: few-shot from creative-base, replace + undo, disabled when empty
+      • structure tags insert into lyrics field
+      • music job: lyrics + style + instrumental/pro chips, stages, audio player
+      • photo job renders decoded PNG preview
+      • 422 content_blocked: moderation card + text preserved (chat and jobs)
+      • interactive states defined in css (hover/active/disabled/focus + accent)
+      • parallel feed: chat stream + job simultaneously, per-card stop kills only its own op
+      • job polling stop via in-card ✕ shows a notice and frees the composer
+      • new chat preserves previous session
+      • photo prompt improve via art-director + undo
+      • photo card carries a download link
+      • profile menu: nick label, key card via menu item, Escape closes
+      • gate: nick+pinpad login, registration, session persistence, logout, wrong pin
+      • library: entry from job, favorite toggle + filter, delete, tab switching
+      • mobile 390x844: composer sticky bottom, no h-scroll, touch targets >=44
+      • completed chat context survives reload
+      • mode drafts remain separate
+      • music snapshot and server artwork survive settings changes
+      • merged library, artwork and actual file download
+      • library reports failed favorite without corrupting state
+      • late improvement preserves newer edits
+      • active session cannot leak into another profile
+      • narrow library layout and bounded media queue
+      • 100 restored tracks: zero audio requests until action, deduplicated transfer
+      • 100 library tracks: lazy audio and bounded transfers
+      • restored image history loads near the viewport
+      • interactive audio is prioritized over queued image transfers
+      • 429 and 503 polling recovers without duplicate generation
+      • mobile 320x568 advanced controls remain accessible
+      • legacy feed and context migrate through studio without altering source keys
+      • two sessions keep context and late track isolated, linked in library after reload
+      • editable text repeat and separate cover image, without pretending to remix or replace artwork
+      • mock 429 storm: four failures, eight attempts, four covers recovered
+      • mock persistent 429: visible retry recovers cover after limit clears
+      • file fetch blocks foreign origins, traversal and redirects without URL credentials
+      • producer mobile: review/edit/apply/restore and reload, no implicit audio job
+      • producer keeps authored lyrics and guards newer edits with recoverable backup
+      • instrumental review and explicit generation, no duration parameter
+      • malformed response and moderation preserve original
+      • producer cancellation and parallel chat preserve the music draft
+      • late producer result is isolated to the originating session
+      • producer 429 preserves the input and never starts a job
+      • music chat: send converses without jobs, mentor system used, draft accept/generate, dialog persisted, explicit composer Generate
+      • track card: cover=play, auto waveform with click-seek, unified 7-action menu, transparency, sanitized filename
+      • mobile 320x568: track menu is a bottom sheet inside the viewport
+  check-wait-phrases.cjs: ok()=10, assert=23, строк=209
+      • pools: 40+ unique phrases per type, server stages and mock zones
+      • stage and mock-zone binding
+      • no repeat inside the 15-phrase window
+      • anti-repeat history survives reload
+      • rotation every 4–6 seconds without repeats
+      • stage change re-pools the line immediately
+      • reduced motion: no rotation
+      • mock music job shows an honest wait line under the progress
+      • scripted chat has no live wait line
+      • no page errors
+  check-waveform.cjs: ok()=0, assert=6, строк=113
+
+===== S4.1 · ключевые темы контракта в тестах (0 = не покрыто) =====
+  params.language: 0 совпад.
+  params.seed / provenance.seed: 0 совпад.
+  parent_job_id: 0 совпад.
+  POST /jobs/{id}/cancel: 0 совпад.
+  Idempotency-Key: 0 совпад.
+  ttl_seconds / retention-404: 0 совпад.
+  provenance в UI: 0 совпад.
+  warning (model игнорируется): 0 совпад.
+  X-Request-Id в ошибке: 0 совпад.
+  peaks как объект {id,duration,peaks}: 0 совпад.
+  стадии model-warmup/generating: 1 совпад.
+  axe-core (доступность): 0 совпад.
+  несколько одновременно играющих аудио: 1 совпад.
+  перенос стрим-флага между сессиями: 1 совпад.
+  AxeBuilder импортируется в browser-env.cjs, но используется в сюитах: НИГДЕ
