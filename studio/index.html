@@ -15,9 +15,142 @@ if (location.hostname === 'briix.ru' || location.hostname === 'www.briix.ru') {
   location.replace('https://demo.briix.ru/studio/' + location.hash);
 }
 </script>
-<link rel="stylesheet" href="studio.css?v=c1de4536b7">
+<script>
+/* Кеш-самолечение (хвост T-35). Браузер держит этот HTML в эвристическом кеше,
+ * а деплой перезаписывает JS/CSS под старыми именами — «старый HTML + новые
+ * файлы под старыми ?v=» роняют загрузку, и экран остаётся чёрным: оба корневых
+ * блока ниже в разметке скрыты. Сторож инлайн-овый и работает, даже если ни один
+ * внешний скрипт не загрузился:
+ *  1) version.json (сборочный отпечаток ассетов на сервере) запрашивается без
+ *     кеша; расхождение с window.__BRIIX_BUILD__ этой страницы — страница сама
+ *     перезагружается с параметром _b=<отпечаток>: новый URL гарантированно
+ *     минует кеш браузера. Пользователь ничего не нажимает — версия на сервере
+ *     всегда побеждает;
+ *  2) если за BOOT_TIMEOUT мс страница не ожила (гейт и студия скрыты,
+ *     data-booted нет) — та же перезагрузка: лечит битые пары из кеша;
+ *  3) не больше MAX_BUSTS перезагрузок за WINDOW_MS, дальше — видимый
+ *     fallback с кнопкой: не вечный чёрный экран и не цикл перезагрузок;
+ *  4) живая вкладка перепроверяется при возвращении на неё; если пользователь
+ *     занят (идут операции / есть несохраненный текст) — перезагрузка только
+ *     по его нажатию «Обновить», молча работа не сносим.
+ * window.__BRIIX_BOOT_TIMEOUT / __BRIIX_RECHECK_MS — хуки сюиты check-cache-selfheal. */
+window.__BRIIX_BUILD__ = '0726eadb8d';
+(function () {
+  var SS_KEY = 'briix-bust', MAX_BUSTS = 2, WINDOW_MS = 60000;
+  var BOOT_TIMEOUT = window.__BRIIX_BOOT_TIMEOUT || 9000;
+  var RECHECK_MS = window.__BRIIX_RECHECK_MS || 10000;
+  var lastCheck = 0, busy = false, bootTimer = null, cleanTimer = null;
+  function replaceUrl(mark) {
+    var u = new URL(location.href);
+    u.searchParams.set('_b', mark);
+    location.replace(u.href);
+  }
+  function bust(mark) {
+    if (busy) return;
+    busy = true;
+    if (bootTimer) { clearTimeout(bootTimer); bootTimer = null; }
+    // CacheStorage за собой подчищаем и в приватном режиме (там sessionStorage нет) —
+    // счётчик не ведётся, но и перезагрузка максимум одна: busy уже поставлен.
+    try {
+      if (window.caches && caches.keys) caches.keys().then(function (keys) {
+        keys.forEach(function (k) { caches.delete(k); });
+      }).catch(function () {});
+    } catch (e) {}
+    try {
+      var rec = null;
+      try { rec = JSON.parse(sessionStorage.getItem(SS_KEY) || 'null'); } catch (e) {}
+      var now = Date.now();
+      if (!rec || now - rec.at > WINDOW_MS) rec = { n: 0, at: now };
+      rec.n += 1; rec.at = now;
+      if (rec.n > MAX_BUSTS) { fallback(); return; }
+      sessionStorage.setItem(SS_KEY, JSON.stringify(rec));
+      replaceUrl(mark || String(now));
+    } catch (e) { replaceUrl(mark || String(Date.now())); }
+  }
+  function fallback() {
+    try { sessionStorage.removeItem(SS_KEY); } catch (e) {}
+    function show() {
+      if (document.getElementById('briixBootFallback')) return;
+      var el = document.createElement('div');
+      el.id = 'briixBootFallback';
+      el.className = 'boot-fallback';
+      el.setAttribute('role', 'alert');
+      var p = document.createElement('p');
+      p.textContent = 'Студия не загрузилась: браузер держит старые файлы.';
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = 'Перезагрузить';
+      b.addEventListener('click', function () { replaceUrl(String(Date.now())); });
+      el.append(p, b);
+      document.body.append(el);
+    }
+    if (document.body) show();
+    else document.addEventListener('DOMContentLoaded', show);
+  }
+  function booted() {
+    if (document.documentElement.getAttribute('data-booted') === '1') return true;
+    var g = document.getElementById('gate'), s = document.getElementById('studio');
+    return Boolean((g && !g.hidden) || (s && !s.hidden));
+  }
+  function offerUpdate(build) {
+    // Живая вкладка: сносим работу пользователя только когда безопасно.
+    var opsBadge = document.getElementById('opsBadge');
+    var opsLive = opsBadge && !opsBadge.hidden;
+    var typing = ['prompt', 'lyrics', 'musicPrompt'].some(function (id) {
+      var el = document.getElementById(id);
+      return Boolean(el && el.value);
+    });
+    if (!opsLive && !typing) { bust(build); return; }
+    var t = window.BRIIX_TOASTS;
+    if (t && t.toast) {
+      t.toast('Доступна новая версия студии', {
+        kind: 'info',
+        key: 'briix-update',
+        action: { label: 'Обновить', onClick: function () { replaceUrl(build); } }
+      });
+    }
+  }
+  function check() {
+    lastCheck = Date.now();
+    fetch('version.json?t=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (v) {
+        if (!v || !v.build || v.build === window.__BRIIX_BUILD__) return;
+        // Только открывшаяся страница перезагружается немедленно; давно живая —
+        // бережно (offerUpdate), чтобы не потерять ввод.
+        if (booted() && (window.performance ? performance.now() : 99999) > 3000) offerUpdate(v.build);
+        else bust(v.build);
+      })
+      .catch(function () {});
+  }
+  check();
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible' && Date.now() - lastCheck > RECHECK_MS) check();
+  });
+  bootTimer = setTimeout(function () {
+    if (!booted()) bust(null);
+  }, BOOT_TIMEOUT);
+  // Успешный бут: снимаем счётчик перезагрузок и убираем _b из адреса
+  // (replaceState — адрес остаётся чистым для шаринга и F5).
+  cleanTimer = setInterval(function () {
+    if (!booted()) return;
+    clearInterval(cleanTimer);
+    try { sessionStorage.removeItem(SS_KEY); } catch (e) {}
+    try {
+      var u = new URL(location.href);
+      if (u.searchParams.has('_b')) {
+        u.searchParams.delete('_b');
+        var q = u.searchParams.toString();
+        history.replaceState(null, '', u.pathname + (q ? '?' + q : '') + u.hash);
+      }
+    } catch (e) {}
+  }, 700);
+  setTimeout(function () { clearInterval(cleanTimer); }, 45000);
+})();
+</script>
+<link rel="stylesheet" href="studio.css?v=a4b3be1aca">
 <!-- T-35: главный скрипт стартует заранее; URL совпадает с тегом ниже (иначе двойная загрузка) -->
-<link rel="preload" as="script" href="studio.js?v=b485a0a964">
+<link rel="preload" as="script" href="studio.js?v=ccc487f3e2">
 </head>
 <body>
 
@@ -240,6 +373,6 @@ if (location.hostname === 'briix.ru' || location.hostname === 'www.briix.ru') {
 <script defer src="player.js?v=778d4b4c76"></script>
 <script defer src="producer-brain.js?v=f82a6e65db"></script>
 <script defer src="music-brain.js?v=c4f9d1bc83"></script>
-<script defer src="studio.js?v=b485a0a964"></script>
+<script defer src="studio.js?v=ccc487f3e2"></script>
 </body>
 </html>

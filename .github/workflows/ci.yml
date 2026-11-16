@@ -76,6 +76,13 @@ jobs:
         run: node tools/check-wait-phrases.cjs
         env:
           NODE_PATH: ./node_modules
+      - name: check-cache-selfheal
+        # Хвост T-35: устаревший кеш браузера не даёт чёрный экран — инлайн-сторож
+        # в index.html сверяет сборочный отпечаток с version.json и сам
+        # перезагружает страницу мимо кеша; 7 сценариев, свой сервер на 127.0.0.1.
+        run: node tools/check-cache-selfheal.cjs
+        env:
+          NODE_PATH: ./node_modules
       - name: check-a11y (axe, T-45)
         # Гейт/композер/Библиотека: serious/critical = 0 (F-48 контраст, F-02 гейт,
         # F-15 progressbar). Включён ПОСЛЕ точечных фиксов доступности (3.4).

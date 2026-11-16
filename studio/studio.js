@@ -3631,4 +3631,9 @@
   const savedUser = currentUser();
   if (savedUser && profiles()[savedUser]) startSession(savedUser);
   else { els.gate.hidden = false; els.nickInput.focus(); }
+  // Кеш-самолечение (хвост T-35): инлайн-сторож в index.html по этому маркеру
+  // (и видимым гейту/студии) понимает, что бут прошёл, и чистит счётчик
+  // перезагрузок + служебный ?_b= в адресе. Без маркера живая страница
+  // через 9 с считала бы себя сломанной и перезагрузилась бы.
+  document.documentElement.setAttribute('data-booted', '1');
 })();
