@@ -268,6 +268,7 @@ assert.ok(maxWords <= brain.rules.MAX_CAPTION_WORDS,
   `самый длинный caption ${maxWords} слов ≤ ${brain.rules.MAX_CAPTION_WORDS} (запас до 256 токенов)`);
 assert.ok(maxLen <= MAX_CAPTION, `самый длинный caption ${maxLen} символов ≤ ${MAX_CAPTION}`);
 
+<<<<<<< HEAD
 // ------------------------------- (14) паритет семейств стиля с резолвером ---
 // Резолвер (producer-brain) отдаёт семейство строкой — оно должно существовать
 // в STYLE_ATMOSPHERE, иначе мозг молча упадёт на базовую глубину.
@@ -282,6 +283,8 @@ const rockish = brain.buildCaption('грув, бас, 96 BPM', { kind: 'song', s
 assert.equal(rockish.layers.style.key, 'rock', 'стиль из резолвера принят мозгом');
 assert.match(rockish.caption, /room|close dry drums|live band/i, 'под рок добавились его приёмы');
 
+=======
+>>>>>>> 2365ede (docs(research)+fix(brain): проверить лимиты 640/2000 и разделение caption/лирики)
 // ------------------------------------------------------------------ вывод --
 console.log('PASS music-brain v3: слои, ритм-всегда, вокал с характером и фиксированной идентичностью, продакшн, бюджет, негативы, self-check, полный трек (роли/микс/форма/защита), глубина и стилевая атмосфера, разделение caption/лирики и потолок токенов');
 console.log('20 брифов (buildTags / buildCaption, символы):');
