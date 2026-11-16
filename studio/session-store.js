@@ -107,32 +107,52 @@
   function newEmptySession(id, now) {
     return { id, title: 'Новый чат', titleSet: false, createdAt: now, updatedAt: now, feed: [], history: [] };
   }
+  // Возврат: валидная запись возвращается КАК ЕСТЬ (тот же объект) — по ней
+  // sanitizeProfile понимает, что профиль не менялся и его не нужно переписывать
+  // в хранилище (хвост #23: раньше копия создавалась всегда и open() перезаписывал
+  // профиль при каждом открытии без изменений). Битая — починенной копией.
   function sanitizeSession(raw, now) {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+    let changed = false;
     const fixed = { ...raw };
     if (typeof fixed.id !== 'string' || !fixed.id) {
       fixed.id = (globalThis.crypto && crypto.randomUUID) ? crypto.randomUUID() : 's-' + now + '-' + Math.random().toString(36).slice(2);
+      changed = true;
     }
-    if (typeof fixed.title !== 'string' || !fixed.title) { fixed.title = 'Новый чат'; fixed.titleSet = false; }
-    if (!Array.isArray(fixed.feed)) fixed.feed = [];
-    if (!Array.isArray(fixed.history)) fixed.history = [];
+    if (typeof fixed.title !== 'string' || !fixed.title) { fixed.title = 'Новый чат'; fixed.titleSet = false; changed = true; }
+    if (!Array.isArray(fixed.feed)) { fixed.feed = []; changed = true; }
+    if (!Array.isArray(fixed.history)) { fixed.history = []; changed = true; }
     // Находка ревью PR #25: null-ЭЛЕМЕНТЫ внутри feed/history тоже роняли бут
     // (ensureRoot читает item.t у null). Чистим мусор, валидные элементы не трогаем.
-    fixed.feed = fixed.feed.filter(item => item && typeof item === 'object');
-    fixed.history = fixed.history.filter(item => item && typeof item === 'object');
+    const cleanFeed = fixed.feed.filter(item => item && typeof item === 'object');
+    if (cleanFeed.length !== fixed.feed.length) { fixed.feed = cleanFeed; changed = true; }
+    const cleanHistory = fixed.history.filter(item => item && typeof item === 'object');
+    if (cleanHistory.length !== fixed.history.length) { fixed.history = cleanHistory; changed = true; }
     // Репродукция на проде (#23): черновики без контейнера полей —
     // renderMusicDraftContent читает entry.draft[name], renderProducerDraft —
     // entry.snapshot.idea и соседи. Битый контейнер чиним до {}, валидный не трогаем.
     const fixContainer = (item, field) => {
-      if (typeof item[field] !== 'object' || item[field] === null || Array.isArray(item[field])) item[field] = {};
+      if (typeof item[field] !== 'object' || item[field] === null || Array.isArray(item[field])) { item[field] = {}; changed = true; }
     };
     for (const item of fixed.feed) {
       if (item.t === 'music_draft') fixContainer(item, 'draft');
-      if (item.t === 'producer_draft') fixContainer(item, 'snapshot');
+      if (item.t === 'producer_draft') {
+        fixContainer(item, 'snapshot');
+        // Хвост #23: renderProducerDraft читает b.quick у элементов backups —
+        // мусорные элементы ([null]) чистим, валидные не трогаем. Не-массив
+        // чинится до []: рендер делает (entry.backups || []).map.
+        if (item.backups !== undefined) {
+          if (!Array.isArray(item.backups)) { item.backups = []; changed = true; }
+          else {
+            const cleanBackups = item.backups.filter(b => b && typeof b === 'object');
+            if (cleanBackups.length !== item.backups.length) { item.backups = cleanBackups; changed = true; }
+          }
+        }
+      }
     }
-    if (!Number.isFinite(fixed.createdAt)) fixed.createdAt = now;
-    if (!Number.isFinite(fixed.updatedAt)) fixed.updatedAt = fixed.createdAt;
-    return fixed;
+    if (!Number.isFinite(fixed.createdAt)) { fixed.createdAt = now; changed = true; }
+    if (!Number.isFinite(fixed.updatedAt)) { fixed.updatedAt = fixed.createdAt; changed = true; }
+    return changed ? fixed : raw;
   }
   function sanitizeProfile(profile) {
     if (!profile || typeof profile !== 'object') return null;
@@ -146,7 +166,11 @@
       if (fixed !== raw) changed = true;
       sessions.push(fixed);
     }
-    return { profile: { ...profile, sessions }, changed };
+    // Ничего не изменилось — возвращаем профиль как есть: open() не переписывает
+    // валидную запись в хранилище при каждом открытии. Битые записи по-прежнему
+    // перезаписываются (хотфикс #23).
+    if (!changed) return { profile, changed: false };
+    return { profile: { ...profile, sessions }, changed: true };
   }
 
   async function openProfile(nick, options = {}) {
