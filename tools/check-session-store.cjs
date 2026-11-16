@@ -168,6 +168,29 @@ const { launch } = require('./browser-env.cjs');
     assert.equal(sanitizeLocal.profile.sessions.length, 1, 'local: null-запись выброшена');
     assert.deepEqual(sanitizeLocal.profile.sessions[0].feed, [], 'local: битая запись починена');
     assert.equal(sanitizeLocal.stored.sessions.length, 1, 'local: санированный профиль записан обратно');
+
+    // Находка ревью PR #25: null-ЭЛЕМЕНТЫ внутри feed валидной сессии вычищаются,
+    // валидный элемент цел — иначе ensureRoot падает на item.t у null.
+    const dirtyFeed = await page.evaluate(async () => {
+      const raw = { schemaVersion: 1, nick: 'мусор-в-feed', revision: 1, activeSessionId: 's1', sessions: [
+        { id: 's1', title: 'Живая', titleSet: true, createdAt: 1, updatedAt: 2,
+          feed: [null, { t: 'user', who: 'Вы', text: 'x' }, 'мусор-строка'], history: [null, { role: 'user', content: 'y' }] }
+      ], legacyBackup: null };
+      await new Promise((resolve, reject) => {
+        const req = indexedDB.open('briix-studio-sessions', 1);
+        req.onsuccess = () => {
+          const db = req.result;
+          const tx = db.transaction('profiles', 'readwrite');
+          tx.objectStore('profiles').put(raw);
+          tx.oncomplete = () => { db.close(); resolve(); };
+          tx.onerror = () => reject(tx.error);
+        };
+      });
+      const opened = await BriixSessionStore.openProfile('мусор-в-feed');
+      return opened.sessions[0];
+    });
+    assert.deepEqual(dirtyFeed.feed, [{ t: 'user', who: 'Вы', text: 'x' }], 'null/мусор внутри feed вычищены, валидный элемент цел');
+    assert.deepEqual(dirtyFeed.history, [{ role: 'user', content: 'y' }], 'null внутри history вычищен');
     await context.close();
     console.log('PASS session storage: migration, backup, fallback, isolation, conflicts and failures');
   } finally {

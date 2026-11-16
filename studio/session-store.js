@@ -116,6 +116,10 @@
     if (typeof fixed.title !== 'string' || !fixed.title) { fixed.title = 'Новый чат'; fixed.titleSet = false; }
     if (!Array.isArray(fixed.feed)) fixed.feed = [];
     if (!Array.isArray(fixed.history)) fixed.history = [];
+    // Находка ревью PR #25: null-ЭЛЕМЕНТЫ внутри feed/history тоже роняли бут
+    // (ensureRoot читает item.t у null). Чистим мусор, валидные элементы не трогаем.
+    fixed.feed = fixed.feed.filter(item => item && typeof item === 'object');
+    fixed.history = fixed.history.filter(item => item && typeof item === 'object');
     if (!Number.isFinite(fixed.createdAt)) fixed.createdAt = now;
     if (!Number.isFinite(fixed.updatedAt)) fixed.updatedAt = fixed.createdAt;
     return fixed;
