@@ -288,7 +288,7 @@
     lyrics: $('lyrics'), musicPrompt: $('musicPrompt'),
     improveLyrics: $('improveLyrics'), improvePrompt: $('improvePrompt'),
     undoLyrics: $('undoLyrics'), undoPrompt: $('undoPrompt'),
-    tags: $('tags'), addBtn: $('addBtn'),
+    tags: $('tags'),
     assistantChip: $('assistantChip'), assistantName: $('assistantName'), assistantMenu: $('assistantMenu'),
     modelChip: $('modelChip'), modelName: $('modelName'), modelMenu: $('modelMenu'),
     vocalSeg: $('vocalSeg'), tuneToggle: $('tuneToggle'), prepareMusic: $('prepareMusic'),
@@ -309,7 +309,16 @@
   };
 
   let mode = 'chat';
-  let quality = 'flash';
+  // F-34: настройки устройства переживают перезагрузку — режим, тонкая
+  // настройка, модель, роли. Ключ briix-* — «Выйти и очистить устройство»
+  // забирает и их (осознанно: это настройки устройства, не профиля).
+  const PREFS_KEY = 'briix-studio-prefs';
+  function loadPrefs() { try { return JSON.parse(localStorage.getItem(PREFS_KEY)) || {}; } catch { return {}; } }
+  function savePrefs(patch) {
+    try { localStorage.setItem(PREFS_KEY, JSON.stringify({ ...loadPrefs(), ...patch })); } catch { /* приватный режим */ }
+  }
+
+  let quality = loadPrefs().quality || 'flash';
   let instrumental = false; // вокальный контур починен (infra#79) — дефолт снова «Песня»; выбор хранится в браузере
   try { const savedInstr = localStorage.getItem('briix-studio-instrumental'); if (savedInstr !== null) instrumental = savedInstr === '1'; } catch {}
   let advanced = false;
@@ -576,20 +585,29 @@
             renderTrackCard(session, { who: d.who, job: d.job, cover: d.cover, input: d.input || {}, file: d.file,
               loadBlob: () => fileBlob(d.file, 0) });
           } else {
-            const body = card('assistant', d.who, '', session);
+            const body = card('assistant', d.who, '', session, { at: d.at || null });
             body.textContent = '';
             // R2/T-18: фото-restore — тот же компонент, что fresh и Библиотека.
             body.append(photoCard({ file: d.file, loadBlob: () => fileBlob(d.file, 1), alt: d.prompt || '' }).body);
             if (d.track) addMakeTrackAction(body.closest('.card'), trackBriefOf(d));
           }
         } else {
-          const body = card(d.t, d.who, d.text, session);
-          if (d.t === 'assistant' && d.track) addMakeTrackAction(body.closest('.card'), trackBriefOf(d));
+          const body = card(d.t, d.who, d.text, session, { at: d.at || null });
+          if (d.t === 'assistant') {
+            // F-09: у ответа наставника — «Копировать» (текстовые реплики)
+            if (d.text) addCopyAction(body.closest('.card'), () => d.text);
+            if (d.track) addMakeTrackAction(body.closest('.card'), trackBriefOf(d));
+          }
         }
       }
     } finally { restoringFeed = false; }
   }
   const assistantId = { chat: 'mentor', photo: 'art-dir', music: 'producer' };
+  // F-34: выбранные роли тоже переживают перезагрузку
+  {
+    const saved = loadPrefs().assistantId || {};
+    for (const key of Object.keys(assistantId)) if (saved[key]) assistantId[key] = saved[key];
+  }
   // T-22: бэкап полей перед «✨ Улучшить» живёт на сессии — undo в сессии B
   // больше не подставляет текст из сессии A (и переживает перезагрузку).
   function sessionUndo(session, field, value) {
@@ -798,6 +816,7 @@
     label: a.name, selected: a.id === assistantId[mode],
     onPick: () => {
       assistantId[mode] = a.id;
+      savePrefs({ assistantId: { ...assistantId } }); // F-34
       // Смена роли в music mode очищает контекст диалога (один наставник на сессию).
       if (mode === 'music' && activeSession && activeSession.musicChat && activeSession.musicChat.assistant !== a.id) {
         activeSession.musicChat = { assistant: a.id, history: [] };
@@ -817,7 +836,7 @@
       const bits = [id];
       if (etaS) bits.push('~' + fmtMinutes(etaS));
       if (cat && !cat.ready) bits.push('недоступна');
-      return { label: MODEL_LABELS[q], sub: bits.join(' · '), selected: q === quality, onPick: () => { quality = q; renderChrome(); } };
+      return { label: MODEL_LABELS[q], sub: bits.join(' · '), selected: q === quality, onPick: () => { quality = q; savePrefs({ quality: q }); renderChrome(); } }; // F-34
     });
   });
 
@@ -880,13 +899,22 @@
   // Флаг «идёт восстановление истории»: старые карточки не считаются новыми.
   let restoringFeed = false;
 
-  function card(kind, who, text, session = activeSession) {
+  function card(kind, who, text, session = activeSession, opts = {}) {
     const div = document.createElement('div');
     div.className = 'card ' + kind;
     if (kind === 'stage') div.setAttribute('role', 'status'); // F-50: карточка ожидания объявляется скринридеру
     const whoEl = document.createElement('div');
     whoEl.className = 'who';
     whoEl.textContent = who;
+    // F-10: время сообщения (ЧЧ:ММ) у реплик; служебные карточки и старые
+    // записи без времени (at === null) — без таймкода. Свежие — момент создания.
+    const at = opts.at === undefined ? Date.now() : opts.at;
+    if (at !== null && (kind === 'user' || kind === 'assistant')) {
+      const time = document.createElement('span');
+      time.className = 'msg-time';
+      time.textContent = new Date(at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+      whoEl.append(time);
+    }
     const body = document.createElement('div');
     body.className = 'body';
     body.textContent = text || '';
@@ -1442,6 +1470,42 @@
     container.append(row);
   }
 
+  // F-09: «Копировать» у ответа наставника — одна кнопка вместо ручного
+  // выделения длинного текста. Переиспользует ту же actions-строку, что и
+  // «Сделать из этого трек» (кто первый — тот её создал).
+  function addCopyAction(container, getText) {
+    if (!container) return;
+    let row = container.querySelector(':scope > .actions');
+    if (!row) {
+      row = document.createElement('div');
+      row.className = 'actions';
+      container.append(row);
+    }
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'action copy-text';
+    button.textContent = '⧉ Копировать';
+    button.setAttribute('aria-label', 'Скопировать ответ');
+    button.addEventListener('click', async () => {
+      const text = String(getText() || '').trim();
+      if (!text) return;
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        // http-контекст или старый Safari — копируем через временный textarea
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.cssText = 'position:fixed;opacity:0';
+        document.body.append(ta);
+        ta.select();
+        try { document.execCommand('copy'); } catch { /* остаётся только вручную */ }
+        ta.remove();
+      }
+      BRIIX_TOASTS.toast('Ответ скопирован', { kind: 'done' });
+    });
+    row.append(button);
+  }
+
   // Transparency-блок: что уехало в модель (#109) + происхождение лирики и имя/исполнитель.
   function addMusicDetails(container, input) {
     const details = document.createElement('details'); details.className = 'track-details';
@@ -1558,7 +1622,12 @@
     if (next === mode) return;
     drafts[mode] = els.prompt.value;
     mode = next;
+    savePrefs({ mode: next }); // F-34
     els.prompt.value = drafts[next];
+    // F-34: режим — часть черновика сессии; пишем СИНХРОННО, не дебаунсом —
+    // быстрый переход «режим → генерация» не должен перезаписать draft
+    // устаревшим состоянием (гонка таймера против быстрых сценариев).
+    saveDraft(activeSession); persistSessions();
     renderChrome();
   }
 
@@ -1704,6 +1773,7 @@
       session.history.push(turn, { role: 'assistant', content: full });
       feedPush({ t: 'assistant', who, text: full, track: true }, session); // T-33: флаг вместо копии текста
       addMakeTrackAction(body.closest('.card'), full);
+      addCopyAction(body.closest('.card'), () => body.textContent);
     } catch (error) {
       stopRow.remove();
       sink?.sync(); // T-39: недоставленный в кадр текст не пропадает
@@ -1822,6 +1892,7 @@
       history.push({ role: 'user', content: text }, { role: 'assistant', content: full });
       session.updatedAt = Date.now();
       feedPush(entry, session);
+      addCopyAction(body.closest('.card'), () => parsed.text || full);
     } catch (error) {
       stopRow.remove();
       sink?.sync(); // T-39
@@ -2658,7 +2729,10 @@
   function loadDraft(session) {
     const draft = session.draft || {};
     for (const key of Object.keys(drafts)) drafts[key] = draft.prompts?.[key] || '';
-    mode = ['chat', 'photo', 'music'].includes(draft.mode) ? draft.mode : 'chat';
+    // F-34: приоритет — режим этой сессии (draft); если черновик его не помнит
+    // (новая/старая запись) — настройка устройства; дефолт — чат.
+    const preferred = ['chat', 'photo', 'music'].includes(loadPrefs().mode) ? loadPrefs().mode : 'chat';
+    mode = ['chat', 'photo', 'music'].includes(draft.mode) ? draft.mode : preferred;
     advanced = !!draft.advanced;
     els.prompt.value = drafts[mode]; els.lyrics.value = draft.lyrics || ''; els.musicPrompt.value = draft.musicPrompt || '';
     // T-22: кнопки возврата отражают бэкапы именно этой сессии.
@@ -2672,7 +2746,7 @@
     const root = document.createElement('div'); root.className = 'session-feed'; root.hidden = true;
     sessionRoots.set(session.id, root); els.feed.append(root);
     feedRestore(session);
-    if (!session.history.length && session.feed.some(item => item.t === 'assistant' && item.track)) {
+    if (!session.history.length && session.feed.some(item => item && item.t === 'assistant' && item.track)) {
       card('notice', 'Контекст чата', 'Ранее сохранённая переписка показана выше, но её контекст не был сохранён.', session);
     }
   }
@@ -2820,7 +2894,11 @@
     els.feed.innerHTML = ''; sessionRoots.clear(); sessionProfile = null; activeSession = null;
     els.prompt.value = ''; els.lyrics.value = ''; els.musicPrompt.value = '';
     Object.keys(drafts).forEach(k => { drafts[k] = ''; });
-    mode = 'chat'; advanced = false; renderChrome(); setView('chat');
+    mode = 'chat'; advanced = false;
+    // F-34: режим — настройка устройства и восстанавливается после входа;
+    // тонкая настройка — состояние конкретной сессии (новый чат всегда Simple).
+    if (['chat', 'photo', 'music'].includes(loadPrefs().mode)) mode = loadPrefs().mode;
+    renderChrome(); setView('chat');
     try {
       const opened = await BriixSessionStore.open(nick);
       sessionProfile = opened.profile; sessionBackend = opened.backend;
@@ -3464,7 +3542,7 @@
     setMode(button.dataset.mode);
   });
 
-  els.tuneToggle.addEventListener('click', () => { advanced = !advanced; renderChrome(); });
+  els.tuneToggle.addEventListener('click', () => { advanced = !advanced; saveDraft(activeSession); persistSessions(); renderChrome(); }); // F-34: состояние сессии, пишем сразу — без гонки дебаунса
   els.vocalSeg.addEventListener('click', e => {
     const btn = e.target.closest('.seg-btn');
     if (!btn) return;
@@ -3510,11 +3588,6 @@
   els.tags.addEventListener('click', e => {
     const tag = e.target.closest('.tag');
     if (tag) insertTag(tag.dataset.tag);
-  });
-
-  els.addBtn.addEventListener('click', e => {
-    e.stopPropagation();
-    card('notice', 'Вложения', 'Прикрепление файлов скоро — пока опишите всё текстом.');
   });
 
   els.prompt.addEventListener('input', updateEnabled);
@@ -3616,7 +3689,29 @@
     }
   });
   els.enterBtn.addEventListener('click', enterGate);
-  els.nickInput.addEventListener('keydown', e => { if (e.key === 'Enter') els.pinpad.querySelector('[data-digit="1"]').focus(); });
+  // F-03: гейт полностью управляется и с физической клавиатуры: Enter в нике
+  // уходит на кнопку «Войти» (пустой ник — подсказка), дальше цифры/⌫
+  // набираются напрямую, Enter = вход. Enter на сфокусированной цифре
+  // подавляем (нативный click добавил бы лишнюю цифру вместо входа).
+  els.nickInput.addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    if (!els.nickInput.value.trim()) { gateHint('Сначала ник.'); return; }
+    els.enterBtn.focus();
+  });
+  document.addEventListener('keydown', e => {
+    if (els.gate.hidden || e.target === els.nickInput) return;
+    if (/^[0-9]$/.test(e.key)) {
+      if (pinBuf.length < PIN_MAX) { pinBuf += e.key; renderDots(); gateHint(''); }
+    } else if (e.key === 'Backspace') {
+      e.preventDefault();
+      pinBuf = pinBuf.slice(0, -1);
+      renderDots();
+    } else if (e.key === 'Enter') {
+      if (e.target === els.enterBtn) return; // нативный click «Войти» сам войдёт
+      if (e.target.closest && e.target.closest('.pk')) e.preventDefault();
+      enterGate();
+    }
+  });
   els.tabs.addEventListener('click', e => {
     const tab = e.target.closest('.tab');
     if (tab) setView(tab.dataset.tab);

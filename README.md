@@ -102,13 +102,14 @@ header @studioAsset ?Cache-Control "public, max-age=31536000, immutable"
 export NODE_PATH=/opt/homebrew/lib/node_modules
 node tools/check-assembly.cjs        # сборка запроса #109: sanitize, языковое правило, brain-теги, каркас лирики
 node tools/check-music-brain.cjs     # музыкальный мозг v2: слои caption, ритм всегда, бюджет, негативы, 20 брифов
-node tools/check-studio.cjs          # студия целиком: композер, чат SSE, music/photo job'ы, библиотека, мобильная вёрстка
+node tools/check-studio.cjs          # студия целиком: композер, чат SSE, music/photo job'ы, библиотека, мобильная вёрстка, мелочи 3.9
 node tools/check-session-store.cjs   # session-store.js: персист и восстановление сессий
 node tools/check-studio-storage.cjs  # localStorage/квоты/миграции хранилища студии
 node tools/check-waveform.cjs        # waveform.js: пики, seek, fallback на битом аудио (WAV + реальный m4a)
 node tools/check-producer.cjs        # producer-brain.js: черновики продюсера (vm, без браузера)
 node tools/check-wait-phrases.cjs    # wait-phrases.js + wait-ui.js: фразы ожидания, самодостаточный сервер 127.0.0.1:8388
 node tools/check-cache-selfheal.cjs  # кеш-самолечение: устаревший кеш не даёт чёрный экран (7 сценариев, свой сервер)
+node tools/check-css-classes.cjs    # мёртвые CSS-классы: каждый класс studio.css встречается в JS/HTML
 ```
 
 Зависимости браузера: `npx playwright install chromium` (в CI ставится в job).

@@ -2277,6 +2277,53 @@ function bffServer(port) {
   ok('restore с null/битой записью: бут не падает, баннера нет, сессии санированы (#23)');
   await p.close();
 
+  // ---- 3.9: мелочи пачкой -------------------------------------------------------
+  // F-03: гейт целиком проходится с физической клавиатуры.
+  {
+    const g = await page({ user: '', token: '' }); // чистый гейт входа
+    await g.locator('#nickInput').press('Enter'); // пустой ник — подсказка, не прыжок
+    assert.match(await g.locator('#gateHint').innerText(), /ник/i, 'F-03: пустой ник — подсказка');
+    await g.locator('#nickInput').fill('kboard');
+    await g.locator('#nickInput').press('Enter'); // фокус уходит на пин-пад
+    for (const digit of '1234') await g.keyboard.press(digit); // цифры набираются напрямую
+    await g.keyboard.press('Enter'); // Enter = «Войти»
+    await g.waitForSelector('#studio:not([hidden])', { timeout: 8000 });
+    assert.equal(await g.evaluate(() => localStorage.getItem('briix-studio-user')), 'kboard', 'F-03: вход только с клавиатуры');
+    await g.close();
+    ok('F-03: гейт с клавиатуры — ник Enter, цифры, Enter = вход; пустой ник — подсказка', {});
+  }
+  // F-09/F-10: время у реплик и «Копировать» у ответа наставника.
+  {
+    const p = await page();
+    await p.locator('#prompt').fill('проверка времени и копирования');
+    await p.locator('#send').click();
+    await p.waitForFunction(() => [...document.querySelectorAll('#feed .card.assistant .who')].some(w => /\d\d:\d\d/.test(w.textContent)), null, { timeout: 20000 });
+    assert.match(await p.locator('#feed .card.assistant .who').last().innerText(), /\d\d:\d\d/, 'F-10: таймкод у ответа наставника');
+    assert.match(await p.locator('#feed .card.user .who').first().innerText(), /\d\d:\d\d/, 'F-10: таймкод у сообщения пользователя');
+    await p.locator('.card.assistant .copy-text').last().click();
+    await p.waitForSelector('.toast', { timeout: 4000 });
+    assert.match(await p.locator('.toast').first().innerText(), /Скопирован/i, 'F-09: тост о копировании ответа');
+    await p.close();
+    ok('F-09/F-10: у реплик время ЧЧ:ММ; «Копировать» у ответа — тост подтверждает', {});
+  }
+  // F-34/F-41: настройки переживают перезагрузку; кнопки-тупика «+» больше нет.
+  {
+    const p = await page();
+    assert.equal(await p.locator('#addBtn').count(), 0, 'F-41: кнопка-тупик «+ вложений» убрана');
+    await p.locator('.mode[data-mode="music"]').click();
+    await p.locator('#tuneToggle').click();
+    await p.locator('#modelChip').click();
+    await p.locator('#modelMenu button', { hasText: 'Pro' }).click();
+    await p.waitForTimeout(700); // debounce-сохранение черновика (режим — часть draft сессии)
+    await p.reload();
+    await p.waitForSelector('#studio:not([hidden])', { timeout: 8000 });
+    assert.equal(await p.locator('.mode[data-mode="music"]').getAttribute('aria-pressed'), 'true', 'F-34: режим музыки восстановлен');
+    assert.ok(await p.locator('#advanced').isVisible(), 'F-34: тонкая настройка восстановлена');
+    assert.match(await p.locator('#modelName').innerText(), /Pro/, 'F-34: выбор модели восстановлен');
+    await p.close();
+    ok('F-34/F-41: режим/тонкая настройка/модель переживают reload; «+» убран', {});
+  }
+
   assert.deepEqual(errors, [], 'no page errors anywhere');
   await browser.close();
   staticSrv.close();
