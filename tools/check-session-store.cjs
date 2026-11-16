@@ -221,6 +221,76 @@ const { launch } = require('./browser-env.cjs');
     assert.deepEqual(dirtyDrafts[2].snapshot, {}, 'producer_draft с snapshot:null → {}');
     assert.deepEqual(dirtyDrafts[3].draft, { title: 'Валидный', prompt: 'p' }, 'валидный draft не тронут');
     assert.deepEqual(dirtyDrafts[4].snapshot, { idea: 'Валидная идея', quick: 'q' }, 'валидный snapshot не тронут');
+
+    // Хвост #23 (P3): мусорные элементы массива backups у producer_draft —
+    // [null] чистится при openProfile, валидные элементы целы. Не-массив чинится до [].
+    const dirtyBackups = await page.evaluate(async () => {
+      const raw = { schemaVersion: 1, nick: 'мусор-в-backups', revision: 1, activeSessionId: 's1', sessions: [
+        { id: 's1', title: 'Бэкапы', titleSet: false, createdAt: 1, updatedAt: 2, history: [], feed: [
+          { t: 'producer_draft', who: 'Продюсер', snapshot: { idea: 'x' }, backups: [null, 'мусор', { quick: 'живой', style: 's' }] },
+          { t: 'producer_draft', who: 'Продюсер', snapshot: { idea: 'y' }, backups: 'не-массив' }
+        ] }
+      ], legacyBackup: null };
+      await new Promise((resolve, reject) => {
+        const req = indexedDB.open('briix-studio-sessions', 1);
+        req.onsuccess = () => {
+          const db = req.result;
+          const tx = db.transaction('profiles', 'readwrite');
+          tx.objectStore('profiles').put(raw);
+          tx.oncomplete = () => { db.close(); resolve(); };
+          tx.onerror = () => reject(tx.error);
+        };
+      });
+      return (await BriixSessionStore.openProfile('мусор-в-backups')).sessions[0].feed;
+    });
+    assert.deepEqual(dirtyBackups[0].backups, [{ quick: 'живой', style: 's' }], 'мусорные элементы backups ([null], строки) вычищены, валидная копия цела');
+    assert.deepEqual(dirtyBackups[1].backups, [], 'не-массив backups чинится до []: рендер делает (entry.backups || []).map');
+
+    // Хвост #23 (P4): валидный профиль при open/openProfile НЕ переписывается в
+    // хранилище (put не вызывается), битый — по-прежнему записывается обратно.
+    // Spy на IDBObjectStore.prototype.put — снаружи transact, только публичный IDB.
+    const changedSemantics = await page.evaluate(async () => {
+      const validSession = { id: 'v1', title: 'Живой', titleSet: true, createdAt: 1, updatedAt: 2, history: [], feed: [
+        { t: 'producer_draft', who: 'Продюсер', snapshot: { idea: 'ок' }, backups: [{ quick: 'q' }] }
+      ] };
+      const validProfile = { schemaVersion: 1, nick: 'changed-семантика', revision: 7, activeSessionId: 'v1', sessions: [validSession], legacyBackup: null };
+      const brokenProfile = { schemaVersion: 1, nick: 'changed-семантика', revision: 7, activeSessionId: 's1', sessions: [
+        { id: 's1', title: 'Битая', backups: [null] }, { t: 'producer_draft' }
+      ], legacyBackup: null };
+      const rawWrite = raw => new Promise((resolve, reject) => {
+        const req = indexedDB.open('briix-studio-sessions', 1);
+        req.onsuccess = () => {
+          const db = req.result;
+          const tx = db.transaction('profiles', 'readwrite');
+          tx.objectStore('profiles').put(raw);
+          tx.oncomplete = () => { db.close(); resolve(); };
+          tx.onerror = () => reject(tx.error);
+        };
+      });
+      const result = {};
+      const originalPut = IDBObjectStore.prototype.put;
+      try {
+        await rawWrite(validProfile);
+        let puts = 0;
+        IDBObjectStore.prototype.put = function (...args) { puts++; return originalPut.apply(this, args); };
+        const openedValid = await BriixSessionStore.openProfile('changed-семантика');
+        result.validPuts = puts;
+        // Идентичность «вернулся тот же объект» через IDB не наблюдается (store.get
+        // всегда десериализует копию) — наблюдаемый контракт: put не было и содержимое
+        // сессии не изменилось.
+        result.validSessionSame = openedValid.sessions[0].feed[0] === undefined ? false :
+          JSON.stringify(openedValid.sessions[0]) === JSON.stringify(validSession);
+        await rawWrite(brokenProfile);
+        puts = 0;
+        await BriixSessionStore.openProfile('changed-семантика');
+        result.brokenPuts = puts;
+      } finally { IDBObjectStore.prototype.put = originalPut; }
+      return result;
+    });
+    assert.equal(changedSemantics.validPuts, 0, 'валидный профиль: put не вызывается при открытии (changed=false)');
+    assert.equal(changedSemantics.validSessionSame, true, 'валидная сессия возвращается без изменений содержимого');
+    assert.equal(changedSemantics.brokenPuts >= 1, true, 'битый профиль по-прежнему перезаписывается (хотфикс #23 сохранён)');
+
     await context.close();
     console.log('PASS session storage: migration, backup, fallback, isolation, conflicts and failures');
   } finally {

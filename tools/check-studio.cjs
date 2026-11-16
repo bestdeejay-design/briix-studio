@@ -2239,7 +2239,10 @@ function bffServer(port) {
         // Репродукция на проде (#23): черновики без draft/snapshot в валидной сессии.
         { t: 'music_draft', who: 'Наставник', draft: null },
         { t: 'music_draft', who: 'Наставник' }, // draft undefined
-        { t: 'producer_draft', who: 'Продюсер', snapshot: null }
+        { t: 'producer_draft', who: 'Продюсер', snapshot: null },
+        // Хвост #23 (P3): producer_draft с мусорными элементами backups —
+        // refreshBackups раньше читал b.quick у null и ронял рендер карточки.
+        { t: 'producer_draft', who: 'Продюсер', snapshot: { idea: 'идея с бэкапами' }, backups: [null, { quick: 'живой бэкап' }] }
       ],
       history: [{ role: 'user', content: 'привет из живой сессии' }] };
     const broken = { id: 'broken-1', title: 'Битая' }; // нет feed/history
@@ -2284,6 +2287,16 @@ function bffServer(port) {
   await p.waitForSelector('#feed .producer-draft', { timeout: 10000 });
   const draftCards = await p.locator('#feed .producer-draft').count();
   assert.ok(draftCards >= 3, 'все три битых черновика отрендерились без краша: ' + draftCards);
+  // Хвост #23 (P3): карточка с backups:[null] отрендерилась, мусор вычищен на всех уровнях.
+  const backupsText = await p.locator('#feed .producer-draft .producer-idea').last().textContent(); // details закрыт: innerText скрытое не отдаёт
+  assert.ok(backupsText.includes('идея с бэкапами'), 'producer_draft с backups:[null] отрендерился без краша');
+  const storedBackups = await p.evaluate(async () => {
+    const opened = await BriixSessionStore.open('сломан');
+    const s = opened.profile.sessions.find(s => s.id === 'valid-1');
+    return s.feed.map(f => f.t === 'producer_draft' ? f.backups : undefined).filter(b => b !== undefined);
+  });
+  assert.ok(storedBackups.some(b => Array.isArray(b) && b.length === 1 && b[0] && b[0].quick === 'живой бэкап'),
+    'мусор [null] вычищен из backups в хранилище: ' + JSON.stringify(storedBackups));
   ok('restore с null/битой записью: бут не падает, баннера нет, сессии санированы (#23)');
   await p.close();
 
