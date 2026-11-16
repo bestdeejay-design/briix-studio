@@ -5,7 +5,53 @@ on:
   pull_request:
 
 jobs:
+  # --- 1. Определяем, что менялось (issue #30, дизайн B) ---
+  # dorny/paths-filter: для pull_request база = ветка PR-базы (main) по умолчанию,
+  # для push в main — предыдущий коммит (github.event.before), т.е. diff merge-коммита.
+  # Явный base не ставим: для push в main он сломал бы diff (HEAD == base).
+  # Пин по SHA (v3.0.4) — внешнее действие в критическом пути деплоя.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      docs: ${{ steps.filter.outputs.docs }}
+      docs_files: ${{ steps.filter.outputs.docs_files }}
+      deployable: ${{ steps.filter.outputs.deployable }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad  # v3.0.4
+        id: filter
+        with:
+          list-files: json
+          filters: |
+            docs:
+              - 'docs/**'
+              - 'audits/**'
+              - '**.md'
+            # Deployable-ассеты прода. ВАЖНО (REVIEWER_KICK #3): tools/ и
+            # server-contract/ — тоже deliverable (регресс-скрипты и серверный
+            # контракт), правки workflow (.github/) деплой не отсекает.
+            deployable:
+              - 'studio/**'
+              - 'assets/**'
+              - 'tools/**'
+              - 'server-contract/**'
+              - '.github/**'
+              - 'package.json'
+              - 'package-lock.json'
+
+  # --- 2. Полный регресс: всё, кроме чисто-документационных изменений ---
   tests:
+    needs: [changes]
+    if: >-
+      always() &&
+      (needs.changes.outputs.deployable == 'true' ||
+       needs.changes.outputs.docs != 'true')
+    concurrency:
+      # Отменяем устаревший прогон той же ветки при новом пуше (REVIEWER_KICK #2:
+      # это относится ТОЛЬКО к тестам — у деплоя отдельная группа, cancel: false).
+      group: ci-tests-${{ github.ref }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest   # внешний runner; briix-ci (self-hosted) — только по явной команде владельца
     timeout-minutes: 10
     steps:
@@ -13,11 +59,27 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+          # кеш ~/.npm — требует закоммиченного package-lock.json (issue #30)
+          cache: npm
+      # Кеш браузеров playwright (~/.cache/ms-playwright, 150-300 МБ).
+      # Ключ по хешу lockfile: версии playwright запинены в package.json,
+      # lockfile закоммичен — ключ стабилен (REVIEWER_KICK #4).
+      - name: Cache playwright browsers
+        uses: actions/cache@v4
+        id: pw-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
       - name: Install playwright
         run: |
-          npm init -y >/dev/null
-          npm i --no-fund --no-audit playwright @axe-core/playwright
-          npx playwright install --with-deps chromium
+          npm ci --no-fund --no-audit
+          # --with-deps ставит apt-пакеты — их кешировать нельзя, поэтому при
+          # попадании в кеш ставим только браузер, apt-часть пропускаем.
+          if [ "${{ steps.pw-cache.outputs.cache-hit }}" = "true" ]; then
+            npx playwright install chromium
+          else
+            npx playwright install --with-deps chromium
+          fi
       - name: node --check (studio + tools)
         run: |
           for f in studio/*.js tools/*.cjs; do node --check "$f"; done
@@ -90,11 +152,49 @@ jobs:
         env:
           NODE_PATH: ./node_modules
 
+  # --- 3. Лёгкий docs-прогон: вместо полного регресса на чисто-документационных PR ---
+  # Быстро (без chromium): проверка относительных ссылок в изменённых markdown +
+  # отпечаток сборки (asset-versions). Полный регресс (tests) на таких PR скипается.
+  docs-check:
+    needs: [changes]
+    if: >-
+      always() &&
+      needs.changes.outputs.docs == 'true' &&
+      needs.changes.outputs.deployable != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Check markdown links in changed files
+        # Проверяем только относительные ссылки (между файлами репо) на изменённых
+        # файлах: внешние URL и якоря — вне скоупа, чтобы не флейтить по сети.
+        env:
+          CHANGED: ${{ needs.changes.outputs.docs_files }}
+        run: node tools/check-md-links.cjs
+      - name: asset versions (T-35)
+        run: node tools/asset-versions.cjs
+
+  # --- 4. Деплой на стенд: только при изменении deployable-ассетов ---
   deploy-stand:
     # Единственный писец /home/badai/briix-demo/studio (briix.ru#107): briix.ru больше не деплоит studio/.
     # Раннер briix-ci стоит на стенде A — деплой это локальный rsync, ключи не нужны.
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [tests]
+    # Пуш чисто-документационного PR в main пропускает деплой с понятным сообщением
+    # (REVIEWER_KICK #3: deployable покрывает studio/assets/tools/server-contract/.github).
+    if: >-
+      always() &&
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      needs.changes.outputs.deployable == 'true' &&
+      needs.tests.result == 'success'
+    needs: [tests, changes]
+    concurrency:
+      # Отмена АКТИВНОГО деплоя = риск полупереписанной папки прода
+      # (REVIEWER_KICK #2): только очередь, cancel-in-progress: false.
+      group: deploy-stand
+      cancel-in-progress: false
     runs-on: [self-hosted, briix-ci]
     timeout-minutes: 5
     steps:
@@ -109,3 +209,35 @@ jobs:
           tar -cf - -C assets . | tar -xf - -C /home/badai/briix-demo/assets/data/
           ls /home/badai/briix-demo/studio/ | wc -l
           curl -s -o /dev/null -w "studio http: %{http_code}\n" http://127.0.0.1:8440/studio/
+      - name: Post-deploy verification (build fingerprint)
+        # Отпечаток сборки пишется в два места, всегда одинаковых (T-35):
+        # studio/version.json и window.__BRIIX_BUILD__ в studio/index.html.
+        # После деплоя сверяем оба на живом проде с отпечатком смерженного
+        # index.html. Расхождение = частичный/пустой tar или рассинхрон — job красный.
+        run: |
+          set -euo pipefail
+          expected=$(node -e "
+            const s = require('fs').readFileSync('studio/index.html', 'utf8');
+            const m = s.match(/window\.__BRIIX_BUILD__ = '([0-9a-f]{10})';/);
+            if (!m) { console.error('no __BRIIX_BUILD__ in merged index.html'); process.exit(1); }
+            console.log(m[1]);
+          ")
+          got_json=$(curl -fsS --max-time 10 https://demo.briix.ru/studio/version.json)
+          got_build=$(node -e "
+            const v = JSON.parse(process.argv[1]);
+            if (!v.build) { console.error('no build in prod version.json'); process.exit(1); }
+            console.log(v.build);
+          " "$got_json")
+          html_build=$(curl -fsS --max-time 10 https://demo.briix.ru/studio/ | grep -o "__BRIIX_BUILD__ = '[0-9a-f]\{10\}'" | grep -o "[0-9a-f]\{10\}" | head -1)
+          echo "expected (merged index.html): $expected"
+          echo "prod version.json build:      $got_build"
+          echo "prod index.html build:        $html_build"
+          if [ "$got_build" != "$expected" ]; then
+            echo "::error title=post-deploy verification::version.json build ($got_build) != merged index.html fingerprint ($expected)"
+            exit 1
+          fi
+          if [ "$html_build" != "$expected" ]; then
+            echo "::error title=post-deploy verification::prod index.html __BRIIX_BUILD__ ($html_build) != merged index.html fingerprint ($expected)"
+            exit 1
+          fi
+          echo "post-deploy verification OK: build $expected on https://demo.briix.ru/studio/"
