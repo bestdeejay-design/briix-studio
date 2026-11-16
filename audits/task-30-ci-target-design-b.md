@@ -65,7 +65,11 @@ enforce_admins=false, allow_force_pushes=false, allow_deletions=false
   (self-hosted label `briix-ci`, SC2012 на `ls` — оба до правки).
 - CI на ветке (PR #31): прогон 43931936463 — changes 7s PASS, tests 6m46s PASS,
   docs-check/deploy-stand корректно скипнуты (PR с код-правками). Повторный docs-only
-  коммит этого отчёта — живая проверка пути docs-check/tests-skip: [ниже].
+  коммит (прогон 43933275078: tests 5m52s PASS, docs-check/deploy-stand skipped 0s) подтвердил
+  семантику dorny на pull_request: дифф берётся против base (main), поэтому дифф ВСЕГО PR
+  включает ci.yml/package.json → deployable=true → полный tests на PR. Чисто docs-only PR
+  (дифф только docs/audits/*.md) получит tests=skipped + docs-check — эта ветка условий
+  считается по логике фильтров, но живым прогоном ещё не проверена (см. §3).
 - `check-md-links.cjs`: полный прогон по репо — 40 ссылок / 37 файлов, 19 cross-repo refs снимка, 0 битых.
 
 ## 3. Что осталось непроверенным
@@ -78,7 +82,12 @@ enforce_admins=false, allow_force_pushes=false, allow_deletions=false
 - Кеш playwright на ubuntu runner: первый прогон — cache miss (--with-deps), попадание кеша проверится
   со второго прогона.
 - concurrency-очередь deploy-stand в бою не проверялась (нужны два подряд push в main).
-- dorny/paths-filter на push в main (diff по github.event.before) не проверен живым прогоном.
+- Повторный прогон показал: кеш playwright пока не проверен (оба прогона — cache miss с --with-deps; hit будет со второго прогона ПОСЛЕ мержа, т.к. ключ кеша впервые появился в этом PR).- dorny/paths-filter на push в main (diff по github.event.before) не проверен живым прогоном —
+  сработает на первом мерже после этого PR.
+- Путь «чисто docs-only PR → tests skipped + docs-check» не прогонялся (этот PR содержит
+  workflow-правки → полный tests; отдельную docs-ветку создавать нельзя по правилам сессии).
+  Проверится на первом же docs-only PR после мержа; при красном docs-check — откат не нужен,
+  job не в критическом пути деплоя.
 
 ## 4. Файлы
 
