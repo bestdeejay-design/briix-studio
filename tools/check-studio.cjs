@@ -2234,7 +2234,13 @@ function bffServer(port) {
   p = await page({ user: '' }); // путь через гейт, как у владельца на проде
   const seeded = await p.evaluate(async () => {
     const valid = { id: 'valid-1', title: 'Живой чат', titleSet: true, createdAt: 1, updatedAt: 2,
-      feed: [{ t: 'user', who: 'Вы', text: 'привет из живой сессии' }],
+      feed: [
+        { t: 'user', who: 'Вы', text: 'привет из живой сессии' },
+        // Репродукция на проде (#23): черновики без draft/snapshot в валидной сессии.
+        { t: 'music_draft', who: 'Наставник', draft: null },
+        { t: 'music_draft', who: 'Наставник' }, // draft undefined
+        { t: 'producer_draft', who: 'Продюсер', snapshot: null }
+      ],
       history: [{ role: 'user', content: 'привет из живой сессии' }] };
     const broken = { id: 'broken-1', title: 'Битая' }; // нет feed/history
     const raw = { schemaVersion: 1, nick: 'сломан', revision: 0, activeSessionId: 'broken-1', sessions: [null, broken, valid], legacyBackup: null };
@@ -2274,6 +2280,10 @@ function bffServer(port) {
   await p.locator('.session-item', { hasText: 'Живой чат' }).click();
   await p.waitForSelector('#feed .card.user', { timeout: 10000 });
   assert.match(await p.locator('#feed .card.user .body').first().innerText(), /привет из живой сессии/, 'лента валидной сессии восстановлена');
+  // Репродукция на проде (#23): битые черновики рендерятся карточками, а не роняют бут.
+  await p.waitForSelector('#feed .producer-draft', { timeout: 10000 });
+  const draftCards = await p.locator('#feed .producer-draft').count();
+  assert.ok(draftCards >= 3, 'все три битых черновика отрендерились без краша: ' + draftCards);
   ok('restore с null/битой записью: бут не падает, баннера нет, сессии санированы (#23)');
   await p.close();
 

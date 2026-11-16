@@ -1863,6 +1863,8 @@
   // паттерн renderProducerDraft) + «Сгенерировать трек» (явная генерация).
   // F-11: формулировки и набор действий совпадают с продюсерским черновиком.
   function renderMusicDraftContent(body, entry, session) {
+    // Репродукция на проде (#23): битый feed не должен уметь ронять рендер.
+    if (!entry.draft || typeof entry.draft !== 'object' || Array.isArray(entry.draft)) entry.draft = {};
     body.classList.add('producer-draft', 'music-draft');
     const note = document.createElement('p'); note.className = 'producer-note';
     note.textContent = 'Черновик наставника. Проверьте смысл, язык и ограничения — помощник может ошибаться.';
@@ -2448,6 +2450,8 @@
   }
 
   function renderProducerDraft(entry, session) {
+    // Репродукция на проде (#23): snapshot без объекта — пустые поля с fallback '—'.
+    if (!entry.snapshot || typeof entry.snapshot !== 'object' || Array.isArray(entry.snapshot)) entry.snapshot = {};
     const body = card('assistant', 'Музыкальный продюсер · черновик', '', session);
     body.classList.add('producer-draft');
     const note = document.createElement('p'); note.className = 'producer-note';
