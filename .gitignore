@@ -1,8 +1,8 @@
 node_modules/
 playwright-report/
 test-results/
-/package.json
-/package-lock.json
+# package.json/package-lock.json коммитятся с issue #30: пины playwright/axe,
+# стабильный ключ кеша браузеров. node_modules по-прежнему игнорируется.
 
 # Бенчмарк мозга v2: аудио и ключ слепого прослушивания не коммитим (#20)
 bench/out/

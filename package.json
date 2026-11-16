@@ -1,0 +1,9 @@
+{
+  "name": "briix-studio-ci",
+  "private": true,
+  "description": "CI-only зависимости для .github/workflows/ci.yml (issue #30, дизайн B). Промышленный код студии без сборки — npm тут только для playwright/axe.",
+  "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
+    "playwright": "1.65.0"
+  }
+}
