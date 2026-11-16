@@ -191,6 +191,36 @@ const { launch } = require('./browser-env.cjs');
     });
     assert.deepEqual(dirtyFeed.feed, [{ t: 'user', who: 'Вы', text: 'x' }], 'null/мусор внутри feed вычищены, валидный элемент цел');
     assert.deepEqual(dirtyFeed.history, [{ role: 'user', content: 'y' }], 'null внутри history вычищен');
+
+    // Репродукция на проде (#23): черновики без draft/snapshot чинятся до {},
+    // валидные черновики не трогаются.
+    const dirtyDrafts = await page.evaluate(async () => {
+      const raw = { schemaVersion: 1, nick: 'черновики-без-поля', revision: 1, activeSessionId: 's1', sessions: [
+        { id: 's1', title: 'Черновики', titleSet: false, createdAt: 1, updatedAt: 2, history: [], feed: [
+          { t: 'music_draft', who: 'Наставник', draft: null },
+          { t: 'music_draft', who: 'Наставник' }, // draft undefined
+          { t: 'producer_draft', who: 'Продюсер', snapshot: null },
+          { t: 'music_draft', who: 'Наставник', draft: { title: 'Валидный', prompt: 'p' } },
+          { t: 'producer_draft', who: 'Продюсер', snapshot: { idea: 'Валидная идея', quick: 'q' } }
+        ] }
+      ], legacyBackup: null };
+      await new Promise((resolve, reject) => {
+        const req = indexedDB.open('briix-studio-sessions', 1);
+        req.onsuccess = () => {
+          const db = req.result;
+          const tx = db.transaction('profiles', 'readwrite');
+          tx.objectStore('profiles').put(raw);
+          tx.oncomplete = () => { db.close(); resolve(); };
+          tx.onerror = () => reject(tx.error);
+        };
+      });
+      return (await BriixSessionStore.openProfile('черновики-без-поля')).sessions[0].feed;
+    });
+    assert.deepEqual(dirtyDrafts[0].draft, {}, 'music_draft с draft:null → {}');
+    assert.deepEqual(dirtyDrafts[1].draft, {}, 'music_draft без draft → {}');
+    assert.deepEqual(dirtyDrafts[2].snapshot, {}, 'producer_draft с snapshot:null → {}');
+    assert.deepEqual(dirtyDrafts[3].draft, { title: 'Валидный', prompt: 'p' }, 'валидный draft не тронут');
+    assert.deepEqual(dirtyDrafts[4].snapshot, { idea: 'Валидная идея', quick: 'q' }, 'валидный snapshot не тронут');
     await context.close();
     console.log('PASS session storage: migration, backup, fallback, isolation, conflicts and failures');
   } finally {

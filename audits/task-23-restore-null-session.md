@@ -41,3 +41,26 @@
 - `session-store.js`: `sanitizeSession` теперь чистит null/мусорные ЭЛЕМЕНТЫ внутри `feed` и `history` валидных записей (фильтр `item && typeof item === 'object'`) — раньше профиль с `feed: [null]` проходил санитизацию записей и ронял бут на `ensureRoot` (`item.t` у null).
 - `tools/check-session-store.cjs`: регресс-ассерт — валидная сессия с `feed: [null, {t:'user',text:'x'}, 'мусор-строка']` и `history: [null, {role:'user',…}]` → после `openProfile()` остаётся только валидный элемент в каждом массиве.
 - check-session-store и check-studio (74 checks) — зелёные. Первый прогон check-studio упал по таймауту (разовый флак); два повторных прогона полностью зелёные, к правкам это не относится.
+
+## Репродукция на проде: черновики без draft/snapshot
+
+Координатор воспроизвел владельческий краш на сборке e6e7596a27: санитизация чистила null-элементы feed, но не битые КОНТЕЙНЕРЫ полей черновиков. Формы-репродукторы (всё внутри try startSession → ensureRoot → feedRestore):
+1. `feed:[{t:'music_draft', draft:null}]` → «reading 'title'» (renderMusicDraftContent: `entry.draft[name]`, name='title') — точное совпадение с баннером владельца.
+2. `feed:[{t:'music_draft', who:'Продюсер'}]` (draft undefined) → то же семейство.
+3. `feed:[{t:'producer_draft', snapshot:null}]` → «reading 'idea'» (renderProducerDraft читает .idea/.quick/.style/.lyrics без guard).
+
+### Фикс (ветка fix/feed-draft-guards, от свежего origin/main b8f7a14)
+- `studio/session-store.js`, `sanitizeSession`: для feed-элементов `t='music_draft'` не-объектный/массивный `draft` заменяется на `{}`; для `t='producer_draft'` — `snapshot` → `{}` (пустой объект безопасен: рендер даёт поля с fallback «—»). Валидные черновики не трогаются (мутация только при бите). Один и тот же sanitizeSession работает на обоих бэкендах (IDB и local fallback) — отдельного кода для localStorage не требуется.
+- `studio/studio.js` (защита в глубину): `renderMusicDraftContent` — `entry.draft` не объект → `entry.draft = {}` в начале; `renderProducerDraft` — то же для `entry.snapshot`. Поведение валидных черновиков не изменено.
+
+### Тесты
+- `check-session-store.cjs`: все три формы + два валидных черновика в одном feed → битые контейнеры стали `{}`, валидные deep-equal нетронуты.
+- `check-studio.cjs`: сквозной сценарий #23 расширен — в валидную сессию сеются `music_draft draft:null`, `music_draft` без draft, `producer_draft snapshot:null`; вход без баннера, студия открыта, все три черновика рендерятся карточками (`.producer-draft` ≥ 3), page errors пуст.
+
+### Сюиты и отпечаток
+- Все 8 сюит зелёные: session-store, studio (74 checks, три прогона подряд после перегенерации), assembly, studio-storage, waveform, producer, wait-phrases, cache-selfheal. Промежуточные разовые сбои check-wait-phrases и check-studio (таймаут/ассерт при параллельной нагрузке прогонов) не воспроизвелись при повторах — каждый сюит в финале зелёный, у check-studio 4 зелёных прогона.
+- Ассеты менялись (session-store.js, studio.js) → `asset-versions.cjs --fix` прогнан: 7 правок, новый отпечаток `adba617caf`, повторный `asset-versions` — PASS («?v= и сборочный отпечаток согласованы»), cache-selfheal подтверждает совпадение с version.json. Рассинхрон, как на CI, не остался.
+
+### Непроверенное (дополнительно к списку выше)
+- Битые элементы `backups` внутри producer_draft (массив резервных копий) не чистятся — `(b.quick || '—')` с b=null может упасть; в границы задачи не входило, зафиксировано как кандидат на следующий дожим.
+- Живой прод-профиль владельца по-прежнему не проверен на реальных данных.

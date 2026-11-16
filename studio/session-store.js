@@ -120,6 +120,16 @@
     // (ensureRoot читает item.t у null). Чистим мусор, валидные элементы не трогаем.
     fixed.feed = fixed.feed.filter(item => item && typeof item === 'object');
     fixed.history = fixed.history.filter(item => item && typeof item === 'object');
+    // Репродукция на проде (#23): черновики без контейнера полей —
+    // renderMusicDraftContent читает entry.draft[name], renderProducerDraft —
+    // entry.snapshot.idea и соседи. Битый контейнер чиним до {}, валидный не трогаем.
+    const fixContainer = (item, field) => {
+      if (typeof item[field] !== 'object' || item[field] === null || Array.isArray(item[field])) item[field] = {};
+    };
+    for (const item of fixed.feed) {
+      if (item.t === 'music_draft') fixContainer(item, 'draft');
+      if (item.t === 'producer_draft') fixContainer(item, 'snapshot');
+    }
     if (!Number.isFinite(fixed.createdAt)) fixed.createdAt = now;
     if (!Number.isFinite(fixed.updatedAt)) fixed.updatedAt = fixed.createdAt;
     return fixed;
