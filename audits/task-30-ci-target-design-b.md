@@ -63,7 +63,9 @@ enforce_admins=false, allow_force_pushes=false, allow_deletions=false
 - Локальный полный регресс 11 сюит (`NODE_PATH=/opt/homebrew/lib/node_modules`): все 11 PASS (check-studio, check-assembly, check-session-store, check-studio-storage, check-waveform, check-producer, check-music-brain, check-wait-phrases, check-a11y, asset-versions, check-cache-selfheal)
 - `node --check` на все studio/*.js + tools/*.cjs — PASS; `actionlint` — только 2 известных замечания
   (self-hosted label `briix-ci`, SC2012 на `ls` — оба до правки).
-- CI на ветке: [заполняется по результату]
+- CI на ветке (PR #31): прогон 43931936463 — changes 7s PASS, tests 6m46s PASS,
+  docs-check/deploy-stand корректно скипнуты (PR с код-правками). Повторный docs-only
+  коммит этого отчёта — живая проверка пути docs-check/tests-skip: [ниже].
 - `check-md-links.cjs`: полный прогон по репо — 40 ссылок / 37 файлов, 19 cross-repo refs снимка, 0 битых.
 
 ## 3. Что осталось непроверенным
