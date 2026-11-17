@@ -2463,7 +2463,9 @@
       '\n\nСтиль до подготовки: ' + (entry.snapshot.style || '—') + '\n\nЛирика до подготовки: ' + (entry.snapshot.lyrics || '—');
     details.append(summary, original);
     const backups = document.createElement('pre');
-    const refreshBackups = () => { backups.textContent = (entry.backups || []).map((b, i) =>
+    // Защита в глубину (хвост #23): мусорные элементы backups ([null]) могли остаться
+    // в уже открытой вкладке, чей профиль санирован мимо store — рендер не падает.
+    const refreshBackups = () => { backups.textContent = (entry.backups || []).filter(b => b && typeof b === 'object').map((b, i) =>
       'Резервная копия ' + (i + 1) + ':\nБыстрый черновик: ' + (b.quick || '—') + '\nСтиль: ' + (b.style || '—') + '\nЛирика: ' + (b.lyrics || '—')).join('\n\n'); };
     refreshBackups(); details.append(backups);
     body.append(note, details);
