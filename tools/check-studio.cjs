@@ -2062,13 +2062,16 @@ function bffServer(port) {
   assert.match(await p.locator('#newBelow').innerText(), /новое|новых/, 'F-39: пилюля считает новое');
   await p.locator('#newBelow').click();
   await p.waitForFunction(() => document.getElementById('newBelow')?.hidden === true, {}, { timeout: 10000 });
-  // клик должен привести к новому: либо лента у низа, либо карточка «Фото готово» в кадре
-  const landed = await p.evaluate(() => {
+  // Клик должен привести к новому: либо лента у низа, либо карточка «Фото готово»
+  // в кадре. Проверка с поллингом (не мгновенная): обложка может догрузиться
+  // после скролла и вырастить карточку — разовый замер ловил промежуточное
+  // состояние (известный флейк из ревью PR #25/#24).
+  const landed = await p.waitForFunction(() => {
     const f = document.getElementById('feed');
     const photo = [...f.querySelectorAll('.card.assistant')].find(c => c.textContent.includes('Фото готово'));
     return f.scrollHeight - f.scrollTop - f.clientHeight < 140
       || (photo && photo.getBoundingClientRect().bottom <= f.getBoundingClientRect().bottom + 4);
-  });
+  }, null, { timeout: 3000 }).then(() => true).catch(() => false);
   assert.equal(landed, true, 'F-39: клик привёл к новому (фото в кадре)');
   await p.waitForSelector('#feed img.media-in', { timeout: 10000 }); // переход раскрыл карточку — img догрузился
   ok('new-content pill appears for readers above the feed bottom (F-39)');
@@ -2205,6 +2208,34 @@ function bffServer(port) {
     await bcCtx.close();
   }
   ok('BroadcastChannel syncs library favorites across tabs (T-26)');
+
+  // #22: «одним запросом — весь лист»: повторное открытие Библиотеки не дёргает
+  // /jobs заново (TTL 60с), мутация (♥ серверной записи) инвалидирует кеш.
+  // Своя джоба в моке — сцена самодостаточна, не зависит от предыдущих.
+  {
+    state.jobPosts.push({ id: 'ttl-1', type: 'music', prompt: 'песня для TTL-сцены', params: { artist: 'tester' } });
+    const p = await page();
+    await p.locator('.tab[data-tab="library"]').click();
+    await p.waitForSelector('.lib-item', { timeout: 15000 });
+    const first = state.jobsLists;
+    // Переоткрытие без мутаций: список из TTL-кеша, нового запроса нет.
+    await p.locator('.tab[data-tab="chat"]').click();
+    await p.locator('.tab[data-tab="library"]').click();
+    await p.waitForSelector('.lib-item', { timeout: 15000 });
+    assert.equal(state.jobsLists, first, '#22: повторное открытие Библиотеки — /jobs из кеша, без запроса');
+    // ♥ серверной записи инвалидирует кеш: следующее открытие обновляет список.
+    const favBtn = p.locator('.lib-item button.action', { hasText: 'В избранное' }).first();
+    if (await favBtn.count()) {
+      await favBtn.click();
+      await p.waitForFunction(() => document.querySelector('.lib-item')?.classList.contains('fav'), {}, { timeout: 8000 });
+      await p.locator('.tab[data-tab="chat"]').click();
+      await p.locator('.tab[data-tab="library"]').click();
+      await p.waitForSelector('.lib-item', { timeout: 15000 });
+      assert.ok(state.jobsLists > first, '#22: мутация ♥ инвалидировала кеш — /jobs пошёл заново (' + state.jobsLists + ' > ' + first + ')');
+    }
+    await p.close();
+    ok('#22: список одним запросом — TTL 60с, ♥ инвалидирует кеш', {});
+  }
 
   // T-35: старт — defer на всех скриптах, версии по контент-хэшу,
   // favicon/manifest/theme-color, словарь ожидания ленивый.

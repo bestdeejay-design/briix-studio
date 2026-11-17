@@ -190,6 +190,7 @@
 
   async function submitJob(body) {
     const response = await request('/jobs', { method: 'POST', headers: headers(), body: JSON.stringify(body) });
+    invalidateServerJobs(); // #22: новая джоба должна попасть в Библиотеку без ожидания TTL
     const payload = await response.json();
     if (!payload?.job_id) throw new BusError('bad_response', 'Сервер не вернул job_id.');
     return payload.job_id;
@@ -863,7 +864,19 @@
       pill.id = 'newBelow';
       pill.className = 'new-below';
       pill.hidden = true;
-      pill.addEventListener('click', () => { scrollFeed(true); });
+      pill.addEventListener('click', () => {
+        scrollFeed(true);
+        // F-39/#22-хвост: контент новой карточки может догрузиться ПОСЛЕ скролла
+        // (обложка/фото вырастает на сотни px) — разовый скролл оставлял читателя
+        // «почти у нового», а само новое — за кадром. Держим низ 1.2с: догрузка
+        // не уводит цель, после — отпускаем (читатель волен листать).
+        const t0 = Date.now();
+        (function stick() {
+          if (Date.now() - t0 > 1200) return;
+          scrollFeed(true);
+          requestAnimationFrame(stick);
+        })();
+      });
       newBelowPill = pill;
     }
     els.feed.append(newBelowPill); // append переносит узел в конец — за карточками сессии
@@ -1385,7 +1398,7 @@
               try {
                 await request('/jobs/' + encodeURIComponent(ctx.job) + '/favorite', {
                   method: 'POST', headers: headers(), body: JSON.stringify({ favorite: next })
-                });
+                }).then(() => invalidateServerJobs()); // #22: ♥ виден сразу при переоткрытии
               } catch (error) { errorCard(error); return; }
             }
             item.fav = next; libSave(list);
@@ -1413,7 +1426,7 @@
         if (!ok) return;
         const item = libEntry(ctx.job);
         if (item?.server) {
-          try { await request('/jobs/' + encodeURIComponent(ctx.job), { method: 'DELETE', headers: headers() }); }
+          try { await request('/jobs/' + encodeURIComponent(ctx.job), { method: 'DELETE', headers: headers() }).then(() => invalidateServerJobs()); } // #22
           catch (error) { errorCard(error); return; }
         }
         libSave(libLoad().filter(x => x.job !== ctx.job));
@@ -3031,9 +3044,18 @@
   // Серверная библиотека (infra#77): GET /jobs как первоисточник, клиентские записи — дополнение.
   let libSeq = 0;
   const jobsInFlight = new Map();
+  // #22 (P1): «одним запросом — весь лист». /jobs и так забирает список целиком,
+  // но клиент дёргал его на КАЖДОЕ открытие Библиотеки (и fallback обложек) —
+  // на сотовом IP с прокси-лимитом 30 req/min это и ловило 429 владельца.
+  // TTL 60с: список меняется только нашими же мутациями (создание/♥/удаление
+  // инвалидируют кеш) и серверной retention-чисткой раз в 24ч.
+  const JOBS_TTL_MS = 60000;
+  let jobsCached = null; // { key, list, at }
+  function invalidateServerJobs() { jobsCached = null; }
   function serverJobs() {
     const origin = server(), credential = token(), owner = currentUser();
     const key = JSON.stringify([origin, credential, owner]);
+    if (jobsCached && jobsCached.key === key && Date.now() - jobsCached.at < JOBS_TTL_MS) return Promise.resolve(jobsCached.list);
     if (jobsInFlight.has(key)) return jobsInFlight.get(key);
     const work = (async () => {
       const response = await fetch(origin + '/jobs?limit=100', { headers: { Authorization: 'Bearer ' + credential, 'Content-Type': 'application/json' } });
@@ -3042,7 +3064,9 @@
         throw new BusError('http', 'Библиотека недоступна (' + response.status + ').', response.status);
       }
       const payload = await response.json();
-      return Array.isArray(payload?.items) ? payload.items : [];
+      const list = Array.isArray(payload?.items) ? payload.items : [];
+      jobsCached = { key, list, at: Date.now() };
+      return list;
     })();
     jobsInFlight.set(key, work);
     const clear = () => { if (jobsInFlight.get(key) === work) jobsInFlight.delete(key); };
@@ -3309,7 +3333,7 @@
         try {
           await request('/jobs/' + encodeURIComponent(entry.job) + '/favorite', {
             method: 'POST', headers: headers(), body: JSON.stringify({ favorite: next })
-          });
+          }).then(() => invalidateServerJobs()); // #22: ♥ виден сразу при переоткрытии
         } catch { fav.disabled = false; showLibError(div, 'Не удалось обновить избранное.'); return; }
       }
       if (currentUser() !== owner) return;
@@ -3334,7 +3358,7 @@
       });
       if (!ok) return;
       if (entry.server) {
-        try { await request('/jobs/' + encodeURIComponent(entry.job), { method: 'DELETE', headers: headers() }); }
+        try { await request('/jobs/' + encodeURIComponent(entry.job), { method: 'DELETE', headers: headers() }).then(() => invalidateServerJobs()); } // #22
         catch { showLibError(div, 'Не удалось удалить запись.'); return; }
       }
       if (currentUser() !== owner) return;
