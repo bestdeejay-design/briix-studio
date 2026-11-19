@@ -60,7 +60,9 @@ const rows = spec.tracks.map(t => {
       atmosphere: built.layers.space.atmosphere,
       dynamics: built.layers.tail.dynamics,
       mood: built.layers.tail.mood,
-      concept: built.layers.tail.concept
+      concept: built.layers.tail.concept,
+      style: built.layers.style ? built.layers.style.key : null,
+      depth: (built.layers.depth && built.layers.depth.tags) || []
     },
     lengths: { a: captionA.length, b: captionB.length },
     // Самопроверка считается по ФАКТИЧЕСКОМУ caption B (VOCAL-CONST + слои мозга):
