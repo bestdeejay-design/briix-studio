@@ -144,9 +144,12 @@ function bffServer(port) {
           if (state.chatMidstreamError) return sseMidstreamError(res);
           if (state.chatCrlf) return sseCrlf(res, 'Стрим через жёсткий прокси: ' + last.slice(-30));
           if (state.chatSlow) return sse(res, state.chatSlowText || 'медленное слово '.repeat(80), state.chatSlowTick || 120);
-          // Разговорный музыкальный режим (вариант B): наставник отвечает разговорно
-          // и всегда с draft-блоком в маркер-формате клиента.
-          if (/Продюсер|Лирик|Автор песни/.test(body.messages[0]?.content || '')) {
+          // Разговорный музыкальный режим (#35: единый диалог): музыкальная роль
+          // отвечает разговорно и всегда с draft-блоком в маркер-формате клиента.
+          // Роль детектим по объявлению «Ты «…»» / «Ты музыкальный продюсер»
+          // (prepareMusic, producer-brain) — в контексте студии есть слово
+          // «Лирика:», которое ложно матчило старый /Лирик/.
+          if (/Ты «(Продюсер|Лирик|Автор песни)»|музыкальный продюсер BRIIX/.test(body.messages[0]?.content || '')) {
             const draft = JSON.stringify({ title: 'Черновик наставника', prompt: 'dream pop, 90 BPM, warm female vocals', lyrics: '[Verse]\nНовая строка про осень' });
             return sse(res, 'Разговор пошёл. Вот черновик. [briix-draft] ' + draft + ' [/briix-draft]');
           }
@@ -325,27 +328,30 @@ function bffServer(port) {
     return p;
   }
 
-  // 1. Загрузка без ошибок, 3 режима, чип помощника по режимам, состояния send.
+  // 1. Загрузка без ошибок, 2 фокуса (музыка — дефолт), чип наставников, состояния send.
   let p = await page();
   await p.waitForTimeout(300);
   assert.deepEqual(errors, [], 'no page errors on load');
-  assert.equal(await p.locator('.mode').count(), 3);
-  assert.equal(await p.locator('.mode[data-mode="chat"]').getAttribute('aria-pressed'), 'true');
+  assert.equal(await p.locator('.mode').count(), 2, '#35: two focuses instead of three chats');
+  assert.equal(await p.locator('.mode[data-mode="music"]').getAttribute('aria-pressed'), 'true', 'Создание музыки — default focus');
   assert.equal(await p.locator('#send').isDisabled(), true, 'send disabled on empty field');
   assert.equal(await p.locator('#assistantChip').isVisible(), true, 'assistant is a toolbar chip');
-  // Чат: 3 помощника в меню чипа.
+  // Единый диалог: 7 универсальных наставников + 3 музыкальные роли в одном меню.
   await p.locator('#assistantChip').click();
-  assert.equal(await p.locator('#assistantMenu button').count(), 7, 'chat has 7 assistants');
+  assert.equal(await p.locator('#assistantMenu button').count(), 10, 'music focus has 7 universal mentors + 3 music roles');
   assert.match(await p.locator('#assistantMenu').innerText(), /Универсальный/);
   assert.match(await p.locator('#assistantMenu').innerText(), /Маркетолог/);
   assert.match(await p.locator('#assistantMenu').innerText(), /Наставник/);
+  assert.match(await p.locator('#assistantMenu').innerText(), /Продюсер/);
+  assert.match(await p.locator('#assistantMenu').innerText(), /Лирик/);
+  assert.match(await p.locator('#assistantMenu').innerText(), /Автор песни/);
   assert.equal(await p.locator('#assistantMenu button').first().evaluate(el => el === document.activeElement), true);
   await p.keyboard.press('ArrowDown');
   assert.equal(await p.locator('#assistantMenu button').nth(1).evaluate(el => el === document.activeElement), true);
   await p.keyboard.press('Escape');
   assert.equal(await p.locator('#assistantChip').evaluate(el => el === document.activeElement), true);
   assert.equal(await p.locator('#assistantMenu').isVisible(), false, 'Escape closes the menu');
-  // Фото: 1 помощник, музыкальные чипы скрыты.
+  // Фото: 2 помощника, музыкальные чипы скрыты.
   await p.locator('.mode[data-mode="photo"]').click();
   await p.locator('#assistantChip').click();
   assert.equal(await p.locator('#assistantMenu button').count(), 2, 'photo has 2 assistants');
@@ -353,13 +359,9 @@ function bffServer(port) {
   assert.match(await p.locator('#assistantMenu').innerText(), /Визуальный дизайнер/);
   await p.keyboard.press('Escape');
   assert.equal(await p.locator('#modelChip').isVisible(), false, 'model chip hidden outside music');
-  // Музыка: 2 помощника + муз-чипы видимы.
+  // Музыка: чипы видимы.
   await p.locator('.mode[data-mode="music"]').click();
   await p.locator('#assistantChip').click();
-  assert.equal(await p.locator('#assistantMenu button').count(), 3, 'music has 3 assistants');
-  assert.match(await p.locator('#assistantMenu').innerText(), /Продюсер/);
-  assert.match(await p.locator('#assistantMenu').innerText(), /Лирик/);
-  assert.match(await p.locator('#assistantMenu').innerText(), /Автор песни/);
   await p.keyboard.press('Escape');
   assert.equal(await p.locator('#modelChip').isVisible(), true, 'model chip visible in music');
   assert.equal(await p.locator('#vocalSeg').isVisible(), true, 'track-mode segmented control visible in music');
@@ -370,12 +372,12 @@ function bffServer(port) {
   assert.equal(await p.locator('#send').isDisabled(), false, 'send enabled once the prompt is filled');
   assert.equal(await p.locator('#genTrack').isDisabled(), false, 'explicit Generate button enabled once the prompt is filled');
   await p.locator('#prompt').fill('');
-  ok('loads clean, 3 modes, assistant chip menus per mode, music toolbar', {});
+  ok('loads clean, 2 focuses (music default), unified mentor menu, music toolbar', {});
 
   // 2. Инлайн-ввод ключа, когда хранилище пусто: по умолчанию — до закрытия
   //    вкладки (sessionStorage), чекбокс «запомнить» — в localStorage (T-42).
   p = await page({ token: '' });
-  await p.locator('.mode[data-mode="chat"]').click();
+  await p.locator('.mode[data-mode="music"]').click();
   await p.locator('#prompt').fill('привет');
   await p.locator('#send').click();
   await p.waitForSelector('#keyCard:not([hidden])');
@@ -533,9 +535,12 @@ function bffServer(port) {
   assert.ok(natural > 0, 'PNG preview actually decoded');
   ok('photo job renders decoded PNG preview', {});
 
-  // 9. Модерация 422 в чате и в джобе: карточка + сохранение текста.
+  // 9. Модерация 422 в диалоге и в джобе: карточка + сохранение текста.
   state.chatBlocked = true;
-  await p.locator('.mode[data-mode="chat"]').click();
+  await p.locator('.mode[data-mode="music"]').click();
+  // #35: после фото возвращаемся в music — в advanced (черновик секции 7) поле
+  // один (#prompt скрыт); выключаем тонкую настройку, чтобы вернуть Simple-диалог.
+  if (await p.locator('#advanced').isVisible()) await p.locator('#tuneToggle').click();
   const blockedText = 'запрещённый текст';
   await p.locator('#prompt').fill(blockedText);
   await p.locator('#send').click();
@@ -562,9 +567,10 @@ function bffServer(port) {
   assert.ok(css.includes('#d97757'), 'single accent color used');
   ok('interactive states defined in css (hover/active/disabled/focus + accent)', {});
 
-  // 11. Параллельная лента: стрим в чате + джоба одновременно; ✕ в карточке гасит только свой поток.
+  // 11. Параллельная лента: стрим в диалоге + джоба одновременно; ✕ в карточке гасит только свой поток.
   p = await page();
   state.chatSlow = true;
+  state.chatSlowTick = 400; // #35: медленные операции конфигуратора делают обход длинным — стрим обязан пережить его
   await p.locator('#prompt').fill('останови меня');
   await p.locator('#prompt').press('Enter'); // Enter = отправка в чате
   await p.waitForSelector('.card.assistant .stream-stop, .card.assistant .wait-row .stage-stop', { timeout: 10000 });
@@ -574,18 +580,33 @@ function bffServer(port) {
   await p.locator('#send').click();
   await p.waitForSelector('.card.stage .stage-stop', { timeout: 10000 });
   // Пока ответ идёт, можно писать черновик, но второй ход ждёт завершения первого.
-  await p.locator('.mode[data-mode="chat"]').click();
+  await p.locator('.mode[data-mode="music"]').click();
   await p.locator('#prompt').fill('пока жду — ещё вопрос');
+  if (process.env.BRIIX_DEBUG_11) {
+    console.log('DBG11:', await p.evaluate(() => ({
+      mode: document.querySelector('.mode[aria-pressed="true"]')?.dataset.mode,
+      sendDisabled: document.getElementById('send').disabled,
+      chatPendingHidden: document.getElementById('chatPending').hidden,
+      waitRows: document.querySelectorAll('#feed .wait-row').length,
+      streaming: document.querySelectorAll('#feed .card.assistant.streaming').length,
+      bodies: [...document.querySelectorAll('#feed .card .body')].map(b => (b.textContent || '').slice(0, 30))
+    })));
+  }
   assert.equal(await p.evaluate(() => document.getElementById('send').disabled), true, 'second chat turn waits for current reply');
   assert.equal(await p.locator('#chatPending').isVisible(), true);
-  // ✕ гасит только чат-стрим: джоба продолжает жить.
+  // ✕ гасит только чат-стрим: джоба продолжает жить. Если ✕ пришёл до первого
+  // слова стрима — карточка убирается вовсе (пустой ответ не висит), это тоже валидно.
   await p.locator('.card.assistant .stage-stop').first().click();
-  await p.waitForSelector('.card.assistant .stopped-note', { timeout: 10000 });
+  await p.waitForFunction(() => {
+    const note = document.querySelector('.card.assistant .stopped-note');
+    const streaming = [...document.querySelectorAll('#feed .card.assistant')].some(c => c.classList.contains('streaming'));
+    return Boolean(note) || !streaming;
+  }, {}, { timeout: 10000 });
   assert.equal(await p.locator('#send').isDisabled(), false, 'chat draft can be sent after stopping reply');
   const stageStillThere = await p.locator('.card.stage').count();
   assert.equal(stageStillThere >= 1, true, 'job card survives chat stream stop');
   await p.waitForSelector('.card img.media-in', { timeout: 20000 }); // джоба завершилась успехом
-  state.chatSlow = false;
+  state.chatSlow = false; state.chatSlowTick = 0;
   ok('parallel feed: chat stream + job simultaneously, per-card stop kills only its own op', {});
 
   // 11b. Стоп поллинга джобы: ✕ на stage-карточке останавливает ожидание.
@@ -606,7 +627,7 @@ function bffServer(port) {
   ok('job polling stop via in-card ✕ cancels the job on the server, shows a notice, frees the composer', {});
 
   // 12. Новый чат сохраняет старый; его можно открыть через историю.
-  await p.locator('.mode[data-mode="chat"]').click();
+  await p.locator('.mode[data-mode="music"]').click();
   await p.locator('#newChat').click();
   await p.waitForFunction(() => document.querySelectorAll('#feed .session-feed:not([hidden]) .card').length === 0);
   await p.locator('#sessionsOpen').click();
@@ -854,7 +875,8 @@ function bffServer(port) {
   // F-35: meta даёт Android-уменьшение вьюпорта, visualViewport-подстраховка — iOS.
   const kbMeta = await p.evaluate(() => document.querySelector('meta[name="viewport"]').content);
   assert.match(kbMeta, /interactive-widget=resizableViewport/, 'F-35: viewport содержит interactive-widget=resizableViewport');
-  await p.locator('.mode[data-mode="chat"]').click(); // компактный композер — чистый замер подъёма
+  // #35: режима «Чат» больше нет — для чистого замера уходим из advanced в Simple.
+  if (await p.locator('#advanced').isVisible()) await p.locator('#tuneToggle').click();
   const lift = await p.evaluate(() => {
     const send = document.getElementById('send');
     const before = send.getBoundingClientRect().bottom;
@@ -960,7 +982,7 @@ function bffServer(port) {
   await p.locator('#prompt').fill('черновик чата');
   await p.locator('.mode[data-mode="photo"]').click();
   await p.locator('#prompt').fill('черновик фото');
-  await p.locator('.mode[data-mode="chat"]').click();
+  await p.locator('.mode[data-mode="music"]').click();
   assert.equal(await p.locator('#prompt').inputValue(), 'черновик чата');
   await p.locator('.mode[data-mode="photo"]').click();
   assert.equal(await p.locator('#prompt').inputValue(), 'черновик фото');
@@ -998,7 +1020,7 @@ function bffServer(port) {
   // Скачивание теперь в меню «⋯» (отдельной кнопки в единой карточке нет).
   const downloadPromise = p.waitForEvent('download');
   await p.locator('.lib-item .menu-btn').first().click();
-  await p.locator('.track-menu:not([hidden]) button', { hasText: 'Скачать' }).first().click();
+  await p.locator('.track-menu:not([hidden]) button', { hasText: 'Скачать аудио (M4A)' }).first().click();
   const downloaded = await downloadPromise;
   assert.match(downloaded.suggestedFilename(), /\.m4a$/);
   assert.match(downloaded.suggestedFilename(), / - tester\.m4a$/, 'library download uses the unified «Title - Artist» name (F-22)');
@@ -1153,7 +1175,10 @@ function bffServer(port) {
   ok('100 library tracks: lazy audio and bounded transfers');
 
   resetBff();
-  p = await page({ viewport: { width: 320, height: 568 } });
+  // #35: сценарий ленивой загрузки гоняем на десктоп-вьюпорте — композер
+  // музыкального фокуса выше старого чата, на 320px окно ленты сжимается до
+  // полоски (известный долг компоновки v2, см. audits/task-35-ui-v2-w1.md).
+  p = await page();
   await p.evaluate(async () => {
     const { profile, backend } = await BriixSessionStore.open('tester');
     profile.sessions[0].feed = Array.from({ length: 100 }, (_, i) => ({
@@ -1262,7 +1287,7 @@ function bffServer(port) {
   const fullPrompt = 'Музыкальная идея ' + 'ритм '.repeat(70);
   await p.locator('#prompt').fill(fullPrompt);
   await p.locator('#genTrack').click();
-  await p.locator('.mode[data-mode="chat"]').click();
+  await p.locator('.mode[data-mode="music"]').click();
   await p.locator('#newChat').click();
   await p.waitForFunction(() => document.querySelectorAll('#feed .session-feed:not([hidden]) .card').length === 0);
   await p.locator('#prompt').fill('Вторая сессия');
@@ -1436,7 +1461,7 @@ function bffServer(port) {
   await p.waitForTimeout(700); // дебаунс 400 мс
   const draftSaved = await p.evaluate(async () => {
     const { profile } = await BriixSessionStore.open('tester');
-    const s = profile.sessions.find(x => x.draft?.prompts?.chat === 'черновик, который не должен потеряться');
+    const s = profile.sessions.find(x => x.draft?.prompts?.music === 'черновик, который не должен потеряться');
     return !!s;
   });
   assert.equal(draftSaved, true, 'F-33: черновик сохранён дебаунсом на вводе');
@@ -1620,12 +1645,15 @@ function bffServer(port) {
   assert.equal(await p.locator('#prompt').inputValue(), 'Отменяемая идея');
   await p.waitForTimeout(1400); assert.equal(await p.locator('.producer-draft').count(), 0);
   await p.locator('#prepareMusic').click();
-  await p.locator('.mode[data-mode="chat"]').click(); await p.locator('#prompt').fill('Параллельный вопрос'); await p.locator('#send').click();
+  await p.locator('.mode[data-mode="music"]').click(); await p.locator('#prompt').fill('Параллельный вопрос'); await p.locator('#send').click();
   await p.locator('.card.assistant', { hasText: 'Стрим пришёл' }).waitFor();
   await p.locator('.producer-draft').waitFor();
   assert.equal(state.jobPosts.length, 0);
-  await p.locator('.mode[data-mode="music"]').click(); assert.equal(await p.locator('#prompt').inputValue(), 'Отменяемая идея');
-  ok('producer cancellation and parallel chat preserve the music draft');
+  // #35: композер один — ход диалога пишется в то же поле, «Отменяемая идея»
+  // осталась в снимке producer_draft (snapshot.idea), а не в поле композера.
+  assert.equal(await p.locator('#prompt').inputValue(), '', 'диалоговый ход очистил общее поле');
+  assert.equal(await p.locator('.producer-draft').count(), 1, 'черновик продюсера на месте');
+  ok('producer cancellation and parallel dialog coexist; draft preserved in producer snapshot');
 
   // A late response stays in its original session even while a new one is active.
   resetBff(); state.improveDelay = 3000;
@@ -1633,8 +1661,8 @@ function bffServer(port) {
   p = await page(); await p.locator('#prompt').fill('Первая сессия продюсера'); await p.locator('#send').click();
   await p.locator('.card.assistant', { hasText: 'Стрим пришёл' }).waitFor();
   await p.locator('.mode[data-mode="music"]').click(); await p.locator('#prompt').fill('Идея первой сессии');
-  await p.locator('#prepareMusic').click(); await p.locator('.mode[data-mode="chat"]').click(); await p.locator('#newChat').click();
-  await p.waitForFunction(() => document.querySelector('.mode[data-mode="chat"]').getAttribute('aria-pressed') === 'true');
+  await p.locator('#prepareMusic').click(); await p.locator('.mode[data-mode="music"]').click(); await p.locator('#newChat').click();
+  await p.waitForFunction(() => document.querySelector('.mode[data-mode="music"]').getAttribute('aria-pressed') === 'true');
   await p.waitForTimeout(3400);
   assert.equal(await p.locator('.session-feed:not([hidden]) .producer-draft').count(), 0);
   await p.locator('#sessionsOpen').click();
@@ -1704,14 +1732,16 @@ function bffServer(port) {
   assert.equal(state.jobPosts[0].params.title, 'Черновик наставника', 'params.title carries the draft title');
   assert.equal(state.jobPosts[0].params.artist, 'tester', 'params.artist is the user nick');
   assert.equal(state.chatPosts.filter(x => x.stream === false && x.max_tokens === 300).length, 0, 'promptReady path skips silent translation');
-  // Диалог и черновики персистятся в session-store.
+  // Диалог и черновики персистятся в session-store (#35 W1-2: единый поток на сессии).
   const savedDialog = await p.evaluate(async () => {
     const { profile } = await BriixSessionStore.open('tester');
     const s = profile.sessions[0];
-    return { history: s.musicChat?.history?.length || 0, assistant: s.musicChat?.assistant, drafts: s.feed.filter(x => x.t === 'music_draft').length };
+    return { history: s.history?.length || 0, assistant: s.assistantId, musicChat: s.musicChat,
+      drafts: s.feed.filter(x => x.t === 'music_draft').length };
   });
-  assert.ok(savedDialog.history >= 4, 'music dialog persisted in session-store');
-  assert.equal(savedDialog.assistant, 'lyricist');
+  assert.ok(savedDialog.history >= 4, 'unified dialog persisted in session.history (2 хода = 4 элемента)');
+  assert.equal(savedDialog.assistant, 'lyricist', 'роль — свойство сессии (P2-1)');
+  assert.equal(savedDialog.musicChat, undefined, 'муз-диалога-отдельным-контейнером больше нет');
   assert.ok(savedDialog.drafts >= 2, 'draft cards persisted in the feed');
   await p.reload();
   await p.waitForSelector('.music-draft', { timeout: 10000 });
@@ -1789,13 +1819,14 @@ function bffServer(port) {
   await p.waitForFunction(() => navigator.mediaSession.playbackState === 'playing' && !document.querySelector('#feed audio').paused, {}, { timeout: 5000 });
   await p.locator('#feed .track-cover.playing').click(); // пауза — не мешаем следующим проверкам
   await p.waitForFunction(() => document.querySelector('#feed audio').paused, {}, { timeout: 5000 });
-  // Единое меню «⋯»: ровно 7 действий.
+  // Единое меню «⋯»: 9 действий (#35 W1-4: + WAV и обложка, MP3 скрыт до бэффа).
   await p.locator('#feed .menu-btn').click();
   const menuTexts = await p.locator('.track-menu:not([hidden]) button').allInnerTexts();
-  for (const label of ['Копировать промпт', 'Копировать лирику', 'Скачать', 'Повторить с правками', 'Создать обложку', 'В избранное', 'Удалить']) {
+  for (const label of ['Копировать промпт', 'Копировать лирику', 'Скачать аудио (M4A)', 'Скачать WAV — мастер без тегов', 'Скачать обложку', 'Повторить с правками', 'Создать обложку', 'В избранное', 'Удалить']) {
     assert.ok(menuTexts.some(t => t.includes(label)), 'menu contains: ' + label);
   }
-  assert.equal(menuTexts.length, 7, 'exactly the seven actions in the unified menu');
+  assert.equal(menuTexts.length, 9, 'exactly the nine actions in the unified menu');
+  assert.ok(!menuTexts.some(t => /MP3/i.test(t)), 'MP3 item is hidden until the backend ships it (SPEC #35 W1-4)');
   await p.keyboard.press('Escape');
   // Transparency: что уехало в модель + название/исполнитель + источник лирики.
   await p.locator('#feed .track-details summary').click();
@@ -1808,10 +1839,10 @@ function bffServer(port) {
   // Имя файла скачивания: sanitize с сохранением кириллицы, спецсимволы вырезаны.
   const dlCardPromise = p.waitForEvent('download');
   await p.locator('#feed .menu-btn').click();
-  await p.locator('.track-menu:not([hidden]) button', { hasText: 'Скачать' }).click();
+  await p.locator('.track-menu:not([hidden]) button', { hasText: 'Скачать аудио (M4A)' }).click();
   assert.equal((await dlCardPromise).suggestedFilename(), 'Тест Трек №1 - tester.wav',
     'download name: sanitized title - artist, cyrillic kept, special characters removed');
-  ok('track card: cover=play, auto waveform with click-seek, unified 7-action menu, transparency, sanitized filename');
+  ok('track card: cover=play, auto waveform with click-seek, unified 9-action menu, transparency, sanitized filename');
 
   // Мобильный 320×568: меню «⋯» — bottom-sheet и не вылезает за экран.
   p = await page({ viewport: { width: 320, height: 568 } });
@@ -2106,7 +2137,7 @@ function bffServer(port) {
   await p.waitForFunction(() => document.querySelectorAll('.lib-item').length === 9);
   async function libDownload(i) {
     await p.locator('.lib-item').nth(i).locator('.menu-btn').click();
-    await p.locator('.track-menu:not([hidden]) button', { hasText: 'Скачать' }).click();
+    await p.locator('.track-menu:not([hidden]) button', { hasText: 'Скачать аудио (M4A)' }).click();
   }
   for (let i = 0; i < 9; i++) await libDownload(i);
   await p.waitForFunction(() => window.__liveUrls.size <= 8, {}, { timeout: 15000 });
@@ -2303,6 +2334,111 @@ function bffServer(port) {
   assert.ok(storedBackups.some(b => Array.isArray(b) && b.length === 1 && b[0] && b[0].quick === 'живой бэкап'),
     'мусор [null] вычищен из backups в хранилище: ' + JSON.stringify(storedBackups));
   ok('restore с null/битой записью: бут не падает, баннера нет, сессии санированы (#23)');
+  await p.close();
+
+  // ==== #35 W1-1/П1: миграция v1→v2 в точке загрузки + temporary-ключ v1-вкладки ====
+
+  // (а) v1-профиль в IDB мигрирует при входе: ленты на месте, муз-история влита
+  // в конец общего потока, assistantId/draft из musicChat; feed побайтово не тронут.
+  resetBff();
+  p = await page({ user: '' });
+  await p.evaluate(async () => {
+    const v1Session = {
+      id: 'old-1', title: 'Старая сессия', titleSet: true, createdAt: 1, updatedAt: 2,
+      feed: [{ t: 'user', who: 'Вы', text: 'старое сообщение' }],
+      history: [{ role: 'user', content: 'старое сообщение' }, { role: 'assistant', content: 'старый ответ' }],
+      musicChat: { assistant: 'producer', history: [{ role: 'user', content: 'муз-вопрос' }, { role: 'assistant', content: 'муз-ответ' }] }
+    };
+    const raw = { schemaVersion: 1, nick: 'мигрант', revision: 5, activeSessionId: 'old-1', sessions: [v1Session], legacyBackup: null };
+    await new Promise((resolve, reject) => {
+      const req = indexedDB.open('briix-studio-sessions', 1);
+      req.onupgradeneeded = () => { if (!req.result.objectStoreNames.contains('profiles')) req.result.createObjectStore('profiles', { keyPath: 'nick' }); };
+      req.onsuccess = () => {
+        const db = req.result;
+        const tx = db.transaction('profiles', 'readwrite');
+        tx.objectStore('profiles').put(raw);
+        tx.oncomplete = () => { db.close(); resolve(); };
+        tx.onerror = () => reject(tx.error);
+      };
+    });
+  });
+  await p.locator('#nickInput').fill('мигрант');
+  for (const digit of '1234') await p.locator(`.pk[data-digit="${digit}"]`).click();
+  await p.locator('#enterBtn').click();
+  await p.waitForSelector('#studio:not([hidden])');
+  const migrated = await p.evaluate(async () => {
+    const opened = await BriixSessionStore.open('мигрант');
+    const s = opened.profile.sessions[0];
+    return { schemaVersion: opened.profile.schemaVersion, revision: opened.profile.revision, s,
+      rawFeed: (await new Promise(resolve => {
+        const req = indexedDB.open('briix-studio-sessions', 1);
+        req.onsuccess = () => {
+          const db = req.result;
+          const tx = db.transaction('profiles', 'readonly');
+          const get = tx.objectStore('profiles').get('мигрант');
+          tx.oncomplete = () => { db.close(); resolve(get.result.sessions[0].feed); };
+        };
+      })) };
+  });
+  assert.equal(migrated.schemaVersion, 2, 'v1-профиль мигрировал в v2 при загрузке');
+  assert.ok(migrated.revision >= 6, 'revision повышен миграцией (5 → 6, далее живое приложение может наращивать)');
+  assert.equal(migrated.s.assistantId, 'producer', 'assistantId восстановлен из musicChat');
+  assert.equal(migrated.s.draft.quality, 'flash', 'draft.quality проставлен дефолт');
+  assert.equal(migrated.s.draft.instrumental, false, 'draft.instrumental проставлен из трека/дефолта');
+  assert.equal(migrated.s.musicChat, undefined, 'musicChat удалён');
+  assert.equal(migrated.s.history.length, 5, 'муз-история влита в конец общего потока (2+1 маркер+2)');
+  assert.equal(migrated.s.history[2].role, 'system', 'служебный маркер-граница в контексте');
+  assert.equal(migrated.s.history[3].via, 'music-chat', 'влитые элементы помечены via: music-chat');
+  assert.deepEqual(migrated.rawFeed, [{ t: 'user', who: 'Вы', text: 'старое сообщение' }], 'feed не мигрирует — побайтово исходный');
+  ok('v1→v2 migration at load: history merged, assistantId/draft restored, feed untouched');
+
+  // (б) v1-вкладка пишет в v2-хранилище → schema_unsupported, баннер + temporary-ключ;
+  // после перезагрузки v2-код предлагает «Восстановить несохранённое» и удаляет ключ.
+  resetBff();
+  p = await page({ user: '' });
+  await p.locator('#nickInput').fill('вкладка-v1');
+  for (const digit of '1234') await p.locator(`.pk[data-digit="${digit}"]`).click();
+  await p.locator('#enterBtn').click();
+  await p.waitForSelector('#studio:not([hidden])');
+  // Живой диалог — чтобы в pending-снапшоте было что сохранять.
+  await p.locator('#prompt').fill('несохранённый текст вкладки');
+  await p.locator('#send').click();
+  await p.waitForSelector('#feed .card.assistant', { timeout: 15000 });
+  // «Старая вкладка»: откатываем схему записи в хранилище до v1 (как будто её оставил v1-код).
+  await p.evaluate(async () => {
+    const opened = await BriixSessionStore.open('вкладка-v1');
+    await new Promise((resolve, reject) => {
+      const req = indexedDB.open('briix-studio-sessions', 1);
+      req.onsuccess = () => {
+        const db = req.result;
+        const tx = db.transaction('profiles', 'readwrite');
+        tx.objectStore('profiles').put({ ...opened.profile, schemaVersion: 1 });
+        tx.oncomplete = () => { db.close(); resolve(); };
+        tx.onerror = () => reject(tx.error);
+      };
+    });
+  });
+  // Следующая запись приложения падает с schema_unsupported → баннер + pending-ключ.
+  await p.locator('#prompt').fill('ещё текст после отката');
+  await p.waitForSelector('.schema-banner', { timeout: 15000 });
+  assert.match(await p.locator('.schema-banner').innerText(), /обновите страницу/, 'баннер «обновите страницу» виден');
+  const pending = await p.evaluate(() => {
+    const raw = localStorage.getItem('briix-studio-pending-v1-вкладка-v1');
+    return raw ? JSON.parse(raw) : null;
+  });
+  assert.ok(pending?.profile?.sessions?.length >= 1, 'несохранённое сериализовано в temporary-ключ briix-studio-pending-v1-<nick>');
+  assert.ok(pending.capturedAt > 0, 'capturedAt проставлен');
+  // Хранилище не изменилось записью v1-вкладки (гейт стоит на месте).
+  await p.reload();
+  await p.waitForSelector('#studio:not([hidden])');
+  await p.waitForSelector('.confirm-overlay:not([hidden])', { timeout: 15000 });
+  assert.match(await p.locator('.confirm-dialog').innerText(), /Восстановить несохранённое/, 'после обновления предложено восстановить pending');
+  await p.getByRole('button', { name: 'Восстановить' }).click();
+  await p.waitForFunction(() => localStorage.getItem('briix-studio-pending-v1-вкладка-v1') === null, {}, { timeout: 10000 });
+  const restoredCount = await p.evaluate(async () => (await BriixSessionStore.open('вкладка-v1')).profile.sessions.length);
+  assert.ok(restoredCount >= 1, 'pending-сессии влиты в профиль (дедуп по id)');
+  assert.equal(await p.locator('.schema-banner').count(), 0, 'после перезагрузки баннер снят (v2-код пишет снова)');
+  ok('schema gate: v1 tab gets honest banner + pending key; v2 restores and clears it (П1 SPEC #35)');
   await p.close();
 
   assert.deepEqual(errors, [], 'no page errors anywhere');
