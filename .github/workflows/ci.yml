@@ -102,6 +102,10 @@ jobs:
         run: node tools/check-producer.cjs
       - name: check-session-store
         run: node tools/check-session-store.cjs
+      - name: check-session-migration
+        run: node tools/check-session-migration.cjs
+      - name: check-export
+        run: node tools/check-export.cjs
         env:
           NODE_PATH: ./node_modules
       - name: check-studio-storage

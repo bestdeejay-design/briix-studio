@@ -104,6 +104,8 @@ node tools/check-assembly.cjs        # сборка запроса #109: sanitiz
 node tools/check-music-brain.cjs     # музыкальный мозг v2: слои caption, ритм всегда, бюджет, негативы, 20 брифов
 node tools/check-studio.cjs          # студия целиком: композер, чат SSE, music/photo job'ы, библиотека, мобильная вёрстка
 node tools/check-session-store.cjs   # session-store.js: персист и восстановление сессий
+node tools/check-session-migration.cjs # миграция schema v1→v2 в точке загрузки (#35)
+node tools/check-export.cjs          # экспорт v1: WAV/M4A/обложка, честная деградация (#35)
 node tools/check-studio-storage.cjs  # localStorage/квоты/миграции хранилища студии
 node tools/check-waveform.cjs        # waveform.js: пики, seek, fallback на битом аудио (WAV + реальный m4a)
 node tools/check-producer.cjs        # producer-brain.js: черновики продюсера (vm, без браузера)

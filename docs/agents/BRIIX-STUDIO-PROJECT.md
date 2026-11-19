@@ -33,6 +33,8 @@
 node tools/check-studio.cjs          # 73+ ассертов, сквозные сценарии
 node tools/check-assembly.cjs        # санитизация, язык, латинские теги
 node tools/check-session-store.cjs   # IndexedDB: миграция, бэкап, изоляция, CAS
+node tools/check-session-migration.cjs # schema v1→v2 в точке загрузки (#35: merge истории, pending-ключ, гейты)
+node tools/check-export.cjs          # экспорт v1 (#35): WAV/M4A/обложка, честная деградация, ?refetch=1
 node tools/check-studio-storage.cjs  # интегрированный fallback
 node tools/check-waveform.cjs        # волна из пиков, 0 AudioContext
 node tools/check-producer.cjs        # продюсер-парсинг и лимиты
