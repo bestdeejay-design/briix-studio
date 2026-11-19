@@ -65,6 +65,9 @@ for (const t of prompts.tracks) {
   const overlap = aTags.filter(x => bTags.has(x)).length / aTags.length;
   ok(overlap <= 0.6, `${tag}: B не собран из A (пересечение тегов ${overlap.toFixed(2)} ≤ 0.60)`);
   ok(brain.selfCheck(t.promptB, { instrumental: false }).ok, `${tag}: B проходит selfCheck`);
+  // Ресёрч audits/limits: секции живут в лирике, потолок промта 256 токенов.
+  ok(!/\[(?:intro|verse|chorus|bridge|outro|instrumental)\]/i.test(t.promptB), `${tag}: в caption нет секционных тегов`);
+  ok(t.promptB.split(/\s+/).filter(Boolean).length <= 190, `${tag}: caption B не упирается в токен-потолок`);
 }
 
 // Плечи A и B перепутаны детерминированно и различаются в каждом треке.

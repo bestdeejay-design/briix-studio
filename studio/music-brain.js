@@ -34,8 +34,9 @@
  *
  *   Подробности и цифры: audits/brain-v2/RESEARCH_PACK.md (§3), обоснование
  *   выбора слоёв — там же. Там же — чем платим за 240 символов и почему
- *   полный продюсерский caption живёт в buildCaption (640), а компактный
- *   путь студии — в buildTags (240).
+ *   полный продюсерский caption живёт в buildCaption (640) и с 16.11 это
+ *   единственный путь студии (решение владельца); buildTags (240) остался
+ *   как legacy-путь обратной совместимости для карточек и старых вызовов.
  *
  * Сохранённые правила (не менялись):
  *   - порядок тегов и словарь — только из таксономии корпуса (8202 трека);
@@ -59,6 +60,11 @@
   // 640 символов ≈ 170–190 токенов, то есть внутри потолка; p90 длины промтов
   // корпуса — 641 символ, медиана топ-100 по score — 402.
   const MAX_CAPTION = 640;
+  // Потолок модели — 256 токенов на промт (≈640–800 символов, audits/limits/
+  // RESEARCH_PACK.md §2). Токенизатора mT5 в CI нет, поэтому сторож считает
+  // слова консервативно: 190 слов ≈ 230–250 токенов — предупреждение до того,
+  // как модель молча обрежет хвост.
+  const MAX_CAPTION_WORDS = 190;
   const SOURCE = 'dj1/brain · knowledge/prompt-rules.md + style-taxonomy.md + corpus 8202';
 
   // ---------------------------------------------------------------- словари ---
@@ -184,6 +190,14 @@
   // Антифальцетный страж: «глубокий голос» обязан остаться в грудном регистре.
   // Негатив «без фальцета» перефразируется позитивно (model-acestep.md).
   const LOW_VOICE_HINTS = ['глубок', 'низк', 'бас', 'баритон', 'брутальн', 'грудн', 'мужск'];
+  // Голос — это идентичность, а не переменная. Пока о поле не сказано, в caption
+  // уходило голое «vocals», и модель на каждой генерации бросала монетку:
+  // мужской/женский без всякой зависимости от трека (владелец услышал это на
+  // прогоне 15.11). Теперь пол выбирается детерминированно, в порядке
+  // задумка → профиль слушателя → дефолт канала, и источник виден в notes.
+  const VOICE_IDENTITY = { male: 'male vocals', female: 'female vocals' };
+  const DEFAULT_VOICE_IDENTITY = 'male';
+  const IDENTITY_RE = /female|male|baritone|tenor|bass voice|choir|duet/i;
   const FALSETTO_GUARD = 'chest voice, register never rises';
 
   // L1 SPACE — инструменты и продакшн-цепочка.
@@ -240,6 +254,212 @@
     'edm': ['clean modern production', 'tight low end']
   };
   const PROD_FALLBACK = ['analog warmth'];
+  /* L3 DEPTH — «где это звучит и насколько далеко» + стилевая атмосфера.
+     Причина появления: прогон v3 владельцем — «насытили, но глубины не
+     достигали, стилевые акценты не поднялись». Ресёрч: глубина это КОНТРАСТ
+     близкого и далёкого, а не один эффект на весь микс
+     (audits/style-atmosphere/RESEARCH_PACK.md, §2).
+     Слова автора сильнее стиля: сказал «пространство» — его слова идут первыми. */
+  const DEPTH_WORDS = [
+    ['глубин', 'front-to-back depth'], ['пространств', 'wide reverberant space'],
+    ['эхо', 'tape echo'], ['реверб', 'plate reverb tail'],
+    ['сух', 'dry close perspective'], ['вблизи', 'close perspective'],
+    ['далек', 'distant perspective'], ['далёк', 'distant perspective'],
+    ['комнат', 'room sound'], ['в зале', 'hall ambience'],
+    ['воздух', 'air between instruments'], ['атмосфер', 'atmospheric depth'],
+    ['погружен', 'immersive depth'], ['моно микс', 'mono centre'],
+    ['карман', 'bass locked in the pocket with the kick']
+  ];
+
+  /* Стилевые пулы. Каждый приём — из жанровой практики (RESEARCH_PACK §1:
+     D6–D9), а не выдуман. Из пула на трек берутся 2 приёма + 1 пара планов
+     глубины по хешу задумки: один стиль — разные цепочки, но узнаваемый
+     характер (требование «не жёсткие шаблоны, а перемешивать»). */
+  const STYLE_ATMOSPHERE = {
+    'psychedelic soul': {
+      devices: ['dry dead drums with live room bleed', 'plate reverb on the snare',
+        'tape echo on the guitar', 'spring reverb on the organ',
+        'bass tone rolled off, staccato in the pocket with the kick',
+        'loose unquantized groove', 'dubbed-out vocal fragments'],
+      depth: ['close dry drums, wide room behind', 'dry upfront vocal over a distant plate tail']
+    },
+    'soul': {
+      devices: ['warm plate on the horns', 'hand percussion in the midground',
+        'bass locked in the pocket with the kick', 'live room bleed between players',
+        'tape saturation on the drum bus'],
+      depth: ['close vocal, band two steps back', 'dry rhythm section, distant horns']
+    },
+    'funk': {
+      devices: ['dry tight drums, hi-hat in the foreground', 'wah guitar panned wide',
+        'bass staccato, kick locked to the bass line', 'handclaps close-mic'],
+      depth: ['everything close and dry, one distant room mic', 'close drums, wide room behind']
+    },
+    'dream pop': {
+      devices: ['huge plate reverb on the guitars', 'reversed reverb bloom before the snare',
+        'wide shimmering pads behind the vocal', 'soft focus low end'],
+      depth: ['dry vocal floating over a distant band', 'guitars far back, vocal close']
+    },
+    'pop': {
+      devices: ['dry upfront vocal', 'short plate on the snare',
+        'wide synth pads behind the chorus', 'sidechained pads breathing'],
+      depth: ['vocal in the foreground over a wide room', 'close drums, pads far behind']
+    },
+    'rock': {
+      devices: ['close dry drums', 'cranked room mics', 'doubled guitars panned hard left and right'],
+      depth: ['live band in one room, vocal upfront', 'close drums, room mics two metres back']
+    },
+    'techno': {
+      devices: ['dry punchy kick', 'cavernous dub delay on the stab',
+        'mono low end under a wide reverb tail', 'industrial room tone'],
+      depth: ['dry kick close, echoes far behind', 'mono foreground, wide reverb tail']
+    },
+    'tech house': {
+      devices: ['tight dry kick', 'short room on the hats',
+        'wide filtered chords behind the groove', 'sidechained low end'],
+      depth: ['dry kick in the foreground, chords far back', 'close groove, distant vocal chop']
+    },
+    'house': {
+      devices: ['clean dry kick', 'vocal chops with delay throws',
+        'wide filtered chords', 'club room reverb'],
+      depth: ['dry kick close, room far behind', 'close vocal, wide chord wash']
+    },
+    'trap': {
+      devices: ['808 with a long sub tail', 'short room on the hi-hats',
+        'wide dark pads behind a dry vocal', 'sparse arrangement with clear depth'],
+      depth: ['dry vocal close, 808 tail far behind', 'close hi-hats, wide pad wash']
+    },
+    'rap': {
+      devices: ['dry upfront rap vocal', 'dead drum room', 'short delay throws on the ad-libs'],
+      depth: ['vocal in the foreground, beat two steps back', 'dry vocal, distant dark pad']
+    },
+    'hip-hop': {
+      devices: ['dead drum room', 'vinyl room tone behind the sample',
+        'dry snare up close', 'wide dusty keys'],
+      depth: ['sample far back, drums close', 'close vocal, dusty room behind']
+    },
+    'lo-fi': {
+      devices: ['tape hiss', 'narrow mono mix', 'room bleed on everything'],
+      depth: ['everything near and slightly dull', 'close cassette room, no air']
+    },
+    'ambient': {
+      devices: ['long hall reverb', 'distant field recordings', 'slow evolving drone'],
+      depth: ['everything far, nothing close', 'one close detail against an endless tail']
+    },
+    'cinematic': {
+      devices: ['deep hall tail', 'wide low strings', 'close dry lead against a huge room'],
+      depth: ['close lead, distant orchestra', 'dry soloist, hall far behind']
+    },
+    'orchestral': {
+      devices: ['deep hall tail', 'wide string section', 'close dry solo lead'],
+      depth: ['close soloist, hall far behind', 'strings far back, percussion close']
+    },
+    'jazz': {
+      devices: ['live room sound, instruments bleeding together',
+        'close upright bass, drums two steps back', 'plate on the horns'],
+      depth: ['close bass, distant cymbals', 'one room, every instrument in it']
+    },
+    'ballad': {
+      devices: ['intimate close-mic vocal', 'long plate behind the piano',
+        'dry vocal, distant strings'],
+      depth: ['vocal close, strings far behind', 'close piano, hall tail behind']
+    },
+    'edm': {
+      devices: ['mono bass, wide reverb tail', 'sidechained pads', 'big room reverb on the drop'],
+      depth: ['dry drop close, reverb far behind', 'mono low end, wide tail']
+    },
+    'synthwave': {
+      devices: ['gated reverb on the snare', 'wide analog pads behind the lead',
+        'tape saturation on the bus'],
+      depth: ['close lead, gated room behind', 'dry bass, distant pad wash']
+    },
+    'trip-hop': {
+      devices: ['dusty sampled drums up close', 'wide dark pads', 'dub delay on the vocal'],
+      depth: ['close dusty drums, wide room behind', 'dry vocal, distant dark pad']
+    },
+    'r&b': {
+      devices: ['dry intimate vocal', 'short plate on the snare', 'wide airy keys'],
+      depth: ['vocal close, keys far behind', 'close drums, airy wash behind']
+    },
+    'folk': {
+      devices: ['single close-mic guitar', 'room sound around the vocal', 'everything dry and near'],
+      depth: ['everything close, one room mic', 'close guitar, distant room tone']
+    }
+  };
+  // Базовая глубина: когда стиль не определён, но трек существует, геометрия
+  // «близко/далеко» всё равно нужна — иначе микс плоский (D1–D3). Это не
+  // выдумка про жанр: ни жанра, ни приёмов здесь нет, только планы.
+  const DEPTH_BASE = [
+    'close vocal, distant room',
+    'dry foreground, wide room behind',
+    'front-to-back depth, near and far layers',
+    'close drums, distant reverb wash'
+  ];
+  // Синонимы жанровых тегов и подсказок резолвера → семейство STYLE_ATMOSPHERE.
+  const STYLE_ALIASES = {
+    'psychedelic soul': 'psychedelic soul', 'soul': 'soul', 'funk': 'funk',
+    'dream pop': 'dream pop', 'dream-pop': 'dream pop', 'shoegaze': 'dream pop',
+    'pop': 'pop', 'rock': 'rock', 'indie rock': 'rock',
+    'techno': 'techno', 'tech house': 'tech house', 'house': 'house', 'edm': 'edm',
+    'trap': 'trap', 'phonk': 'trap', 'rap': 'rap', 'хип-хоп': 'hip-hop', 'hip-hop': 'hip-hop',
+    'lo-fi': 'lo-fi', 'ambient': 'ambient', 'cinematic': 'cinematic',
+    'orchestral': 'orchestral', 'jazz': 'jazz', 'ballad': 'ballad',
+    'synthwave': 'synthwave', 'trip-hop': 'trip-hop', 'r&b': 'r&b', 'folk': 'folk',
+    'шансон': 'folk', 'industrial': 'techno', 'trance': 'edm', 'chanson': 'folk'
+  };
+
+  function hashText(text) {
+    let h = 2166136261;
+    const s = String(text || '');
+    for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+    return h >>> 0;
+  }
+
+  /* Резолвер семейства стиля: явная подсказка резолвера (options.style,
+     полученная из референса исполнителя) сильнее жанровых слов задумки. */
+  function resolveStyle(genreTags, options = {}) {
+    const asked = String(options.style || '').toLowerCase().trim();
+    if (asked) {
+      const key = STYLE_ALIASES[asked] || (STYLE_ATMOSPHERE[asked] ? asked : null);
+      if (key) return { key, from: 'резолвер' };
+    }
+    for (const g of genreTags || []) {
+      const key = STYLE_ALIASES[String(g).toLowerCase()] || (STYLE_ATMOSPHERE[g] ? g : null);
+      if (key) return { key, from: 'жанр' };
+    }
+    return { key: null, from: null };
+  }
+
+  /* Слой глубины: слова автора + 2 приёма стиля + 1 пара планов «близко/далеко».
+     Выбор приёмов — по хешу задумки: два трека одного стиля не получают одну и
+     ту же цепочку, а один и тот же бриф всегда даёт один и тот же caption. */
+  function pickDepth(text, style, seedText) {
+    const asked = uniq(scan(text, DEPTH_WORDS, 2).map(d => d.tag));
+    const profile = style && style.key ? STYLE_ATMOSPHERE[style.key] : null;
+    const h0 = hashText(seedText + '|base');
+    if (!profile) {
+      const base = [DEPTH_BASE[h0 % DEPTH_BASE.length]];
+      return { tags: uniq(asked.concat(base)), style: null, from: 'база',
+        devices: [], depth: asked.length ? [] : base };
+    }
+    const h = hashText(seedText + '|' + style.key);
+    const norms = t => t.toLowerCase();
+    const free = profile.devices.filter(d => !asked.some(a => norms(a).includes(norms(d)) || norms(d).includes(norms(a))));
+    // Перемешивание пула: у каждого приёма свой хеш от брифа, берём два первых.
+    // (Шаг вида (h + k*7) % len при len=7 даёт один и тот же индекс — на этом
+    // я уже обжёгся: в caption попадал ровно один приём вместо двух.)
+    const want = asked.length >= 2 ? 1 : 2;
+    const devices = free
+      .map((d, i) => ({ d, k: hashText(seedText + '|' + style.key + '|' + i) }))
+      .sort((a, b) => a.k - b.k)
+      .slice(0, want)
+      .map(o => o.d);
+    const depth = [profile.depth[(h >>> 8) % profile.depth.length]];
+    return {
+      tags: uniq(asked.concat(devices, depth)), style: style.key, from: 'стиль',
+      devices, depth
+    };
+  }
+
   // Где записано — «хвост» продакшна, только если в задумке есть место/эпоха.
   const PLACE_WORDS = [
     ['подвал', 'basement studio'], ['пакгауз', 'waterfront warehouse studio'],
@@ -469,7 +689,18 @@
       || (voiceWords && LOW_VOICE_HINTS.some(w => text.includes(norm(w))));
     const falsettoAsked = !negated(text, 'фальцет') || !negated(text, 'falsetto');
     const antiFalsetto = lowRegister && !falsettoAsked;
-    const genderTags = gender.length ? gender.map(g => g.tag) : (isSong ? ['vocals'] : []);
+    // Профиль слушателя: options.voiceIdentity = 'male' | 'female'.
+    const identityKey = String(options.voiceIdentity || '').toLowerCase();
+    const identityTag = VOICE_IDENTITY[identityKey] || VOICE_IDENTITY[DEFAULT_VOICE_IDENTITY];
+    const identityFrom = identityKey && VOICE_IDENTITY[identityKey] ? 'профиль' : 'дефолт канала';
+    // Пол назван в задумке → он сильнее профиля. Названа только фактура
+    // («бэк-вокал») → пол лида всё равно фиксируем, иначе он поплывёт.
+    const askedIdentity = gender.some(g => IDENTITY_RE.test(g.tag));
+    const genderTags = !isSong
+      ? []
+      : askedIdentity
+        ? gender.map(g => g.tag)
+        : gender.map(g => g.tag).concat(identityTag);
     const character = [];
     delivery.forEach(d => character.push(d.tag));
     texture.forEach(t => character.push(t.tag));
@@ -482,6 +713,8 @@
       characterTags: uniq(character),
       character: delivery.map(d => d.tag).concat(texture.map(t => t.tag)),
       antiFalsetto,
+      identityTag: isSong && !askedIdentity ? identityTag : null,
+      identityFrom: isSong && !askedIdentity ? identityFrom : 'задумка',
       from: { gender: gender.map(g => g.from), delivery: delivery.map(d => d.from), texture: texture.map(t => t.from) }
     };
   }
@@ -541,13 +774,17 @@
       // «opening on texture» точнее, чем общее «intro»: общее убираем.
       .filter(t => t !== 'intro' || !/opening/.test(uniq(scan(text, ARRANGEMENT_WORDS, 4).map(a => a.tag)).join(' ')));
     const guards = uniq(scan(text, GUARD_WORDS, 2).map(g => g.tag));
+    // Глубина и стилевая атмосфера: семейство стиля из жанра или из резолвера.
+    const styleResolved = resolveStyle(genreTags, options);
+    const depth = pickDepth(text, styleResolved, text);
 
     return {
       anchor: { genre: uniq(genreTags), era },
       voice: isSong ? pickVoice(text, options) : { tags: [], character: [], from: {} },
       rhythm: Object.assign(pickRhythm(text, primaryGenre, options), { bpm, bass }),
       space: pickSpace(text, primaryGenre),
-      roles, mix, arrangement, guards,
+      roles, mix, arrangement, guards, depth,
+      style: styleResolved,
       positives,
       tail: { dynamics, mood: uniq(mood), concept },
       instrumental: !isSong
@@ -622,6 +859,19 @@
     add('space.mix', mix || [], 3);
     add('space.atmosphere', (space.atmosphere || []).slice(0, 2), 3);
     add('space.production', space.production.slice(0, 3), 1);
+    // Глубина идёт сразу за продакшном: «как записано» → «где это стоит».
+    // Приоритет 2: в полном caption (640) она есть всегда, в компактном бюджете
+    // 240 уходит только вместе с остальными необязательными блоками.
+    if (layers.depth && layers.depth.tags.length) {
+      const d = layers.depth;
+      // Компактный режим: один стилевой приём + пара планов, чтобы атмосфера
+      // влезала в 240, а не вылетала целиком.
+      const askedDepth = d.tags.filter(t => !d.devices.includes(t) && !d.depth.includes(t));
+      const picked = budget <= 300
+        ? uniq(askedDepth.concat(d.devices.slice(0, 1), d.depth))
+        : d.tags;
+      add('space.depth', picked, 2);
+    }
     add('guards', layers.guards || [], 1);
     add('positives', layers.positives || [], 1);
     add('space.place', space.place.slice(0, 1), 4);
@@ -648,7 +898,7 @@
     // Ритм (rhythm.groove/bpm) и голос не снимаются никогда — это ядро.
     const sacrifice = ['space.place', 'anchor.era', 'tail.concept', 'space.atmosphere',
       'space.mix', 'space.roles', 'space.instruments', 'arrangement', 'rhythm.bass',
-      'tail.dynamics', 'tail.mood', 'positives', 'guards'];
+      'tail.dynamics', 'tail.mood', 'positives', 'guards', 'space.depth'];
     for (const block of sacrifice) {
       if (fits(kept).length <= budget) break;
       let idx = kept.map(u => u.block).lastIndexOf(block);
@@ -686,6 +936,17 @@
   function selfCheck(caption, layers) {
     const missing = [];
     const notes = [];
+    // Секции живут в лирике, а не в caption: [chorus] в поле стиля не работает
+    // (audits/limits/RESEARCH_PACK.md §2, L4/L5).
+    if (/\[(?:intro|verse|pre-chorus|chorus|bridge|interlude|instrumental|outro|hook|drop)\]/i.test(caption)) {
+      notes.push('в caption попал секционный тег — такие метки работают только в лирике');
+    }
+    // Молчаливая обрезка: 256 токенов у промта, считаем слова с запасом.
+    const words = String(caption).trim().split(/\s+/).filter(Boolean).length;
+    if (words > MAX_CAPTION_WORDS) {
+      notes.push('caption ' + words + ' слов (> ' + MAX_CAPTION_WORDS + '): хвост может обрезаться молча (256 токенов у модели)');
+    }
+    if (/[\r\n]/.test(String(caption))) notes.push('caption не однострочный: переводы строк ломают comma-список');
     const has = re => re.test(caption);
     if (!has(/groove|beat|drum|kick|percussion|pulse/)) { missing.push('rhythm'); notes.push('ритм-слой отсутствует: caption не описывает, что качает'); }
     if (!layers.instrumental) {
@@ -710,6 +971,9 @@
     layers.anchor.genre.forEach(t => push(t, 'жанр', 'anchor'));
     if (layers.anchor.era.length) layers.anchor.era.forEach(t => push(t, 'эпоха', 'anchor.era'));
     layers.voice.tags.forEach(t => push(t, 'вокал', 'voice'));
+    if (layers.voice.identityTag) {
+      push('идентичность голоса: ' + layers.voice.identityTag + ' (' + layers.voice.identityFrom + ')', 'голос', 'voice.identity');
+    }
     if (options.kind === 'song') push(LANG_TAGS[options.language] || LANG_TAGS.en, 'язык вокала', 'voice');
     if (layers.rhythm.bpm) push(layers.rhythm.bpm, 'темп', 'rhythm');
     push(layers.rhythm.phrase, 'ритм-слой', 'rhythm');
@@ -717,6 +981,10 @@
     layers.space.instruments.forEach(t => push(t, 'инструменты', 'space'));
     if (layers.space.atmosphere) layers.space.atmosphere.forEach(t => push(t, 'атмосфера', 'space.atmosphere'));
     layers.space.production.forEach(t => push(t, 'продакшн', 'space.production'));
+    if (layers.depth) {
+      layers.depth.tags.forEach(t => push(t, 'глубина', 'space.depth'));
+      if (layers.depth.style) push('стиль: ' + layers.depth.style + ' (' + layers.depth.from + ')', 'стиль', 'space.depth');
+    }
     layers.space.place.forEach(t => push(t, 'место записи', 'space.place'));
     layers.tail.dynamics.forEach(t => push(t, 'динамика', 'tail'));
     layers.tail.mood.forEach(t => push(t, 'настроение', 'tail'));
@@ -738,10 +1006,12 @@
     };
   }
 
-  /* Компактный путь студии (обратная совместимость #109):
-     buildTags(brief, options) → { tags, notes, source } плюс слои и selfCheck.
-     Бюджет по умолчанию 240 символов — его проверяют vm-тесты и карточка трека.
-     Полный продюсерский caption (3 слоя + хвост, до 640) — buildCaption(). */
+  /* Компактный путь (LEGACY с 16.11): buildTags(brief, options) →
+     { tags, notes, source } плюс слои и selfCheck.
+     Бюджет по умолчанию 240 символов — исторический лимит #109; в студии он
+     больше не используется (владелец переключил генерацию на полный caption),
+     но функция сохранена для обратной совместимости и карточек.
+     Полный продюсерский caption (до 640) — buildCaption(). */
   function buildTags(brief, options = {}) {
     const budget = Math.min(Number(options.maxTags) || MAX_TAGS, MAX_TAGS);
     const result = buildCaption(brief, Object.assign({}, options, { maxTags: budget }));
@@ -833,10 +1103,12 @@
     detectBpm,
     // словари и слои открыты для проверок и отладки
     rules: {
-      MAX_TAGS, MAX_CAPTION, POSITIVE, LANG_TAGS,
+      MAX_TAGS, MAX_CAPTION, MAX_CAPTION_WORDS, POSITIVE, LANG_TAGS,
+      DEPTH_WORDS, DEPTH_BASE, STYLE_ATMOSPHERE, STYLE_ALIASES, resolveStyle, pickDepth,
+      VOICE_IDENTITY, DEFAULT_VOICE_IDENTITY,
       layerOrder: ['anchor', 'voice', 'rhythm', 'space', 'arrangement', 'tail', 'guards'],
       captionOrder: ['genre', 'vocals', 'bpm', 'rhythm-section', 'instruments-roles', 'mix',
-        'production', 'arrangement', 'dynamics', 'mood', 'concept', 'guards'],
+        'production', 'depth', 'arrangement', 'dynamics', 'mood', 'concept', 'guards'],
       tagOrder: ['genre', 'instruments', 'vocals', 'bpm', 'mood', 'era', 'production'],
       dictionaries: {
         GENRE_WORDS, RHYTHM_CHAR, RHYTHM_GROOVE, RHYTHM_KIT, RHYTHM_BY_GENRE, BASS_WORDS,

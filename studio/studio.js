@@ -1757,7 +1757,7 @@
       try {
         const value = JSON.parse(full.slice(open + MUSIC_DRAFT_OPEN.length, close).trim());
         if (value && !Array.isArray(value) && typeof value.prompt === 'string') {
-          draft = { title: String(value.title || ''), prompt: BriixProducer.sanitize(value.prompt),
+          draft = { title: String(value.title || ''), style: BriixProducer.normalizeStyle(value.style), prompt: BriixProducer.sanitize(value.prompt),
             lyrics: BriixProducer.latinizeTags(BriixProducer.sanitize(value.lyrics || '')) };
         }
       } catch { draft = null; }
@@ -1907,6 +1907,10 @@
     };
     const writeFields = () => {
       els.musicPrompt.value = promptField.value;
+      // Семейство стиля из резолвера: мозг построит конструкцию под него.
+      // Живёт на поле и сбрасывается, как только автор правит текст вручную.
+      if (entry.draft.style) els.musicPrompt.dataset.styleFamily = entry.draft.style;
+      else delete els.musicPrompt.dataset.styleFamily;
       if (lyricsField) els.lyrics.value = lyricsField.value;
       saveDraft(session);
     };
@@ -2185,12 +2189,25 @@
         }
       }
       // ---- Brain-ступень сборки промпта (#109) --------------------------------
-      // Детерминированный мозг DJ1: английские теги ACE-Step <= 240 символов.
-      const brain = BRIIX_MUSIC_BRAIN.buildTags(style || lyrics || '', {
+      // Детерминированный мозг DJ1: ПОЛНЫЙ продюсерский caption ACE-Step (≤ 640).
+      // 16.11 владелец снял ограничение 240: на компактном бюджете вылетает
+      // глубина и стилевая атмосфера, а именно их не хватало на прослушивании.
+      // Исходная идея в карточке/сессии по-прежнему не переписывается (правило #109).
+      const CAPTION_BUDGET = BRIIX_MUSIC_BRAIN.rules.MAX_CAPTION;
+      // Семейство стиля из резолвера (черновик наставника) — если автор не
+      // переписал описание вручную: мозг соберёт конструкцию под этот стиль.
+      const styleFamily = els.musicPrompt.dataset.styleFamily || undefined;
+      const brainFor = budget => BRIIX_MUSIC_BRAIN.buildCaption(style || lyrics || '', {
         kind: snapshot.instrumental ? 'instrumental' : 'song',
         language: BriixProducer.detectExplicitLanguage(rawIdea) || (snapshot.instrumental ? null : 'en'),
-        bpm: BRIIX_MUSIC_BRAIN.detectBpm(style || lyrics || '')
+        bpm: BRIIX_MUSIC_BRAIN.detectBpm(style || lyrics || ''),
+        style: styleFamily,
+        maxTags: budget
       });
+      // Бюджет режется на длину того, что уже есть в промте (перевод/идея),
+      // чтобы итоговая строка не разъезжалась за 640.
+      const brainBudget = extra => Math.max(240, CAPTION_BUDGET - (extra ? extra.length + 2 : 0));
+      let brain = brainFor(CAPTION_BUDGET);
       let finalPrompt;
       if (snapshot.advanced && style && BriixProducer.isAsciiOnly(style)) {
         // Пользователь/продюсер уже собрал английский промпт: не переписываем его.
@@ -2202,14 +2219,17 @@
         let fluent = null;
         try { fluent = await translatePrompt(style, handle.controller.signal); }
         catch (error) { if (error.name === 'AbortError' || error.code === 'cancelled') throw error; }
+        if (fluent) brain = brainFor(brainBudget(fluent));
         finalPrompt = fluent ? mergePromptTags(fluent, brain.tags) : (brain.tags || style);
       } else if (style) {
         // Быстрый путь с уже английской идеей: brain-теги обязательны —
         // добавляем те, которых в идее ещё нет.
+        brain = brainFor(brainBudget(style));
         finalPrompt = mergePromptTags(style, brain.tags);
       } else {
-        // Только лирика: промптом остаётся она сама.
-        finalPrompt = lyrics;
+        // Только лирика: Brain отдельно собирает описание звучания; исходные
+        // строки остаются только в params.lyrics и не дублируются в prompt.
+        finalPrompt = brain.tags || '';
       }
       if (snapshot.advanced && !snapshot.instrumental && lyrics) {
         const structure = BriixProducer.structureWarnings(lyrics); // ручная лирика: предупредить, не навязывать
@@ -2429,7 +2449,7 @@
       if (handle.cancelled || timedOut || !sessionProfile?.sessions.includes(session)) return;
       const result = BriixProducer.parse(raw, { instrumental: snapshot.instrumental, existingLyrics: snapshot.advanced && !snapshot.instrumental && snapshot.lyrics.trim() ? snapshot.lyrics : '' });
       const entry = { t: 'producer_draft', version: BriixProducer.VERSION, snapshot, title: result.title,
-        prompt: BriixProducer.sanitize(result.prompt), lyrics: BriixProducer.latinizeTags(BriixProducer.sanitize(result.lyrics)), applied: false, createdAt: Date.now() };
+        style: result.style || '', prompt: BriixProducer.sanitize(result.prompt), lyrics: BriixProducer.latinizeTags(BriixProducer.sanitize(result.lyrics)), applied: false, createdAt: Date.now() };
       renderProducerDraft(entry, session);
       await feedPush(entry, session);
     } catch (error) {
@@ -2497,17 +2517,17 @@
       warning.textContent = list.join(' ');
     };
     style.addEventListener('input', refreshWarning); refreshWarning(); body.append(warning);
-    // Brain-ступень (#109): детерминированные теги ACE-Step из исходной идеи —
-    // провенанс для прозрачности. В модель уходит английский промпт этого черновика;
-    // brain-теги автоматически добавляются, только если итоговый промпт не английский.
+    // Brain-ступень (#109): полный продюсерский caption ACE-Step (≤ 640) из
+    // исходной идеи — провенанс для прозрачности. В модель уходит английский
+    // промпт этого черновика; caption добавляется, только если он не английский.
     if (globalThis.BRIIX_MUSIC_BRAIN) {
-      const brain = BRIIX_MUSIC_BRAIN.buildTags(entry.snapshot.idea, {
+      const brain = BRIIX_MUSIC_BRAIN.buildCaption(entry.snapshot.idea, {
         kind: entry.snapshot.instrumental ? 'instrumental' : 'song',
         language: BriixProducer.detectExplicitLanguage(entry.snapshot.idea) || (entry.snapshot.instrumental ? null : 'en'),
         bpm: BRIIX_MUSIC_BRAIN.detectBpm(entry.snapshot.idea)
       });
       const brainNote = document.createElement('p'); brainNote.className = 'producer-note';
-      brainNote.textContent = 'Теги ACE-Step (brain): ' + (brain.tags || '—') + '.';
+      brainNote.textContent = 'Caption ACE-Step (brain): ' + (brain.tags || '—') + '.';
       body.append(brainNote);
     }
     const state = document.createElement('p'); state.className = 'producer-note'; state.setAttribute('role', 'status');
@@ -2542,6 +2562,10 @@
       }
       entry.applied = true;
       els.musicPrompt.value = style.value;
+      // Семейство стиля из резолвера (если наставник его верул) — мозг возьмёт
+      // конструкцию под этот стиль. Правка поля вручную сбрасывает подсказку.
+      if (entry.style) els.musicPrompt.dataset.styleFamily = entry.style;
+      else delete els.musicPrompt.dataset.styleFamily;
       if (lyrics) els.lyrics.value = lyrics.value;
       advanced = true; renderChrome(); saveDraft(session); await persistSessions();
       revert.hidden = false; state.textContent = 'Поля заполнены — проверьте их в композере.';
@@ -3525,7 +3549,11 @@
 
   els.prompt.addEventListener('input', updateEnabled);
   els.lyrics.addEventListener('input', updateEnabled);
-  els.musicPrompt.addEventListener('input', updateEnabled);
+  els.musicPrompt.addEventListener('input', () => {
+    // Ручная правка описания отменяет подсказку резолвера: семейство могло устареть.
+    if (els.musicPrompt.dataset.styleFamily) delete els.musicPrompt.dataset.styleFamily;
+    updateEnabled();
+  });
 
   els.keySave.addEventListener('click', async () => {
     const value = els.keyInput.value.trim();

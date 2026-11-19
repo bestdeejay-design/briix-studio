@@ -10,7 +10,7 @@
  *      markdown-обрамление и служебные обёртки.
  *
  * Плюс brain-ступень (детерминированный мозг DJ1, studio/music-brain.js):
- *   (и) русская идея → prompt содержит английские ACE-теги, <= 240 символов;
+ *   (и) русская идея → prompt содержит английский caption, <= 640 символов;
  *   (к) негатив «без кульминации» → позитивная форма flat dynamics;
  *   (л) BPM из идеи попадает в теги;
  *   (м) отсутствие указания языка → лирика/языковой тег английские.
@@ -46,16 +46,26 @@ async function assemble({ idea = '', manualLyrics = '', instrumental = false, ad
   const style = brain.sanitize(idea);
   let lyrics = advanced ? brain.latinizeTags(brain.sanitize(manualLyrics)) : '';
   const explicit = brain.detectExplicitLanguage(idea);
-  const tags = musicBrain.buildTags(style || lyrics || '', {
+  // Полный caption (≤ 640) — как в студии с 16.11; компактный 240 остался
+  // только как legacy-путь buildTags.
+  const CAPTION_BUDGET = musicBrain.rules.MAX_CAPTION;
+  const build = budget => musicBrain.buildCaption(style || lyrics || '', {
     kind: instrumental ? 'instrumental' : 'song',
     language: explicit || (instrumental ? null : 'en'),
-    bpm: musicBrain.detectBpm(style || lyrics || '')
+    bpm: musicBrain.detectBpm(style || lyrics || ''),
+    maxTags: budget
   });
+  const budgetFor = extra => Math.max(240, CAPTION_BUDGET - (extra ? extra.length + 2 : 0));
+  let tags = build(CAPTION_BUDGET);
   let finalPrompt;
   if (advanced && style && brain.isAsciiOnly(style)) finalPrompt = style;
-  else if (style && !brain.isAsciiOnly(style)) finalPrompt = translation ? mergePromptTags(translation, tags.tags) : (tags.tags || style);
-  else if (style) finalPrompt = mergePromptTags(style, tags.tags);
-  else finalPrompt = lyrics;
+  else if (style && !brain.isAsciiOnly(style)) {
+    if (translation) tags = build(budgetFor(translation));
+    finalPrompt = translation ? mergePromptTags(translation, tags.tags) : (tags.tags || style);
+  } else if (style) {
+    tags = build(budgetFor(style));
+    finalPrompt = mergePromptTags(style, tags.tags);
+  } else finalPrompt = lyrics;
   const params = { model: 'ace-step-flash' };
   if (instrumental) params.instrumental = true;
   if (lyrics) params.lyrics = lyrics;
@@ -79,7 +89,16 @@ assert.ok(brain.validTranslation('deep, driving rhythm with powerful bass'));
 // (а) русская идея → params.prompt ASCII/английский (перевод не состоялся — brain-теги как гарантированный минимум).
 const ru = await assemble({ idea: 'Глубокий, динамичный ритм с мощным басом, вечерний город' });
 assert.ok(brain.isAsciiOnly(ru.postPrompt), 'Russian idea must produce an ASCII English prompt');
-assert.ok(ru.postPrompt.length <= 240, 'brain tag prompt <= 240 chars');
+assert.ok(ru.postPrompt.length <= 640, 'brain caption prompt <= 640 chars');
+// Разделение полей (audits/limits/RESEARCH_PACK.md): лирика не уходит в prompt,
+// секционные теги не уезжают в caption — иначе модель может спеть промт.
+assert.doesNotMatch(ru.postPrompt, /\[(?:verse|chorus|intro|bridge|outro)\]/i, 'prompt без секционных тегов');
+const advancedAsm = await assemble({ idea: 'dream pop, 90 BPM, female vocals', manualLyrics: '[verse]\nпервая строка песни\n[chorus]\nвторая строка', advanced: true });
+assert.equal(advancedAsm.postPrompt, 'dream pop, 90 BPM, female vocals', 'авторский промт не переписан');
+assert.ok(!advancedAsm.postPrompt.includes('первая строка'), 'лирика не попадает в prompt');
+assert.match(advancedAsm.params.lyrics, /первая строка песни/, 'лирика уходит отдельным params.lyrics');
+assert.doesNotMatch(advancedAsm.postPrompt, /\[/, 'в prompt нет скобочных меток');
+assert.match(ru.postPrompt, /reverb|room|depth|perspective|distant/, 'глубина и стилевая атмосфера доходят до промта');
 // (и) русский prompt содержит английские теги таксономии ACE-Step.
 assert.match(ru.postPrompt, /\bbass\b/);
 assert.match(ru.postPrompt, /\b(?:dark|urban|atmospheric|vocals)\b/);

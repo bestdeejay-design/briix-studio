@@ -694,9 +694,14 @@ function bffServer(port) {
   const autoPost = state.jobPosts.at(-1);
   assert.equal(autoPost.params.instrumental, undefined, 'vocal job');
   assert.ok(String(autoPost.params.lyrics || '').length > 20, 'auto-lyrics wrote the lyrics on a fresh page');
-  // Языковое правило #109: русская идея быстрого пути → ASCII английский промпт из brain-тегов.
+  // Языковое правило #109: русская идея быстрого пути → ASCII английский промпт из brain-caption.
   assert.ok(/^[\x20-\x7E\r\n]*$/.test(autoPost.prompt), 'quick path: Russian idea -> ASCII English prompt');
-  assert.ok(autoPost.prompt.length <= 240, 'brain tag prompt <= 240 chars');
+  assert.ok(autoPost.prompt.length <= 640, 'brain caption prompt <= 640 chars (полный caption с 16.11)');
+  assert.match(autoPost.prompt, /reverb|room|depth|perspective|distant/, 'depth layer reaches the model');
+  // Ресёрч audits/limits: лирика и промт — разные поля, иначе модель поёт промт.
+  assert.doesNotMatch(autoPost.prompt, /\[(?:verse|chorus|intro|bridge|outro)\]/i, 'prompt без секционных тегов');
+  const lyricLine = String(autoPost.params.lyrics || '').split('\n').map(s => s.trim()).find(s => s.length > 12) || '';
+  assert.ok(lyricLine && !autoPost.prompt.includes(lyricLine.slice(0, 20)), 'lyrics never leak into prompt');
   assert.match(autoPost.prompt, /\bvocals\b/);
   assert.match(autoPost.prompt, /English lyrics/, 'no language stated -> English lyrics tag (absence of a hint is not Russian)');
   assert.ok(!/Стрим|УЛУЧШЕННЫЙ/.test(autoPost.prompt), 'model chatter never leaks into params.prompt');
@@ -1316,13 +1321,13 @@ function bffServer(port) {
   assert.equal(state.jobPosts.length, 2);
   // Отредактированная не-ASCII идея переводится, brain-теги дедуплицируются.
   // #20: мозг v2 докладывает ритм-слой и продакшн даже инструменталу —
-  // проверяем свойства (перевод во главе, теги не дублируются, лимит 240).
+  // проверяем свойства (перевод во главе, теги не дублируются, лимит 640).
   const repeatPost = String(state.jobPosts[1].prompt);
   assert.ok(repeatPost.startsWith('long musical idea, rhythmic, atmospheric'), 'translation stays at the head');
   assert.match(repeatPost, /\binstrumental\b/, 'instrumental marker kept');
   assert.match(repeatPost, /groove|beat|drum/, 'v2 brain adds a rhythm layer for instrumentals too');
   assert.equal((repeatPost.match(/atmospheric/g) || []).length, 1, 'brain tags deduped against the translation');
-  assert.ok(repeatPost.length <= 240, 'brain prompt stays within MAX_TAGS');
+  assert.ok(repeatPost.length <= 640, 'brain prompt stays within MAX_CAPTION');
   const linked = await p.evaluate(async () => {
     const { profile } = await BriixSessionStore.open('tester');
     return profile.sessions[0].feed.filter(x => x.kind === 'music').map(x => ({ job: x.job, parent: x.input.parentJobId }));

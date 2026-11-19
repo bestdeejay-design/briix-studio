@@ -31,20 +31,20 @@
 
 ## 1. Сводка
 
-| # | Трек | A, симв. | B, симв. | Ритм-слой B | Роли и низ B |
+| # | Трек | A, симв. | B, симв. | Ритм-слой B | Приёмы стиля и глубина B |
 |---|---|---|---|---|---|
-| 01 | Sign-On | 157 | 603 | slow tight drum groove (kick + snare + ride) | live bass guitar, organ, slow Leslie speaker |
-| 02 | Fog-Ledger | 124 | 546 | soft drum groove (brushed drums, kick + snare + ride) | live bass guitar, organ, slow Leslie speaker |
-| 03 | Salt in the Wires | 174 | 504 | rolling hypnotic drum groove (kick + snare + ride) | live bass guitar, slow Leslie speaker, drums |
-| 04 | Caller 03:14 | 155 | 499 | hypnotic drum groove (kick + snare + ride) | live bass guitar, organ, slow Leslie speaker |
-| 05 | The Velvet Public | 169 | 539 | soft hypnotic drum groove (kick + snare + ride) | live bass guitar, slow Leslie speaker, drums |
-| 06 | Deep Water Frequency | 187 | 539 | heavy hypnotic drum groove (kick + snare + ride) | live bass guitar, organ, slow Leslie speaker |
-| 07 | Interference Prayer | 136 | 509 | soft rolling drum groove (kick + snare + ride) | live bass guitar, slow Leslie speaker, drums |
-| 08 | Room Above the Radio | 117 | 508 | sparse drum groove (kick + snare + ride) | live bass guitar, organ, slow Leslie speaker |
-| 09 | Ghosts of the Harbour Choir | 157 | 551 | slow hypnotic drum groove (kick + snare + ride) | live bass guitar, organ, slow Leslie speaker |
-| 10 | Sign-Off Delayed | 116 | 505 | slow tight drum groove (kick + snare + ride) | live bass guitar, organ, slow Leslie speaker |
-| 11 | The Tape That Outlives Us | 139 | 535 | slow soft drum groove (kick + snare + ride) | live bass guitar, organ, slow Leslie speaker |
-| 12 | Sign-Off, Finally | 152 | 519 | slow drum groove (kick + snare + ride) | live bass guitar, slow Leslie speaker, drums |
+| 01 | Sign-On | 751 | 712 | slow tight drum groove (kick + snare + ride) | dry dead drums with live room bleed, plate reverb on the snare, dry upfront vocal over a distant plate tail |
+| 02 | Fog-Ledger | 718 | 655 | soft drum groove (brushed drums, kick + snare + ride) | dry dead drums with live room bleed, plate reverb on the snare, dry upfront vocal over a distant plate tail |
+| 03 | Salt in the Wires | 768 | 603 | rolling hypnotic drum groove (kick + snare + ride) | dubbed-out vocal fragments, loose unquantized groove, dry upfront vocal over a distant plate tail |
+| 04 | Caller 03:14 | 749 | 590 | hypnotic drum groove (kick + snare + ride) | spring reverb on the organ, tape echo on the guitar, dry upfront vocal over a distant plate tail |
+| 05 | The Velvet Public | 763 | 670 | soft hypnotic drum groove (kick + snare + ride) | bass tone rolled off, staccato in the pocket with the kick, loose unquantized groove, dry upfront vocal over a distant plate tail |
+| 06 | Deep Water Frequency | 781 | 638 | heavy hypnotic drum groove (kick + snare + ride) | front-to-back depth, dubbed-out vocal fragments, loose unquantized groove, dry upfront vocal over a distant plate tail |
+| 07 | Interference Prayer | 730 | 642 | soft rolling drum groove (kick + snare + ride) | dubbed-out vocal fragments, bass tone rolled off, staccato in the pocket with the kick, dry upfront vocal over a distant plate tail |
+| 08 | Room Above the Radio | 711 | 609 | sparse drum groove (kick + snare + ride) | room sound, dubbed-out vocal fragments, loose unquantized groove, close dry drums, wide room behind |
+| 09 | Ghosts of the Harbour Choir | 751 | 705 | slow hypnotic drum groove (kick + snare + ride) | distant perspective, dubbed-out vocal fragments, bass tone rolled off, staccato in the pocket with the kick, dry upfront vocal over a distant plate tail |
+| 10 | Sign-Off Delayed | 710 | 604 | slow tight drum groove (kick + snare + ride) | tape echo, loose unquantized groove, dubbed-out vocal fragments, dry upfront vocal over a distant plate tail |
+| 11 | The Tape That Outlives Us | 733 | 624 | slow soft drum groove (kick + snare + ride) | dubbed-out vocal fragments, loose unquantized groove, close dry drums, wide room behind |
+| 12 | Sign-Off, Finally | 746 | 610 | slow drum groove (kick + snare + ride) | tape echo on the guitar, spring reverb on the organ, dry upfront vocal over a distant plate tail |
 
 ## 2. Полные строки B (трек-специфичная часть)
 
@@ -76,18 +76,18 @@
 
 | # | B (после префикса) |
 |---|---|
-| 01 | psychedelic soul, slow tight drum groove (kick + snare + ride), 72 BPM, live bass guitar, organ, slow Leslie speaker, lead role, in front of the mix, dense mix, radio static, analog warmth, tight mix, AM radio broadcast texture, pirate radio studio, opening on texture, wave dynamics, near-silent suspensions before drums re-enter, lyrics about radio and harbour |
-| 02 | psychedelic soul, soft drum groove (brushed drums, kick + snare + ride), 76 BPM, live bass guitar, organ, slow Leslie speaker, lead role, in front of the mix, foggy room tone, analog warmth, tape saturation, wave dynamics, near-silent suspensions before drums re-enter, dreamy, lyrics about fog and dreams |
-| 03 | psychedelic soul, rolling hypnotic drum groove (kick + snare + ride), 84 BPM, live bass guitar, slow Leslie speaker, rhythmic organ stabs, lead role, in front of the mix, analog warmth, tape saturation, wave dynamics, near-silent suspensions before drums re-enter |
-| 04 | psychedelic soul, hypnotic drum groove (kick + snare + ride), 90 BPM, live bass guitar, organ, slow Leslie speaker, lead role, in front of the mix, analog warmth, tape saturation, studio room tone, wave dynamics, near-silent suspensions before drums re-enter |
-| 05 | psychedelic soul, soft hypnotic drum groove (kick + snare + ride), 96 BPM, live bass guitar, slow Leslie speaker, swirling organ, lead role, in front of the mix, melodic, foggy room tone, analog warmth, tape saturation, wave dynamics, near-silent suspensions before drums re-enter, lyrics about fog |
-| 06 | psychedelic soul, heavy hypnotic drum groove (kick + snare + ride), 102 BPM, live bass guitar, deep sub-bass, organ, slow Leslie speaker, in front of the mix, carrying the main melody, front-to-back depth, analog warmth, tape saturation, wave dynamics, near-silent suspensions before drums re-enter |
-| 07 | psychedelic soul, soft rolling drum groove (kick + snare + ride), 88 BPM, live bass guitar, slow Leslie speaker, organ, lead role, in front of the mix, radio static, analog warmth, tape saturation, wave dynamics, near-silent suspensions before drums re-enter, hypnotic |
-| 08 | psychedelic soul, sparse drum groove (kick + snare + ride), 84 BPM, live bass guitar, organ, slow Leslie speaker, lead role, in front of the mix, analog warmth, tape saturation, studio room tone, wave dynamics, near-silent suspensions before drums re-enter, emotional |
-| 09 | psychedelic soul, slow hypnotic drum groove (kick + snare + ride), 78 BPM, live bass guitar, deep low end, organ, slow Leslie speaker, lead role, in front of the mix, low in the mix, foggy room tone, analog warmth, tape saturation, wave dynamics, near-silent suspensions before drums re-enter, lyrics about fog |
-| 10 | psychedelic soul, slow tight drum groove (kick + snare + ride), 72 BPM, live bass guitar, organ, slow Leslie speaker, lead role, in front of the mix, dense mix, analog warmth, tight mix, tape echo delay, wave dynamics, near-silent suspensions before drums re-enter |
-| 11 | psychedelic soul, slow soft drum groove (kick + snare + ride), 66 BPM, live bass guitar, organ, slow Leslie speaker, lead role, in front of the mix, analog warmth, reverse tape textures, tape saturation, wave dynamics, near-silent suspensions before drums re-enter, emotional, lyrics about tape |
-| 12 | psychedelic soul, slow drum groove (kick + snare + ride), 60 BPM, live bass guitar, slow Leslie speaker, organ, lead role, in front of the mix, radio static, analog warmth, tape saturation, build into the last chorus, wave dynamics, near-silent suspensions before drums re-enter |
+| 01 | psychedelic soul, slow tight drum groove (kick + snare + ride), 72 BPM, live bass guitar, organ, slow Leslie speaker, lead role, in front of the mix, dense mix, radio static, analog warmth, tight mix, AM radio broadcast texture, dry dead drums with live room bleed, plate reverb on the snare, dry upfront vocal over a distant plate tail, pirate radio studio, opening on texture, wave dynamics, near-silent suspensions before drums re-enter, lyrics about radio and harbour |
+| 02 | psychedelic soul, soft drum groove (brushed drums, kick + snare + ride), 76 BPM, live bass guitar, organ, slow Leslie speaker, lead role, in front of the mix, foggy room tone, analog warmth, tape saturation, dry dead drums with live room bleed, plate reverb on the snare, dry upfront vocal over a distant plate tail, wave dynamics, near-silent suspensions before drums re-enter, dreamy, lyrics about fog and dreams |
+| 03 | psychedelic soul, rolling hypnotic drum groove (kick + snare + ride), 84 BPM, live bass guitar, slow Leslie speaker, rhythmic organ stabs, lead role, in front of the mix, analog warmth, tape saturation, dubbed-out vocal fragments, loose unquantized groove, dry upfront vocal over a distant plate tail, wave dynamics, near-silent suspensions before drums re-enter |
+| 04 | psychedelic soul, hypnotic drum groove (kick + snare + ride), 90 BPM, live bass guitar, slow Leslie speaker, lead role, in front of the mix, analog warmth, tape saturation, spring reverb on the organ, tape echo on the guitar, dry upfront vocal over a distant plate tail, studio room tone, wave dynamics, near-silent suspensions before drums re-enter |
+| 05 | psychedelic soul, soft hypnotic drum groove (kick + snare + ride), 96 BPM, live bass guitar, slow Leslie speaker, swirling organ, lead role, in front of the mix, melodic, foggy room tone, analog warmth, tape saturation, bass tone rolled off, staccato in the pocket with the kick, loose unquantized groove, dry upfront vocal over a distant plate tail, wave dynamics, near-silent suspensions before drums re-enter, lyrics about fog |
+| 06 | psychedelic soul, heavy hypnotic drum groove (kick + snare + ride), 102 BPM, live bass guitar, deep sub-bass, organ, slow Leslie speaker, in front of the mix, carrying the main melody, front-to-back depth, analog warmth, tape saturation, dubbed-out vocal fragments, loose unquantized groove, dry upfront vocal over a distant plate tail, wave dynamics, near-silent suspensions before drums re-enter |
+| 07 | psychedelic soul, soft rolling drum groove (kick + snare + ride), 88 BPM, live bass guitar, slow Leslie speaker, organ, lead role, in front of the mix, radio static, analog warmth, tape saturation, dubbed-out vocal fragments, bass tone rolled off, staccato in the pocket with the kick, dry upfront vocal over a distant plate tail, wave dynamics, near-silent suspensions before drums re-enter, hypnotic |
+| 08 | psychedelic soul, sparse drum groove (kick + snare + ride), 84 BPM, live bass guitar, organ, slow Leslie speaker, lead role, in front of the mix, analog warmth, tape saturation, room sound, dubbed-out vocal fragments, loose unquantized groove, close dry drums, wide room behind, studio room tone, wave dynamics, near-silent suspensions before drums re-enter, emotional |
+| 09 | psychedelic soul, slow hypnotic drum groove (kick + snare + ride), 78 BPM, live bass guitar, deep low end, organ, slow Leslie speaker, lead role, in front of the mix, low in the mix, foggy room tone, analog warmth, tape saturation, distant perspective, dubbed-out vocal fragments, bass tone rolled off, staccato in the pocket with the kick, dry upfront vocal over a distant plate tail, wave dynamics, near-silent suspensions before drums re-enter, lyrics about fog |
+| 10 | psychedelic soul, slow tight drum groove (kick + snare + ride), 72 BPM, live bass guitar, organ, slow Leslie speaker, lead role, in front of the mix, dense mix, analog warmth, tight mix, tape echo delay, loose unquantized groove, dubbed-out vocal fragments, dry upfront vocal over a distant plate tail, wave dynamics, near-silent suspensions before drums re-enter |
+| 11 | psychedelic soul, slow soft drum groove (kick + snare + ride), 66 BPM, live bass guitar, organ, slow Leslie speaker, lead role, in front of the mix, analog warmth, reverse tape textures, tape saturation, dubbed-out vocal fragments, loose unquantized groove, close dry drums, wide room behind, wave dynamics, near-silent suspensions before drums re-enter, emotional, lyrics about tape |
+| 12 | psychedelic soul, slow drum groove (kick + snare + ride), 60 BPM, live bass guitar, slow Leslie speaker, lead role, in front of the mix, radio static, analog warmth, tape saturation, tape echo on the guitar, spring reverb on the organ, dry upfront vocal over a distant plate tail, build into the last chorus, wave dynamics, near-silent suspensions before drums re-enter |
 
 A по каждому треку = VOCAL-CONST + SONIC-CONST + строка трека из
 `REFERENCE-ALBUM.md` (см. `bench/prompts-12.json`, поле `promptA`; строка трека —
@@ -116,6 +116,38 @@ A по каждому треку = VOCAL-CONST + SONIC-CONST + строка тр
 (перегруз размывает вес ранних тегов). Схема v3: **ANCHOR + VOICE + RHYTHM +
 SPACE(инструменты с ролями, микс, продакшн) + ARRANGEMENT + TAIL + GUARDS**.
 Тональность сознательно не добавляется: в корпусе она не различает успех.
+
+## 2d. Слой глубины и стилевой атмосферы (16.11, после прослушивания)
+
+Вердикт владельца по первому прогону: «насытили и обогатили, но глубины не
+достигали; психоделик-соул выбран не случайно, а его глубина и смешивание ритма
+и баса не поднялись». Это точное описание дыры: слои описывали **что** звучит,
+но не **где** и **насколько далеко**, и жанровое слово подставлялось без
+стилевых приёмов.
+
+Ресёрч — `audits/style-atmosphere/RESEARCH_PACK.md` (D1–D9). Главное:
+глубина это контраст близкого и далёкого (три плана, pre-delay, roll-off верхов),
+а стиль задаётся набором приёмов, а не жанровым словом.
+
+Что появилось в caption (после продакшна, до формы):
+
+| Блок | Пример | Откуда |
+|---|---|---|
+| приёмы стиля (2 из пула 5–7) | `tape echo on the guitar`, `plate reverb on the snare`, `bass tone rolled off, staccato in the pocket with the kick` | жанровая практика (D6–D9), выбираются по хешу брифа |
+| план глубины (1 пара) | `dry upfront vocal over a distant plate tail`, `close dry drums, wide room behind` | D1–D4: близко/далеко одновременно |
+| базовая пара (если стиль не узнан) | `close vocal, distant room` | геометрия микса, не жанр |
+
+Пример (трек 01, B): к прежним слоям добавились
+`mono centre`(из слов автора), `dry dead drums with live room bleed`,
+`plate reverb on the snare`, `dry upfront vocal over a distant plate tail`.
+
+**Не жёсткий шаблон.** Пул на трек перемешивается хешем задумки: три разных
+брифа психоделик-соула дают три разных набора приёмов, но остаются в стиле;
+один и тот же бриф всегда даёт один и тот же caption (детерминизм альбома).
+
+**Стоимость.** B вырос с 499–603 до 590–712 символов, A — 710–781. B всё ещё
+короче A на каждом треке, но запас сократился: при дальнейшем обогащении
+первым надо резать хвост (настроение/концепт), а не глубину.
 
 ## 3. Обоснование расхождений — что я указал иначе и почему жду лучший результат
 

@@ -78,9 +78,10 @@ assert.match(overload.tags, RHYTHM_RE, 'при усечении ритм-сло�
 assert.match(overload.tags, PROD_RE, 'при усечении продакшн-слой выживает');
 assert.match(overload.tags, VOICE_CHAR_RE, 'при усечении характер вокала выживает');
 assert.ok(overload.notes.some(n => /срезано/.test(n.tag)), 'усечение видно в notes (не молчаливое)');
-// Короткий бриф не раздувается: caption остаётся в рамках трёх слоёв + хвост.
+// Короткий бриф не раздувается: caption остаётся в рамках трёх слоёв + хвост
+// (+ одна базовая пара планов глубины, ~30 символов).
 const short = brain.buildTags('песня', { kind: 'song' });
-assert.ok(short.tags.length <= 140, `короткий бриф не раздувается (${short.tags.length} <= 140)`);
+assert.ok(short.tags.length <= 150, `короткий бриф не раздувается (${short.tags.length} <= 150)`);
 assert.ok(short.tags.split(', ').length <= 9, 'не больше 9 блоков на короткой задумке');
 
 // ------------------------------------------------------ (5) 20 брифов -------
@@ -160,7 +161,128 @@ const noFalseGenre = brain.buildTags('широкий стерео, тёплый 
 assert.doesNotMatch(noFalseGenre.tags, /\brock\b/, '«широкий» не превращается в жанр rock');
 assert.match(noFalseGenre.tags, /wide stereo image/, '«широкий стерео» → wide stereo image');
 
+// ------------------------------- (11) голос — идентичность, а не переменная --
+// Владелец на прогоне 15.11 услышал: пол вокала менялся от трека к треку без
+// зависимости. Причина была в фолбэке «vocals» — модель бросала монетку.
+// Теперь пол фиксируется детерминированно: задумка → профиль → дефолт канала.
+const noGender = brain.buildTags('современный хит про приключения и любовь', { kind: 'song' });
+assert.doesNotMatch(noGender.tags, /(^|, )vocals(,|$)/, 'голое «vocals» больше не уходит в модель');
+assert.match(noGender.tags, /^(male|female) vocals/, 'пол лида назван всегда');
+assert.equal(noGender.layers.voice.identityFrom, 'дефолт канала', 'источник идентичности виден');
+assert.ok(noGender.notes.some(n => n.layer === 'voice.identity'), 'идентичность голоса в notes (не молчаливое решение)');
+// Профиль слушателя переопределяет дефолт канала.
+const profiled = brain.buildTags('песня про дорогу', { kind: 'song', voiceIdentity: 'female' });
+assert.match(profiled.tags, /^female vocals/, 'профиль задаёт голос');
+assert.equal(profiled.layers.voice.identityFrom, 'профиль', 'источник — профиль');
+// Слово в задумке сильнее профиля.
+const overridden = brain.buildTags('женский вокал шёпотом', { kind: 'song', voiceIdentity: 'male' });
+assert.match(overridden.tags, /^female vocals/, 'задумка сильнее профиля');
+assert.equal(overridden.layers.voice.identityFrom, 'задумка', 'источник — задумка');
+// Названа только фактура — пол всё равно фиксируется, иначе лид поплывёт.
+const backing = brain.buildTags('бэк-вокал в припеве', { kind: 'song' });
+assert.match(backing.tags, /backing vocals/, 'бэк-вокал на месте');
+assert.match(backing.tags, /(male|female) vocals/, 'пол лида зафиксирован рядом с бэк-вокалом');
+// Детерминизм: один и тот же вход даёт один и тот же caption (важно для альбома).
+const twice = [brain.buildTags('песня про море', { kind: 'song' }), brain.buildTags('песня про море', { kind: 'song' })];
+assert.equal(twice[0].tags, twice[1].tags, 'caption детерминирован: голос не должен «перебрасываться» между прогонами');
+// Инструментал голоса не получает вовсе.
+const instru = brain.buildTags('тёмный техно-бит', { kind: 'instrumental' });
+assert.doesNotMatch(instru.tags, /vocals/, 'инструментал без вокала');
+
+// --------------------------- (12) глубина и стилевая атмосфера --------------
+// Владелец по прогону v3: «насытили, но глубины не достигали, стилевые акценты
+// не поднялись». Глубина — контраст близкого и далёкого, а не один эффект
+// (audits/style-atmosphere/RESEARCH_PACK.md, §2).
+const soulBrief = 'психоделик-соул, 96 BPM, живой бас, Hammond, тёплый аналог, мужской голос шёпотом, ночной порт';
+const soul = brain.buildCaption(soulBrief, { kind: 'song' });
+assert.equal(soul.layers.style.key, 'psychedelic soul', 'семейство стиля распознано из жанра');
+assert.equal(soul.layers.depth.devices.length, 2, 'два стилевых приёма, не один');
+assert.ok(soul.layers.depth.depth.length === 1, 'план глубины «близко/далеко» присутствует');
+assert.match(soul.caption, /reverb|echo|room|depth|perspective|pocket|groove/i, 'глубина слышна в caption');
+// Глубина — это контраст: в паре планов есть и близкое, и далёкое.
+assert.match(soul.layers.depth.depth[0], /upfront|close|dry/i, 'в плане глубины есть близкий элемент');
+assert.match(soul.layers.depth.depth[0], /distant|far|behind|tail|room|wash/i, 'в плане глубины есть далёкий элемент');
+// Не жёсткий шаблон: три брифа одного стиля дают разные цепочки приёмов.
+const soulVariants = [
+  'психоделик-соул, 96 BPM, живой бас, Hammond, тёплый аналог, мужской голос шёпотом, ночной порт',
+  'психоделик-соул, 72 BPM, бас, орган, шёпот, туман',
+  'психоделик-соул, 102 BPM, грув, бас, орган'
+].map(b => brain.buildCaption(b, { kind: 'song' }).layers.depth.devices.join(' + '));
+assert.equal(new Set(soulVariants).size, 3, 'один стиль — разные наборы приёмов (перемешивание, а не шаблон)');
+// Детерминизм: тот же бриф — тот же caption (условие единого альбома).
+assert.equal(brain.buildCaption(soulBrief, { kind: 'song' }).caption, soul.caption, 'глубина выбирается детерминированно');
+// Слова автора сильнее стиля и попадают первыми.
+const askedDepth = brain.buildCaption('трип-хоп, сухо вблизи, эхо, бас', { kind: 'song' });
+assert.match(askedDepth.caption, /dry close perspective/, 'слово автора «сухо вблизи» в caption');
+assert.ok(askedDepth.layers.depth.tags.indexOf('dry close perspective') <= 1, 'слова автора идут первыми');
+// Резолвер: подсказка стиля (из референса исполнителя) сильнее жанровых слов.
+const byResolver = brain.buildCaption('грув, бас, 96 BPM', { kind: 'song', style: 'dream pop' });
+assert.equal(byResolver.layers.style.key, 'dream pop', 'стиль из резолвера принят');
+assert.equal(byResolver.layers.style.from, 'резолвер', 'источник стиля — резолвер');
+assert.match(byResolver.caption, /plate|pads|shimmering|reverb/i, 'под стиль добавилась его атмосфера');
+// Неизвестное семейство не выдумывает приёмы: падаем на жанр/тишину, но не врём.
+const unknownStyle = brain.buildCaption('грув, бас, 96 BPM', { kind: 'song', style: 'нечто неслыханное' });
+assert.equal(unknownStyle.layers.style.key, null, 'неизвестный стиль не подменяется выдумкой');
+assert.equal(unknownStyle.layers.depth.devices.length, 0, 'без стиля приёмы не выдумываются');
+// Ничего не выдумываем: пустая задумка не получает НИ СТИЛЯ, НИ ПРИЁМОВ.
+// Базовая геометрия «близко/далеко» допустима — это утверждение о миксе, а не
+// о жанре (тот же статус, что у дефолтного продакшна).
+const bareSong = brain.buildCaption('песня', { kind: 'song' });
+assert.equal(bareSong.layers.depth.style, null, 'на пустом брифе стиль не выдумывается');
+assert.equal(bareSong.layers.depth.devices.length, 0, 'на пустом брифе стилевые приёмы не выдумываются');
+assert.equal(bareSong.layers.depth.from, 'база', 'глубина на пустом брифе — базовая, и это видно');
+assert.equal(bareSong.layers.depth.depth.length, 1, 'базовая пара планов глубины присутствует');
+// Бюджет держится и с новым слоем.
+assert.ok(soul.caption.length <= MAX_CAPTION, 'глубина укладывается в бюджет 640');
+const squeezedSoul = brain.buildTags(soulBrief, { kind: 'song' });
+assert.ok(squeezedSoul.tags.length <= MAX_TAGS, 'глубина укладывается в компактный бюджет 240');
+assert.match(squeezedSoul.tags, RHYTHM_RE, 'под бюджетом ритм-слой всё равно на месте');
+
+// -------------------- (13) разделение caption и лирики, потолок токенов -----
+// Ресёрч (audits/limits/RESEARCH_PACK.md): у ACE-Step промт и лирика — разные
+// аргументы и разные энкодеры; потолок промта 256 токенов (≈640–800 символов),
+// потолок лирики 2048 токенов. Значит: секции — только в лирике, caption —
+// однострочный comma-список, и он не должен упираться в токен-потолок.
+const lyricsText = '[verse]\nСтрока про море\n[chorus]\nИ снова про море';
+const fromLyrics = brain.buildCaption(lyricsText, { kind: 'song' });
+assert.doesNotMatch(fromLyrics.caption, /\[(?:verse|chorus|intro|bridge|outro)\]/i,
+  'секционные теги из лирики не переезжают в caption');
+assert.doesNotMatch(fromLyrics.caption, /\n/, 'caption однострочный');
+assert.equal(fromLyrics.selfCheck.notes.filter(n => /секционный|однострочный/.test(n)).length, 0,
+  'self-check не ругается на собранный мозгом caption');
+// Сторож реально срабатывает, если тег/перевод строки/перегруз всё-таки влезли.
+assert.ok(brain.selfCheck('[chorus] male vocals, drum groove', { instrumental: false }).notes.some(n => /секционный/.test(n)),
+  'секционный тег в caption ловится self-check');
+assert.ok(brain.selfCheck('male vocals,\ndrum groove, analog warmth', { instrumental: false }).notes.some(n => /однострочный/.test(n)),
+  'перевод строки в caption ловится self-check');
+assert.ok(brain.selfCheck(('tag, '.repeat(200)).trim(), { instrumental: false }).notes.some(n => /обрезаться молча/.test(n)),
+  'перегруз по словам ловится self-check');
+// Бюджет 640 не упирается в потолок: считаем слова у самого длинного caption.
+let maxWords = 0, maxLen = 0;
+for (const f of fixtures) {
+  const cap = brain.buildCaption(f.brief, Object.assign({ kind: 'song' }, f.options || {}));
+  maxWords = Math.max(maxWords, cap.caption.split(/\s+/).filter(Boolean).length);
+  maxLen = Math.max(maxLen, cap.caption.length);
+}
+assert.ok(maxWords <= brain.rules.MAX_CAPTION_WORDS,
+  `самый длинный caption ${maxWords} слов ≤ ${brain.rules.MAX_CAPTION_WORDS} (запас до 256 токенов)`);
+assert.ok(maxLen <= MAX_CAPTION, `самый длинный caption ${maxLen} символов ≤ ${MAX_CAPTION}`);
+
+// ------------------------------- (14) паритет семейств стиля с резолвером ---
+// Резолвер (producer-brain) отдаёт семейство строкой — оно должно существовать
+// в STYLE_ATMOSPHERE, иначе мозг молча упадёт на базовую глубину.
+const producerScope = {};
+vm.runInNewContext(fs.readFileSync(path.join(ROOT, 'studio/producer-brain.js'), 'utf8'), producerScope);
+const families = producerScope.BriixProducer.STYLE_FAMILIES;
+const known = Object.keys(brain.rules.STYLE_ATMOSPHERE);
+for (const f of families) assert.ok(known.includes(f), `семейство резолвера «${f}» есть в STYLE_ATMOSPHERE`);
+for (const k of known) assert.ok(families.includes(k), `семейство STYLE_ATMOSPHERE «${k}» известно резолверу`);
+// Семейство от резолвера реально меняет конструкцию.
+const rockish = brain.buildCaption('грув, бас, 96 BPM', { kind: 'song', style: 'rock' });
+assert.equal(rockish.layers.style.key, 'rock', 'стиль из резолвера принят мозгом');
+assert.match(rockish.caption, /room|close dry drums|live band/i, 'под рок добавились его приёмы');
+
 // ------------------------------------------------------------------ вывод --
-console.log('PASS music-brain v2: слои, ритм-всегда, вокал с характером, продакшн, бюджет, негативы, self-check, полный трек (роли/микс/форма/защита)');
+console.log('PASS music-brain v3: слои, ритм-всегда, вокал с характером и фиксированной идентичностью, продакшн, бюджет, негативы, self-check, полный трек (роли/микс/форма/защита), глубина и стилевая атмосфера, разделение caption/лирики и потолок токенов');
 console.log('20 брифов (buildTags / buildCaption, символы):');
 for (const r of rows) console.log(`  ${r.id} ${r.source.padEnd(9)} ${String(r.len).padStart(3)} / ${String(r.captionLen).padStart(3)}  ${r.tags}`);
