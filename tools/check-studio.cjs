@@ -887,10 +887,18 @@ function bffServer(port) {
     window.__syncKbInset(window.visualViewport); // вернуть как было
     return { kb, lifted: before - after, css, aboveKb };
   });
-  assert.equal(lift.kb, 260, 'F-35: высота клавиатуры измерена');
-  assert.ok(lift.lifted >= 255, 'F-35: композер поднялся над клавиатурой, +' + Math.round(lift.lifted));
-  assert.equal(lift.css, '260px', 'F-35: --kb-inset проставлен');
-  assert.equal(lift.aboveKb, true, 'F-35: композер целиком выше линии клавиатуры');
+  // F-35 (атрибуция CI: ubuntu-раннер): семантика вместо магической константы
+  // подъёма. kb — детерминированная математика (innerHeight − высота vv);
+  // композер обязан подняться на ВСЮ высоту клавиатуры: aboveKb — главный
+  // семантический критерий, lifted — с допуском ±1px на суб-пиксельное
+  // округление getBoundingClientRect (раньше >=255 ронял раннер при дробных
+  // координатах), css — ровно ожидаемое значение визуального viewport.
+  const KB = 260;
+  assert.equal(lift.kb, KB, 'F-35: высота клавиатуры измерена');
+  assert.equal(lift.css, KB + 'px', 'F-35: --kb-inset проставлен');
+  assert.equal(lift.aboveKb, true, 'F-35: композер целиком выше линии клавиатуры (поднят на всю высоту)');
+  assert.ok(lift.lifted >= KB - 1 && lift.lifted <= KB + 1,
+    'F-35: композер поднялся на высоту клавиатуры (±1px округления), сдвиг ' + Math.round(lift.lifted) + ' из ' + KB);
   await p.close();
   ok('keyboard lifts the composer: interactive-widget + visualViewport fallback (F-35)', lift);
 
