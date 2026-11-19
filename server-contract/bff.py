@@ -619,6 +619,12 @@ async def get_job(request):
         return envelope(404, "Задача не найдена.", "job_not_found", request)
     out = {"id": j["id"], "type": j["type"], "status": j["status"],
            "provenance": j["provenance"]}
+    # ревью #37: prompt/lyrics/wav_url в полной карточке джобы
+    out["prompt"] = (j.get("prompt") or "")[:400]
+    if isinstance(j.get("lyrics"), str) and j["lyrics"]:
+        out["lyrics"] = j["lyrics"]
+    if j.get("wav_url"):
+        out["wav_url"] = j["wav_url"]
     if j["status"] == "running" and j.get("stage"):
         out["stage"] = j["stage"]  # S2: music отдаёт model-warmup|generating
     if j["status"] == "ready":
@@ -1818,6 +1824,13 @@ async def executor():
                             "аудио отдаётся без встроенной обложки",
                         }
                         j["stage"] = None
+                        # ревью #37: полная карточка джобы — лирика, ушедшая в
+                        # генерацию, сохраняется отдельным top-level полем записи
+                        # (jobs.json) + прямой URL WAV-мастера.
+                        _lyr = j.get("params", {}).get("lyrics")
+                        if isinstance(_lyr, str) and _lyr.strip():
+                            j["lyrics"] = _lyr.strip()[:MAX_LYRICS]
+                        j["wav_url"] = f"/files/{jid}.wav"
                 finally:
                     BUDGET.release(tokens)
             finally:
