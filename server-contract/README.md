@@ -164,3 +164,38 @@
   (`tools/check-studio.cjs`, порт 8300-диапазон, токен test-token).
 - Инфра-поставка #37 (конвейер экспорта WAV→MP3/M4A+теги) меняет живой bff: после её
   приёмки сюда кладётся НОВЫЙ снимок, старый сохраняется как bff.py.bak-<дата>.
+
+## Поставка #37 — экспорт-конвейер WAV→MP3 320 + M4A с тегами (20.11.2026, исполнитель-саб)
+
+Новый снимок `bff.py` (+ новый модуль `export_pipeline.py`, живёт рядом с bff на стенде)
+после деплоя на стенд A. Бэкап до деплоя: `bff.py.bak-20261120-export37` на стенде
+(инструкция отката: `server-contract/rollback-37.md`).
+
+- **WAV-мастер**: живёт 48ч (WAV_RETENTION_SECONDS), переживает 24ч-retention производных;
+  отдельный URL `GET /files/{id}.wav` (audio/wav, attachment). Производные (m4a/mp3/cover/peaks)
+  живут 24ч и пересобираются mux-on-download из живого мастера; job-запись живёт, пока жив мастер.
+  WAV без тегов — по критерию; в `GET /jobs/{id}` поле `formats.wav.note = "мастер без тегов"`.
+- **MP3 320k**: `GET /files/{id}.mp3`, mux-on-download (Semaphore(1), ретрай mux при падении).
+  ID3v2.4 (проверено mutagen на живом джобе): TIT2/TPE1/TALB/TCON, COMM брендинг, **USLT** (лирика),
+  **TXXX `briix_prompt`** (промт), **APIC** (обложка, front cover). Теги ставит mutagen 1.48.1
+  (поставлен в adapter-venv; ffmpeg пишет лирику как TXXX=USLT, не настоящий USLT — проверено
+  эмпирически 20.11, поэтому mutagen обязателен). Без mutagen — честный фолбэк ffmpeg-тегов
+  (лирика деградирует в TXXX), статус в `GET /health → export`.
+- **M4A**: прежний mux-on-download + mutagen-пасс: **©lyr**, **©gen** («Generative Music»),
+  **freeform `----:com.briix:prompt`** (промт), covr (attached_pic ffmpeg + страховочная досадка).
+- **Обложка**: `GET /files/{id}-cover.png` (как было); ретрай генерации 1 раз (stage
+  `album-cover-retry`); честный статус в `GET /jobs/{id}` → `cover: {status: ok|unavailable, url, detail}`
+  (detail при невозможности, не молчание). В `_job_public` (GET /jobs) добавлены cover_url/cover_status.
+- **GET /jobs/{id}**: новые поля `formats: {wav, mp3, m4a: {url, available}}` и `cover`;
+  `ttl_seconds` для music считается от 48ч мастера.
+- **retention**: производные файлы 24ч, `*.wav` 48ч; `expired` ставится только при удалении
+  мастера; `prune_records(cutoff, master_cutoff)` — music-записи живут с мастером.
+- **/health**: новое поле `export: {mutagen, mp3_uslt, m4a_freeform_prompt}` — честный статус
+  возможностей конвейера.
+- Существующие пути не сломаны: result_url (m4a) как был, /files/{id} fallback-цепочка
+  расширена до `.m4a → .mp3 → .wav`; peaks/moderation/chat/image без изменений.
+
+Проверено на живом стенде 20.11 (sub-test, duration 30): vocal flash 30с — все три формата
+200 OK, MP3 stream 320000 bps, ID3v2.4 все кадры, M4A atoms ©lyr/©gen/covr/freeform,
+WAV 31.04с без тегов, peaks/moderation/ chat/image/instrumental — регресс зелёный
+(полный список — письмо «📦 ПОСТАВКА #37» в issue).

@@ -28,6 +28,21 @@ JOBS_FILE = BASE / "jobs.json"
 
 QUEUE_CAP = 8
 RETENTION_SECONDS = 24 * 3600
+# issue #37: WAV-мастер живёт дольше производных (48ч >= 24ч по критерию);
+# M4A/MP3 пересобираются mux-on-download из живого WAV в любой момент.
+WAV_RETENTION_SECONDS = 48 * 3600
+# issue #37: экспорт-конвейер. MP3 320k всегда (критерий #37), ID3v2.4.
+MP3_BITRATE = "320k"
+MP3_TIMEOUT = 180
+COVER_RETRIES = 1  # ретраев генерации обложки сверх первой попытки
+# Модуль конвейера тегирования (mutagen). Без него MP3/M4A получают теги
+# только средствами ffmpeg (лирика TXXX вместо USLT, без freeform-промта) —
+# статус честно отдаётся в /health и GET /jobs/{id}.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+try:
+    import export_pipeline as ep
+except ImportError:
+    ep = None
 IDEMPOTENCY_WINDOW = 600  # 10 min
 HEAVY_TIMEOUT = 480       # image
 MUSIC_TIMEOUT = 420       # S2: поднят с 300 — холодный первый music-джоб 356с
@@ -473,6 +488,10 @@ async def health(request):
             "music": "ready" if music else "unavailable",
             "text": "ready" if text else "unavailable",
         },
+        # issue #37: честный статус возможностей экспорт-конвейера
+        "export": ep.pipeline_status() if ep else {"mutagen": False,
+                                                   "mp3_uslt": False,
+                                                   "m4a_freeform_prompt": False},
     })
 
 
@@ -609,7 +628,25 @@ async def get_job(request):
         out["mime"] = j.get("mime")
         out["size"] = j.get("size")
         out["checksum"] = j.get("checksum")
-        out["ttl_seconds"] = max(0, int(RETENTION_SECONDS - (time.time() - (j.get("finished_at") or time.time()))))
+        ttl_base = WAV_RETENTION_SECONDS if j["type"] == "music" else RETENTION_SECONDS
+        out["ttl_seconds"] = max(0, int(ttl_base - (time.time() - (j.get("finished_at") or time.time()))))
+        # issue #37: форматы экспорта music-джоба + честный статус обложки.
+        if j["type"] == "music":
+            jid = j["id"]
+            wav_ok = (RESULTS / f"{jid}.wav").exists()
+            cov = j.get("cover") or {}
+            cover_ok = (RESULTS / f"{jid}-cover.png").exists()
+            out["formats"] = {
+                "wav": {"url": f"/files/{jid}.wav", "available": wav_ok,
+                        "note": "мастер без тегов"},
+                "mp3": {"url": f"/files/{jid}.mp3", "available": wav_ok or (RESULTS / f"{jid}.mp3").exists()},
+                "m4a": {"url": f"/files/{jid}.m4a", "available": wav_ok or (RESULTS / f"{jid}.m4a").exists()},
+            }
+            out["cover"] = {
+                "status": cov.get("status") or ("ok" if cover_ok else "unavailable"),
+                "url": f"/files/{jid}-cover.png" if cover_ok else None,
+                "detail": cov.get("detail") if not cover_ok else None,
+            }
     if j.get("error"):
         out["error"] = j["error"]
     if j.get("warning"):
@@ -648,6 +685,9 @@ def _job_public(j):
         cover = RESULTS / f"{j['id']}-cover.png"
         if j["type"] == "music" and cover.exists():
             out["cover_url"] = f"/files/{j['id']}-cover.png"
+        elif j["type"] == "music":
+            out["cover_url"] = None
+            out["cover_status"] = "unavailable"
     if j.get("error"):
         out["error"] = j["error"]
     return out
@@ -752,7 +792,10 @@ async def cancel_job(request):
     return web.json_response({"id": j["id"], "status": "cancelled"})
 
 
-async def get_file(request, jid=None):
+async def get_file(request, jid=None, fmt=None):
+    """GET /files/{id}[.m4a|.mp3|.wav] (issue #37): форматный диспетчер.
+    m4a/mp3 — mux-on-download из живого WAV (+ретрай mux), wav — мастер без
+    тегов (живёт WAV_RETENTION_SECONDS=48ч)."""
     guard = check_auth(request)
     if guard:
         return guard
@@ -760,23 +803,46 @@ async def get_file(request, jid=None):
     j = JOBS.get(jid)
     if not j or j["status"] != "ready":
         return envelope(404, "Файл не найден или срок хранения истёк.", "file_gone", request)
-    path = RESULTS / f"{jid}{'.png' if j['type'] == 'image' else '.txt' if j['type'] == 'text' else '.m4a'}"
+    refetch = request.query.get("refetch") in ("1", "true")
     disposition = None
     if j["type"] == "music":
-        # infra#105/#107 mux-on-download: кэш отдаётся сразу; нет кэша или
-        # ?refetch=1 — сборка на лету из живого WAV (Semaphore(1), не в loop).
-        # WAV истёк, а M4A-кэш жив — отдаём кэш; нет ни того ни другого — 404.
-        if not path.exists() or request.query.get("refetch") in ("1", "true"):
-            if (RESULTS / f"{jid}.wav").exists():
-                await mux_music(j)
-        if path.exists():
-            disposition = content_disposition(j)
-    if not path.exists():
-        if j["type"] == "music":
-            for cand in (f"{jid}.mp3", f"{jid}.wav"):  # legacy до m4a-пакета
-                if (RESULTS / cand).exists():
-                    path = RESULTS / cand
-                    break
+        path = RESULTS / f"{jid}.{fmt or 'm4a'}"
+        if fmt == "wav":
+            # мастер: без сборки, честный 404 после retention
+            if not path.exists():
+                return envelope(404, "WAV-мастер не найден или срок хранения истёк.", "file_gone", request)
+            disposition = content_disposition(j, "wav")
+        elif fmt == "mp3":
+            if (not path.exists() or refetch) and (RESULTS / f"{jid}.wav").exists():
+                ok = await mux_mp3(j)
+                if not ok:  # ретрай при падении mux (#37)
+                    await asyncio.sleep(1)
+                    ok = await mux_mp3(j)
+                if ok:
+                    log(f"mp3 built {jid}")
+            if not path.exists() and not (RESULTS / f"{jid}.m4a").exists():
+                for cand in (f"{jid}.mp3", f"{jid}.wav"):  # legacy до m4a-пакета
+                    if (RESULTS / cand).exists():
+                        path = RESULTS / cand
+                        break
+            if path.exists():
+                disposition = content_disposition(j, "mp3")
+        else:
+            # m4a: mux-on-download; WAV истёк, а M4A-кэш жив — отдаём кэш.
+            if (not path.exists() or refetch) and (RESULTS / f"{jid}.wav").exists():
+                ok = await mux_music(j)
+                if not ok:  # ретрай при падении mux (#37)
+                    await asyncio.sleep(1)
+                    ok = await mux_music(j)
+            if path.exists():
+                disposition = content_disposition(j, "m4a")
+            if not path.exists():
+                for cand in (f"{jid}.mp3", f"{jid}.wav"):  # legacy до m4a-пакета
+                    if (RESULTS / cand).exists():
+                        path = RESULTS / cand
+                        break
+    else:
+        path = RESULTS / f"{jid}{'.png' if j['type'] == 'image' else '.txt'}"
     if not path.exists():
         return envelope(404, "Файл не найден или срок хранения истёк.", "file_gone", request)
     mime = {"image": "image/png",
@@ -790,7 +856,17 @@ async def get_file(request, jid=None):
 
 async def get_file_m4a(request):
     """GET /files/{id}.m4a (infra#105/#107): mux-on-download + Content-Disposition."""
-    return await get_file(request, jid=request.match_info["id"])
+    return await get_file(request, jid=request.match_info["id"], fmt="m4a")
+
+
+async def get_file_mp3(request):
+    """GET /files/{id}.mp3 (issue #37): MP3 320k ID3v2.4, mux-on-download."""
+    return await get_file(request, jid=request.match_info["id"], fmt="mp3")
+
+
+async def get_file_wav(request):
+    """GET /files/{id}.wav (issue #37): WAV-мастер без тегов, retention 48ч."""
+    return await get_file(request, jid=request.match_info["id"], fmt="wav")
 
 
 async def get_cover(request):
@@ -1420,7 +1496,7 @@ def music_package(j):
     jid = j["id"]
     wav = RESULTS / f"{jid}.wav"
     if not wav.exists() or j.get("status") == "cancelled":
-        return
+        return False
     cover = RESULTS / f"{jid}-cover.png"
     env = dict(os.environ)
     env["OMP_NUM_THREADS"] = str(THREAD_BUDGET)
@@ -1441,7 +1517,11 @@ def music_package(j):
     finally:
         PROCS.pop(f"{jid}-cover", None)
     if j.get("status") == "cancelled":
-        return
+        return False
+    ok = cover.exists() and cover.stat().st_size > 0
+    if not ok:
+        cover.unlink(missing_ok=True)  # не оставлять битый/нулевой файл
+    return ok
 
 
 def track_bitrate(j):
@@ -1462,8 +1542,8 @@ def sanitize_filename(name):
     return re.sub(r"\s+", " ", out).strip(" -")[:100]
 
 
-def content_disposition(j):
-    """attachment; filename*=RFC5987 «{title} - {artist}.m4a», fallback job_id."""
+def content_disposition(j, ext="m4a"):
+    """attachment; filename*=RFC5987 «{title} - {artist}.{ext}», fallback job_id."""
     artist = j["params"].get("artist")
     if not (isinstance(artist, str) and artist.strip()):
         artist = "BRIIX"
@@ -1472,8 +1552,8 @@ def content_disposition(j):
         name = j["id"]
     ascii_fb = name.encode("ascii", "ignore").decode("ascii").strip(" -") or j["id"]
     quoted = urllib.parse.quote(name)
-    return (f'attachment; filename="{ascii_fb}.m4a"; '
-            f"filename*=UTF-8''{quoted}.m4a")
+    return (f'attachment; filename="{ascii_fb}.{ext}"; '
+            f"filename*=UTF-8''{quoted}.{ext}")
 
 
 def build_m4a(j):
@@ -1509,12 +1589,75 @@ def build_m4a(j):
                            timeout=MUX_TIMEOUT)
         if r.returncode == 0 and tmp.exists() and tmp.stat().st_size > 0:
             tmp.replace(out)
+            # issue #37: mutagen-пасс — ©gen, freeform промт (----:com.briix:prompt),
+            # страховочная досадка covr, если муксер её не положил.
+            if ep:
+                ep.tag_m4a(out, _track_title(j),
+                           (j["params"].get("artist") or "BRIIX").strip()[:80],
+                           lyrics if isinstance(lyrics, str) and lyrics.strip() else None,
+                           j.get("prompt"),
+                           cover.read_bytes() if cover.exists() and cover.stat().st_size > 0 else None)
             return True
         log(f"mux failed {jid}: {(r.stderr or b'')[-200:].decode('utf-8', 'replace')}")
     except (subprocess.TimeoutExpired, OSError) as e:
         log(f"mux error {jid}: {type(e).__name__}")
     tmp.unlink(missing_ok=True)
     return False
+
+
+def build_mp3_file(j):
+    """issue #37: WAV -> MP3 320k (ID3v2.4: USLT/TXXX briix_prompt/APIC/
+    TIT2/TPE1/TCON). Синхронная CPU-задача — вызывается через Semaphore(1)
+    в отдельном треде (mux-on-download, как build_m4a). True при успехе."""
+    jid = j["id"]
+    wav = RESULTS / f"{jid}.wav"
+    if not wav.exists() or j.get("status") == "cancelled":
+        return False
+    cover = RESULTS / f"{jid}-cover.png"
+    out = RESULTS / f"{jid}.mp3"
+    tmp = RESULTS / f"{jid}.mux.mp3"
+    lyrics = j["params"].get("lyrics")
+    lyrics = lyrics.strip() if isinstance(lyrics, str) and lyrics.strip() else None
+    artist = (j["params"].get("artist") or "BRIIX").strip()[:80]
+    if ep:
+        ok = ep.build_mp3(FFMPEG, wav, out, tmp, MP3_BITRATE, MP3_TIMEOUT)
+        if ok:
+            ep.tag_mp3(out, _track_title(j), artist, BRIIX_TAGS["album"],
+                       BRIIX_TAGS["comment"], lyrics, j.get("prompt"),
+                       cover.read_bytes() if cover.exists() and cover.stat().st_size > 0 else None)
+        return ok
+    # fallback без mutagen: только ffmpeg-теги (лирика деградирует в TXXX=USLT)
+    cmd = [str(FFMPEG), "-y", "-loglevel", "error", "-i", str(wav),
+           "-c:a", "libmp3lame", "-b:a", MP3_BITRATE, "-id3v2_version", "4",
+           "-write_id3v1", "0",
+           "-metadata", f"title={_track_title(j)}",
+           "-metadata", f"artist={artist}",
+           "-metadata", f"album={BRIIX_TAGS['album']}",
+           "-metadata", f"genre={ep_genre()}",
+           "-metadata", f"comment={BRIIX_TAGS['comment']}"]
+    if lyrics:
+        cmd += ["-metadata", f"lyrics={lyrics}"]
+    cmd += [str(tmp)]
+    try:
+        r = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+                           timeout=MP3_TIMEOUT)
+        if r.returncode == 0 and tmp.exists() and tmp.stat().st_size > 0:
+            tmp.replace(out)
+            return True
+    except (subprocess.TimeoutExpired, OSError):
+        pass
+    tmp.unlink(missing_ok=True)
+    return False
+
+
+def ep_genre():
+    return "Generative Music"
+
+
+async def mux_mp3(j):
+    """MP3 как m4a-путь: CPU-задача в треде, 1 одновременно (общий MUX_SEM)."""
+    async with MUX_SEM:
+        return await asyncio.to_thread(build_mp3_file, j)
 
 
 MUX_SEM = asyncio.Semaphore(MUX_CONCURRENCY)
@@ -1655,11 +1798,25 @@ async def executor():
                         if watcher:
                             watcher.cancel()
                     j["stage"] = None
-                    # Брендинг-пакет (08.11): обложка + MP3-mux для любого music-режима.
+                    # Брендинг-пакет (08.11): обложка для любого music-режима.
+                    # issue #37: ретрай генерации обложки + честный статус.
                     if j["type"] == "music" and not j.get("status") == "cancelled":
                         j["stage"] = "album-cover"
                         save_jobs()
-                        await loop.run_in_executor(None, music_package, j)
+                        cover_ok = await loop.run_in_executor(None, music_package, j)
+                        for _attempt in range(COVER_RETRIES):
+                            if cover_ok or j.get("status") == "cancelled":
+                                break
+                            log(f"cover retry {jid} (attempt {_attempt + 1})")
+                            j["stage"] = "album-cover-retry"
+                            save_jobs()
+                            cover_ok = await loop.run_in_executor(None, music_package, j)
+                        j["cover"] = {
+                            "status": "ok" if cover_ok else "unavailable",
+                            "detail": None if cover_ok else
+                            "обложка не сгенерирована (sd-cli timeout/ошибка); "
+                            "аудио отдаётся без встроенной обложки",
+                        }
                         j["stage"] = None
                 finally:
                     BUDGET.release(tokens)
@@ -1750,30 +1907,36 @@ async def music_stage_watcher(j):
         await asyncio.sleep(5)
 
 
-def prune_records(cutoff):
-    """S1: retention 24ч для САМИХ записей jobs.json (иначе растут бесконечно).
+def prune_records(cutoff, master_cutoff=None):
+    """S1: retention для записей jobs.json (иначе растут бесконечно).
 
     - ready-джоб без файла на диске -> запись удаляется (клиент получает 404 и
-      сам показывает «результат истёк»);
-    - settled-джоб (готов/ошибка/отменён/прерван/истёк) старше 24ч -> запись удаляется;
+      сам показывает «результат истёк»); music-джоб живёт, пока жив WAV-мастер
+      (issue #37: производные m4a/mp3 пересобираются из WAV по требованию);
+    - settled-джоб (готов/ошибка/отменён/прерван/истёк) старше cutoff ->
+      запись удаляется; music — по master_cutoff (мастер живёт 48ч);
     - queued/running не трогаем никогда.
     """
     removed = 0
+    master_cutoff = master_cutoff or cutoff
     for jid in list(JOBS.keys()):
         j = JOBS[jid]
         if j["status"] in ("queued", "running"):
             continue
         if j["status"] == "ready":
-            ext = {"image": ".png", "music": ".m4a", "text": ".txt"}[j["type"]]
-            still_there = (RESULTS / f"{jid}{ext}").exists()
-            if j["type"] == "music" and not still_there:
-                still_there = any((RESULTS / f"{jid}{c}").exists() for c in (".mp3", ".wav"))
+            if j["type"] == "music":
+                still_there = (RESULTS / f"{jid}.wav").exists() \
+                    or (RESULTS / f"{jid}.m4a").exists()
+            else:
+                ext = {"image": ".png", "text": ".txt"}[j["type"]]
+                still_there = (RESULTS / f"{jid}{ext}").exists()
             if not still_there:
                 del JOBS[jid]
                 removed += 1
                 continue
         settled_at = j.get("finished_at") or j.get("created_at") or 0
-        if settled_at and settled_at < cutoff:
+        c = master_cutoff if j["type"] == "music" else cutoff
+        if settled_at and settled_at < c:
             del JOBS[jid]
             removed += 1
     if removed:
@@ -1782,38 +1945,47 @@ def prune_records(cutoff):
 
 
 async def retention():
-    """Hourly: delete results older than 24h, mark expired, prune job records."""
+    """Hourly: derived files (m4a/mp3/cover/peaks) live 24h; WAV-master 48h
+    (issue #37). Job marked expired only when the master is gone."""
     while True:
         await asyncio.sleep(3600)
-        cutoff = time.time() - RETENTION_SECONDS
+        now = time.time()
+        cutoff = now - RETENTION_SECONDS
+        wav_cutoff = now - WAV_RETENTION_SECONDS
         for p in RESULTS.iterdir():
             try:
-                if p.is_file() and p.stat().st_mtime < cutoff:
+                if p.name == "warmup.wav":
+                    continue  # служебный файл прогрева не маркер джоба
+                if p.is_file() and p.stat().st_mtime < (wav_cutoff if p.suffix == ".wav" else cutoff):
                     p.unlink()
                     jid = p.stem
-                    if jid in JOBS and JOBS[jid]["status"] == "ready":
+                    if jid in JOBS and JOBS[jid]["status"] == "ready" and p.suffix == ".wav":
                         JOBS[jid]["status"] = "expired"
                         save_jobs()
                     log(f"retention deleted {p.name}")
             except OSError as e:
                 log(f"retention error {p.name}: {e}")
         async with JOBS_LOCK:
-            removed = prune_records(time.time() - RETENTION_SECONDS)
+            removed = prune_records(time.time() - RETENTION_SECONDS,
+                                    time.time() - WAV_RETENTION_SECONDS)
         if removed:
             log(f"retention pruned {removed} job records")
 
 
 def cleanup_once():
-    """Idempotent retention pass for the hourly cron entry (S1: now loads JOBS)."""
+    """Idempotent retention pass (ручной/cron): derived 24ч, WAV-мастер 48ч."""
     load_jobs()
-    cutoff = time.time() - RETENTION_SECONDS
+    now = time.time()
+    cutoff = now - RETENTION_SECONDS
+    wav_cutoff = now - WAV_RETENTION_SECONDS
     removed = 0
     if RESULTS.exists():
         for p in RESULTS.iterdir():
-            if p.is_file() and p.stat().st_mtime < cutoff:
+            c = wav_cutoff if p.suffix == ".wav" else cutoff
+            if p.is_file() and p.stat().st_mtime < c:
                 p.unlink(missing_ok=True)
                 removed += 1
-    pruned = prune_records(cutoff)
+    pruned = prune_records(cutoff, wav_cutoff)
     print(f"cleanup: removed {removed} files, pruned {pruned} job records")
     return 0
 
@@ -1899,6 +2071,8 @@ def main():
     # (включая точки), иначе съел бы суффиксы.
     app.router.add_get("/files/{id}-peaks.json", get_peaks)
     app.router.add_get("/files/{id}.m4a", get_file_m4a)
+    app.router.add_get("/files/{id}.mp3", get_file_mp3)
+    app.router.add_get("/files/{id}.wav", get_file_wav)
     app.router.add_get("/files/{id}", get_file)
     app.router.add_get("/v1/models", list_models)
     app.router.add_post("/v1/chat/completions", chat_completions)
