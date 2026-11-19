@@ -880,13 +880,26 @@ function bffServer(port) {
   const lift = await p.evaluate(() => {
     const send = document.getElementById('send');
     const before = send.getBoundingClientRect().bottom;
+    const wrapBefore = document.querySelector('.composer-wrap').getBoundingClientRect().top;
+    const padBefore = getComputedStyle(document.querySelector('.studio')).paddingBottom;
     const kb = window.__syncKbInset({ height: window.innerHeight - 260, offsetTop: 0 });
     const after = send.getBoundingClientRect().bottom;
+    const wrapAfter = document.querySelector('.composer-wrap').getBoundingClientRect().top;
+    const padAfter = getComputedStyle(document.querySelector('.studio')).paddingBottom;
     const css = getComputedStyle(document.documentElement).getPropertyValue('--kb-inset').trim();
     const aboveKb = after <= window.innerHeight - kb + 2;
     window.__syncKbInset(window.visualViewport); // вернуть как было
-    return { kb, lifted: before - after, css, aboveKb };
+    return { kb, lifted: before - after, css, aboveKb, before, after,
+      wrapBefore: Math.round(wrapBefore), wrapAfter: Math.round(wrapAfter),
+      padBefore, padAfter,
+      ua: navigator.userAgent.slice(0, 80),
+      innerH: innerHeight, clientH: document.documentElement.clientHeight,
+      scrollH: document.documentElement.scrollHeight,
+      studioH: Math.round(document.querySelector('.studio').getBoundingClientRect().height),
+      width: innerWidth,
+      feedH: Math.round(document.getElementById('feed').getBoundingClientRect().height) };
   });
+  console.log('DBG35:', JSON.stringify(lift)); // временно: факты CI для #35 правка-2
   // F-35 (атрибуция CI: ubuntu-раннер): семантика вместо магической константы
   // подъёма. kb — детерминированная математика (innerHeight − высота vv);
   // композер обязан подняться на ВСЮ высоту клавиатуры: aboveKb — главный
