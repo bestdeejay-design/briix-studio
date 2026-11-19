@@ -4,7 +4,13 @@
 
   const DB_NAME = 'briix-studio-sessions';
   const DB_VERSION = 1;
-  const SCHEMA_VERSION = 1;
+  // #35 волна 1: схема v2 — session.assistantId, draft.{quality,instrumental,styleFamily},
+  // единый history-поток (musicChat влит в конец). feed НЕ мигрирует никогда (SPEC #35 П2).
+  const SCHEMA_VERSION = 2;
+  // Известные роли диалога (список синхронизирован со studio.js ASSISTANTS).
+  // Неизвестная/битая роль при санитизации откатывается к наставнику.
+  const KNOWN_ASSISTANTS = new Set(['mentor', 'universal', 'editor', 'analyst', 'developer', 'marketer', 'mentor2',
+    'producer', 'lyricist', 'songwriter']);
   const STORE = 'profiles';
   const feedKey = nick => 'briix-studio-feed-' + nick;
   const historyKey = nick => 'briix-studio-history-' + nick;
@@ -111,6 +117,53 @@
   // sanitizeProfile понимает, что профиль не менялся и его не нужно переписывать
   // в хранилище (хвост #23: раньше копия создавалась всегда и open() перезаписывал
   // профиль при каждом открытии без изменений). Битая — починенной копией.
+  // #35 W1-1: миграция v1 → v2 в точке загрузки (PROTOCOL §7, tolerant intake).
+  // Меняет ТОЛЬКО LLM-контекст и мета-поля сессии; feed (лента) не трогается вообще —
+  // она остаётся источником экрана и после миграции побайтово та же (SPEC #35 П2).
+  // styleFamily осознанно не восстанавливается: в v1 он жил на DOM-элементе, не в данных.
+  function migrateSessionV1toV2(raw) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+    const session = { ...raw };
+    const mc = session.musicChat && typeof session.musicChat === 'object' && !Array.isArray(session.musicChat) ? session.musicChat : null;
+    const mcHistory = mc && Array.isArray(mc.history)
+      ? mc.history.filter(m => m && ['user', 'assistant'].includes(m.role) && typeof m.content === 'string')
+      : [];
+    if (mcHistory.length) {
+      // Merge «в конец»: у v1-элементов нет временных меток, честный порядок —
+      // дозапись муз-диалога после общего потока. Служебный маркер-граница
+      // участвует в контексте (system-роль), но никогда не рендерится.
+      session.history = (Array.isArray(session.history) ? session.history : []).concat(
+        [{ role: 'system', content: 'Муз-диалог перенесён из предыдущей версии' }],
+        mcHistory.map(m => ({ role: m.role, content: m.content, via: 'music-chat', assistant: mc.assistant || 'producer' }))
+      );
+    }
+    session.assistantId = typeof session.assistantId === 'string' && KNOWN_ASSISTANTS.has(session.assistantId)
+      ? session.assistantId
+      : (mc && typeof mc.assistant === 'string' && KNOWN_ASSISTANTS.has(mc.assistant) ? mc.assistant : 'mentor');
+    const draft = session.draft && typeof session.draft === 'object' && !Array.isArray(session.draft) ? { ...session.draft } : {};
+    if (draft.quality !== 'pro') draft.quality = 'flash';
+    if (typeof draft.instrumental !== 'boolean') {
+      // Восстановление из первого трека сессии; старый глобальный тумблер сюда не попадает.
+      const firstTrack = (Array.isArray(session.feed) ? session.feed : []).find(x => x && x.t === 'media' && x.kind === 'music');
+      draft.instrumental = Boolean(firstTrack && firstTrack.input && firstTrack.input.instrumental);
+    }
+    session.draft = draft;
+    delete session.musicChat;
+    return session;
+  }
+  function migrateV1toV2(profile, now = Date.now()) {
+    if (!profile || typeof profile !== 'object' || Array.isArray(profile)) return null;
+    const sessions = (Array.isArray(profile.sessions) ? profile.sessions : [])
+      .map(migrateSessionV1toV2)
+      .filter(Boolean);
+    return {
+      ...profile,
+      schemaVersion: SCHEMA_VERSION,
+      sessions,
+      revision: (Number.isSafeInteger(profile.revision) && profile.revision >= 0 ? profile.revision : 0) + 1
+    };
+  }
+
   function sanitizeSession(raw, now) {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
     let changed = false;
@@ -136,11 +189,10 @@
     };
     for (const item of fixed.feed) {
       if (item.t === 'music_draft') fixContainer(item, 'draft');
-      if (item.t === 'producer_draft') {
-        fixContainer(item, 'snapshot');
-        // Хвост #23: renderProducerDraft читает b.quick у элементов backups —
-        // мусорные элементы ([null]) чистим, валидные не трогаем. Не-массив
-        // чинится до []: рендер делает (entry.backups || []).map.
+      if (item.t === 'producer_draft') fixContainer(item, 'snapshot');
+      // P3-1 аудита #35: sanitize backups теперь и для music_draft (рендер
+      // делает (entry.backups ||= []).push — битый не-массив ронял «Принять в поля»).
+      if (item.t === 'music_draft' || item.t === 'producer_draft') {
         if (item.backups !== undefined) {
           if (!Array.isArray(item.backups)) { item.backups = []; changed = true; }
           else {
@@ -149,6 +201,24 @@
           }
         }
       }
+    }
+    // v2-поля сессии (SPEC #35 §2): неизвестная роль → mentor; draft-контейнер,
+    // styleFamily/quality/instrumental чинятся до валидных значений.
+    if (fixed.assistantId !== undefined && (typeof fixed.assistantId !== 'string' || !KNOWN_ASSISTANTS.has(fixed.assistantId))) {
+      fixed.assistantId = 'mentor';
+      changed = true;
+    }
+    if (fixed.draft === undefined || fixed.draft === null || typeof fixed.draft !== 'object' || Array.isArray(fixed.draft)) {
+      if (fixed.draft !== undefined) { fixed.draft = {}; changed = true; }
+    } else {
+      const draftChanged = (() => {
+        let d = false;
+        if (fixed.draft.styleFamily !== undefined && typeof fixed.draft.styleFamily !== 'string') { const { styleFamily, ...rest } = fixed.draft; fixed.draft = rest; d = true; }
+        if (fixed.draft.quality !== undefined && fixed.draft.quality !== 'flash' && fixed.draft.quality !== 'pro') { fixed.draft.quality = 'flash'; d = true; }
+        if (fixed.draft.instrumental !== undefined && typeof fixed.draft.instrumental !== 'boolean') { fixed.draft.instrumental = Boolean(fixed.draft.instrumental); d = true; }
+        return d;
+      })();
+      if (draftChanged) changed = true;
     }
     if (!Number.isFinite(fixed.createdAt)) { fixed.createdAt = now; changed = true; }
     if (!Number.isFinite(fixed.updatedAt)) { fixed.updatedAt = fixed.createdAt; changed = true; }
@@ -184,7 +254,18 @@
       get.onsuccess = () => {
         if (get.result !== undefined) {
           if (get.result.schemaVersion !== SCHEMA_VERSION) {
-            fail(new SessionStoreError('schema_unsupported', 'Версия данных сессий не поддерживается.'));
+            // #35 W1-1: v1-профиль мигрирует в точке загрузки, а не отбивается.
+            // Идемпотентно: v2 проходит как есть, миграция под тем же замком транзакции
+            // (гонка двойной миграции двух вкладок исключена порядком get→put в IDB).
+            if (get.result.schemaVersion !== 1) {
+              fail(new SessionStoreError('schema_unsupported', 'Версия данных сессий не поддерживается.'));
+              return;
+            }
+            const migrated = migrateV1toV2(get.result);
+            const sanitized = sanitizeProfile(migrated);
+            if (!sanitized) { fail(new SessionStoreError('schema_unsupported', 'Неизвестный формат данных сессий.')); return; }
+            store.put(sanitized.profile);
+            done(sanitized.profile);
             return;
           }
           // Хотфикс #23: санированный профиль сразу записываем обратно,
@@ -283,8 +364,15 @@
       if (raw !== null) {
         let profile;
         try { profile = JSON.parse(raw); } catch (error) { throw new SessionStoreError('legacy_invalid', 'Локальные сессии повреждены.', error); }
-        if (!profile || profile.nick !== nick || profile.schemaVersion !== SCHEMA_VERSION || !Array.isArray(profile.sessions)) {
+        if (!profile || profile.nick !== nick || !Array.isArray(profile.sessions)) {
           throw new SessionStoreError('schema_unsupported', 'Неизвестный формат локальных сессий.');
+        }
+        if (profile.schemaVersion !== SCHEMA_VERSION) {
+          if (profile.schemaVersion !== 1) throw new SessionStoreError('schema_unsupported', 'Неизвестный формат локальных сессий.');
+          // Локальный fallback мигрирует той же функцией (SPEC #35 §2) и сразу
+          // записывается обратно — как IDB-путь в openProfile.
+          profile = sanitizeProfile(migrateV1toV2(profile)).profile;
+          localWrite(storage, fallbackKey(nick), JSON.stringify(profile));
         }
         // Хотфикс #23: локальный бэкенд санируем так же, как IDB.
         const sanitized = sanitizeProfile(profile);
@@ -340,5 +428,5 @@
     return true;
   }
 
-  globalThis.BriixSessionStore = Object.freeze({ open, save, openProfile, saveProfile, wipe, SessionStoreError });
+  globalThis.BriixSessionStore = Object.freeze({ open, save, openProfile, saveProfile, wipe, migrateV1toV2, SessionStoreError });
 })();

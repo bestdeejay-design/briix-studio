@@ -12,10 +12,11 @@
   const TOKEN_SESSION_KEY = 'briix-media-live-token-session'; // T-42: ключ до закрытия вкладки
   const MUSIC_MODELS = { flash: 'ace-step-flash', pro: 'ace-step-pro' };
   const MODEL_LABELS = { flash: 'Flash', pro: 'Pro' };
-  const MODE_LABELS = { chat: 'Чат', photo: 'Фото', music: 'Музыка' };
+  // #35 UI v2: два фокуса — «Создание музыки» (дефолт) и «Фото»; отдельного режима
+  // «Чат» больше нет: универсальные наставники — роли внутри музыкального диалога.
+  const MODE_LABELS = { photo: 'Фото', music: 'Создание музыки' };
   const SEND_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>';
   const PLACEHOLDERS = {
-    chat: 'Что создаём?',
     photo: 'Что рисуем? Опишите изображение…',
     music: 'Опишите трек или спросите наставника…' // F-52: единое «вы»
   };
@@ -292,6 +293,7 @@
     assistantChip: $('assistantChip'), assistantName: $('assistantName'), assistantMenu: $('assistantMenu'),
     modelChip: $('modelChip'), modelName: $('modelName'), modelMenu: $('modelMenu'),
     vocalSeg: $('vocalSeg'), tuneToggle: $('tuneToggle'), prepareMusic: $('prepareMusic'),
+    styleFamilyBadge: $('styleFamilyBadge'),
     genTrack: $('genTrack'),
     send: $('send'), feed: $('feed'), status: $('status'), metaLeft: $('metaLeft'),
     composer: $('composer'), keyCard: $('keyCard'), keyInput: $('keyInput'), keySave: $('keySave'),
@@ -308,19 +310,28 @@
     keyRemember: $('keyRemember'), profileWipeBtn: $('profileWipeBtn'), netBanner: $('netBanner')
   };
 
-  let mode = 'chat';
+  let mode = 'music';
   let quality = 'flash';
-  let instrumental = false; // вокальный контур починен (infra#79) — дефолт снова «Песня»; выбор хранится в браузере
+  let instrumental = false; // зеркала session.draft: пишутся в draft активной сессии (P2-2/P2-3 аудита #35)
   try { const savedInstr = localStorage.getItem('briix-studio-instrumental'); if (savedInstr !== null) instrumental = savedInstr === '1'; } catch {}
+  // localStorage выше — только ДЕФОЛТ для новых сессий; персистится выбор в session.draft.
   let advanced = false;
   // T-20/F-06: занятость диалога — свойство сессии, а не модуля: стрим в сессии A
   // не блокирует ввод в сессии B. Ключ — id сессии, значение { kind, stop }.
   const sessionBusy = new Map();
-  const improving = new Set();
+  // P2-4 аудита #35: «Повторить с правками» клеит parentJobId к СЛЕДУЮЩЕЙ генерации
+  // именно этой сессии; ключ живёт до первого createMusic и не переживает reload.
+  const pendingRepeats = new Map();
+  // ✨-улучшения — на сессию (аудит #35): «Улучшить лирику» в A не блокирует кнопку в B.
+  const improvingBySession = new Map();
+  function improvingHas(sessionId, field) { return improvingBySession.get(sessionId)?.has(field) || false; }
+  function improvingAdd(sessionId, field) { (improvingBySession.get(sessionId) || improvingBySession.set(sessionId, new Set()).get(sessionId)).add(field); }
+  function improvingDelete(sessionId, field) { improvingBySession.get(sessionId)?.delete(field); }
   let sessionProfile = null, sessionBackend = null, activeSession = null;
   let storageBlocked = true, storageDirty = false, pendingSaves = 0, saveQueue = Promise.resolve();
   const sessionRoots = new Map();
-  const producerRequests = new Map();
+  // #35 W1-2: отдельного канала занятости продюсера больше нет — один sessionBusy
+  // на сессию с типом операции (chat | producer | photo | resume).
   let producerSaveTimer = null;
   const feedObjectUrls = new Set();
   function feedObjectURL(blob) {
@@ -409,6 +420,44 @@
     if (card) { setView('chat'); card.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
   });
 
+  // П1 SPEC #35: смешанные версии вкладок — явный отказ, не тихая потеря.
+  // Старая v1-вкладка не может писать в v2-хранилище (schema_unsupported/invalid_profile);
+  // несохранённое состояние уходит в temporary-ключ и предлагается к восстановлению.
+  const pendingKey = nick => 'briix-studio-pending-v1-' + nick;
+  let schemaRejected = false, schemaBanner = null;
+  function storePendingV1() {
+    if (!sessionProfile) return;
+    try {
+      localStorage.setItem(pendingKey(currentUser()), JSON.stringify({ profile: structuredClone(sessionProfile), capturedAt: Date.now() }));
+    } catch { /* переполнение — баннер всё равно виден, текст в полях */ }
+  }
+  function showSchemaBanner() {
+    if (schemaBanner?.isConnected) return;
+    const el = document.createElement('div');
+    el.className = 'schema-banner';
+    el.setAttribute('role', 'alert');
+    const text = document.createElement('p');
+    text.textContent = 'Приложение обновлено. Сохранения остановлены — обновите страницу. Ваш текст не потерян.';
+    const actions = document.createElement('div');
+    actions.className = 'actions';
+    const reload = document.createElement('button');
+    reload.type = 'button'; reload.className = 'action';
+    reload.textContent = 'Обновить';
+    reload.addEventListener('click', () => location.reload());
+    const copy = document.createElement('button');
+    copy.type = 'button'; copy.className = 'action';
+    copy.textContent = 'Скопировать данные';
+    copy.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(JSON.stringify(sessionProfile, null, 2));
+        BRIIX_TOASTS.toast('Данные сессий скопированы в буфер обмена.', { kind: 'done' });
+      } catch { BRIIX_TOASTS.toast('Не удалось скопировать. Нажмите «Обновить» — несохранённое восстановится из temporary-ключа.', { kind: 'error' }); }
+    });
+    actions.append(reload, copy);
+    el.append(text, actions);
+    (document.querySelector('.composer-wrap') || document.body).append(el);
+    schemaBanner = el;
+  }
   function warnStorage(error) {
     storageDirty = true;
     els.storageWarning.hidden = false;
@@ -470,6 +519,14 @@
   }
   function persistSessions() {
     if (!sessionProfile) return Promise.resolve(false);
+    // П1 SPEC #35: после schema-отказа записи не ретраятся (каждый ретрай v1-снапшота
+    // гарантированно падает) — снапшот освежается в temporary-ключе, баннер уже виден.
+    if (schemaRejected) {
+      storePendingV1();
+      storageDirty = true;
+      showSchemaBanner();
+      return Promise.resolve(false);
+    }
     // T-32: structuredClone вместо JSON-раундтрипа — в 2–4 раза быстрее и не
     // теряет undefined-поля; состояние сессий — только клонируемые данные
     // (занятость живёт в sessionBusy вне профиля, undo/repeatOf — простые значения).
@@ -486,12 +543,60 @@
         return true;
       } catch (error) {
         if (error?.code === 'conflict') handleStorageConflict(); // T-28
+        else if (error?.code === 'invalid_profile' || error?.code === 'schema_unsupported') {
+          // П1 SPEC #35: хранилище на новой схеме — старая вкладка не пишет в него.
+          schemaRejected = true;
+          storePendingV1();
+          showSchemaBanner();
+        }
         else warnStorage(error);
         return false;
       }
       finally { pendingSaves--; }
     });
     return saveQueue;
+  }
+  // П1 SPEC #35: восстановление несохранённого из прошлой v1-вкладки.
+  // Вызывается после открытия v2-профиля; ключ удаляется в любом случае
+  // (восстановил юзер или осознанно отказался; протухший >7 дней — предложить один раз).
+  async function restorePendingV1() {
+    let raw = null;
+    try { raw = localStorage.getItem(pendingKey(currentUser())); } catch { return; }
+    if (raw === null) return;
+    try {
+      const rec = JSON.parse(raw);
+      const stale = !rec || !Number.isFinite(rec.capturedAt) || Date.now() - rec.capturedAt > 7 * 24 * 3600 * 1000;
+      const fresh = rec && rec.profile && Array.isArray(rec.profile.sessions) && rec.profile.sessions.length;
+      if (fresh) {
+        const ok = await BRIIX_TOASTS.confirmDialog({
+          title: 'Восстановить несохранённое?',
+          body: 'В прошлой вкладке остались несохранённые сессии (приложение было обновлено). Восстановить их в этот профиль?',
+          confirmLabel: 'Восстановить'
+        });
+        if (ok) {
+          const migrated = BriixSessionStore.migrateV1toV2(rec.profile); // тот же tolerant-пайплайн, что у миграции v1→v2
+          for (const session of migrated.sessions) {
+            if (session && !sessionProfile.sessions.some(x => x && x.id === session.id)) sessionProfile.sessions.push(session);
+          }
+          await persistSessions();
+        }
+      } else if (!stale) { /* пустой pending-профиль — просто удалить */ }
+      else {
+        const ok = await BRIIX_TOASTS.confirmDialog({
+          title: 'Старые несохранённые данные',
+          body: 'Найдены несохранённые сессии недельной давности. Восстановить их? После этого ответа копия будет удалена.',
+          confirmLabel: 'Восстановить'
+        });
+        if (ok) {
+          const migrated = BriixSessionStore.migrateV1toV2(rec.profile);
+          for (const session of migrated.sessions) {
+            if (session && !sessionProfile.sessions.some(x => x && x.id === session.id)) sessionProfile.sessions.push(session);
+          }
+          await persistSessions();
+        }
+      }
+    } catch { /* битый ключ — удаляем */ }
+    try { localStorage.removeItem(pendingKey(currentUser())); } catch { /* приватный режим */ }
   }
   // T-25/F-33: черновик композера и продюсера пишутся с дебаунсом; pagehide
   // флэшит оба таймера — закрытие вкладки больше не теряет последний ввод.
@@ -589,7 +694,9 @@
       }
     } finally { restoringFeed = false; }
   }
-  const assistantId = { chat: 'mentor', photo: 'art-dir', music: 'producer' };
+  const assistantId = { photo: 'art-dir' }; // P2-1 аудита #35: музыкальная роль — свойство СЕССИИ (session.assistantId), не глобал
+  // Роли музыкального фокуса: 7 универсальных наставников + 3 музыкальные роли.
+  const CHAT_ROLES = [...ASSISTANTS.chat, ...ASSISTANTS.music];
   // T-22: бэкап полей перед «✨ Улучшить» живёт на сессии — undo в сессии B
   // больше не подставляет текст из сессии A (и переживает перезагрузку).
   function sessionUndo(session, field, value) {
@@ -733,7 +840,10 @@
   }
 
   function currentAssistant() {
-    return ASSISTANTS[mode].find(a => a.id === assistantId[mode]) || ASSISTANTS[mode][0];
+    if (mode === 'photo') return ASSISTANTS.photo.find(a => a.id === assistantId.photo) || ASSISTANTS.photo[0];
+    // Музыкальный фокус: роль — свойство активной сессии (#35 P2-1).
+    const id = activeSession?.assistantId;
+    return CHAT_ROLES.find(a => a.id === id) || CHAT_ROLES[0];
   }
 
   function meta() {
@@ -794,14 +904,19 @@
     items[next].focus();
   });
 
-  attachMenu(els.assistantChip, els.assistantMenu, () => ASSISTANTS[mode].map(a => ({
-    label: a.name, selected: a.id === assistantId[mode],
+  attachMenu(els.assistantChip, els.assistantMenu, () => (mode === 'photo' ? ASSISTANTS.photo : CHAT_ROLES).map(a => ({
+    label: a.name, selected: a.id === (mode === 'photo' ? assistantId.photo : activeSession?.assistantId),
     onPick: () => {
-      assistantId[mode] = a.id;
-      // Смена роли в music mode очищает контекст диалога (один наставник на сессию).
-      if (mode === 'music' && activeSession && activeSession.musicChat && activeSession.musicChat.assistant !== a.id) {
-        activeSession.musicChat = { assistant: a.id, history: [] };
-        persistSessions();
+      // #35 W1-2: смена роли НЕ обнуляет историю — единый диалог, новый system-промпт;
+      // смена видима системной карточкой в ленте.
+      if (mode === 'photo') assistantId.photo = a.id;
+      else if (activeSession) {
+        if (activeSession.assistantId !== a.id) {
+          activeSession.assistantId = a.id;
+          card('notice', 'Роль переключена', 'Дальше отвечает: ' + a.name + '. История диалога сохранена.');
+          feedPush({ t: 'notice', who: 'Роль', text: 'Дальше отвечает: ' + a.name }, activeSession);
+          persistSessions();
+        }
       }
       renderChrome();
     }
@@ -817,7 +932,7 @@
       const bits = [id];
       if (etaS) bits.push('~' + fmtMinutes(etaS));
       if (cat && !cat.ready) bits.push('недоступна');
-      return { label: MODEL_LABELS[q], sub: bits.join(' · '), selected: q === quality, onPick: () => { quality = q; renderChrome(); } };
+      return { label: MODEL_LABELS[q], sub: bits.join(' · '), selected: q === quality, onPick: () => { setQuality(q); } };
     });
   });
 
@@ -1064,10 +1179,10 @@
     els.musicPrompt.value = source.prompt || ''; els.lyrics.value = source.lyrics || '';
     instrumental = !!source.instrumental;
     quality = Object.keys(MUSIC_MODELS).find(key => MUSIC_MODELS[key] === source.model) || quality;
-    // T-21: связь с родительской джобой живёт на сессии (переживает перезагрузку),
-    // а не в глобальной переменной — параллельные запуски не перехватывают её.
-    activeSession.repeatOf = { jobId: entry.job, at: Date.now() };
-    persistSessions();
+    // P2-4 аудита #35: parentJobId живёт до следующего явного запуска генерации
+    // ИМЕННО этой сессии (pendingRepeats по id сессии), не съедается чужой
+    // генерацией и не переживает перезагрузку как липкое поле сессии.
+    pendingRepeats.set(activeSession.id, { jobId: entry.job, at: Date.now() });
     renderChrome(); els.musicPrompt.focus();
     card('notice', 'Повтор с правками', 'Проверьте и измените данные перед отправкой. Это новая генерация по тексту, не аудиоремикс.');
   }
@@ -1146,6 +1261,16 @@
     if (!frame) {
       addTrackCover(wrap, job, cover);
       frame = wrap.querySelector('.track-cover');
+    }
+    // П3 SPEC #35: у каждой карточки трека — блок обложки со честным статусом.
+    // «Генерируется» показывает stage-карточка; готовый трек без cover_url —
+    // видимая плашка, не молчаливый placeholder «как будто всё нормально».
+    if (!cover) {
+      const coverStatus = document.createElement('div');
+      coverStatus.className = 'cover-status';
+      coverStatus.setAttribute('role', 'status');
+      coverStatus.textContent = 'Обложка не сгенерировалась — генерация не удалась на сервере';
+      wrap.append(coverStatus);
     }
     // F-18: название трека видно сразу — раньше его не было в интерфейсе вовсе
     // (только внутри свёрнутого transparency-блока).
@@ -1275,12 +1400,15 @@
 
   // F-22: единое правило имени файла для ленты и Библиотеки — «что скачано»
   // не зависит от того, из какой части интерфейса нажали «Скачать».
-  function mediaFileName(kind, meta, blob) {
+  // #35 W1-4: variant (wav|m4a|png) дизамбигует расширение по ЗАПРОШЕННОМУ
+  // варианту экспорта, а не только по blob.type (пустой type у mp3 больше
+  // не даёт .m4a — P3-3 аудита #35).
+  function mediaFileName(kind, meta, blob, variant) {
     if (kind === 'music') {
       const title = String(meta.title || meta.prompt || '').trim();
-      return safeFileName(title.length > 2 ? title : 'BRIIX track', meta.artist || currentUser(), extOf(blob));
+      return safeFileName(title.length > 2 ? title : 'BRIIX track', meta.artist || currentUser(), variant || extOf(blob));
     }
-    return 'briix-photo-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.' + extOf(blob);
+    return 'briix-photo-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.' + (variant || extOf(blob));
   }
 
   async function copyText(value, label) {
@@ -1344,6 +1472,30 @@
         BRIIX_TOASTS.toast('Скачано: ' + name + ' (' + fmtBytes(entry.blob.size) + ')', { kind: 'done', key: 'download' }); // F-38
       } catch (error) { errorCard(error); }
     };
+    // #35 W1-4: варианты экспорта. WAV/MP3 собирает сервер; пока бэфф не отдаёт
+    // .wav — честная ошибка, без фейков (SPEC §3: клиент обязан деградировать).
+    const downloadExport = async (path, ext, label) => {
+      try {
+        const blob = await fileBlob(path, 1);
+        const name = mediaFileName('music', input, blob, ext);
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url; link.download = name;
+        document.body.append(link); link.click(); link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        BRIIX_TOASTS.toast('Скачано: ' + name + ' (' + fmtBytes(blob.size) + ')', { kind: 'done', key: 'download' });
+      } catch (error) {
+        const why = error.code === 'not_found' || error.status === 404
+          ? 'сервер пока не отдаёт этот формат (нет файла) — доступно M4A'
+          : (error.message || 'ошибка загрузки');
+        BRIIX_TOASTS.toast(label + ': ' + why, { kind: 'error' });
+      }
+    };
+    const downloadWav = () => downloadExport('/files/' + encodeURIComponent(ctx.job) + '.wav', 'wav', 'WAV-мастер');
+    const downloadCover = () => {
+      const coverPath = libEntry(ctx.job)?.cover || '/files/' + encodeURIComponent(ctx.job) + '-cover.png';
+      return downloadExport(coverPath, 'png', 'Обложка');
+    };
     const favorite = () => {
       const entry = libEntry(ctx.job);
       return {
@@ -1398,7 +1550,9 @@
     return [
       { label: 'Копировать промпт', onPick: () => copyText(input.promptSent || input.prompt || '', 'промпт') },
       { label: 'Копировать лирику', onPick: () => copyText(input.lyrics || '', 'лирика') },
-      { label: 'Скачать', onPick: download },
+      { label: 'Скачать аудио (M4A)', onPick: download },
+      { label: 'Скачать WAV — мастер без тегов', onPick: downloadWav },
+      { label: 'Скачать обложку', onPick: downloadCover },
       { label: 'Повторить с правками', onPick: () => repeatMusic({ job: ctx.job }, input) },
       { label: 'Создать обложку', onPick: () => createCoverDraft({ title: input.title || input.prompt || '', prompt: input.prompt || '' }) },
       favorite(),
@@ -1553,13 +1707,27 @@
   }
 
   // ---- режим/состояния ---------------------------------------------------------
-  const drafts = { chat: '', photo: '', music: '' };
+  const drafts = { photo: '', music: '' };
   function setMode(next) {
     if (next === mode) return;
     drafts[mode] = els.prompt.value;
-    mode = next;
-    els.prompt.value = drafts[next];
+    mode = ['music', 'photo'].includes(next) ? next : 'music';
+    els.prompt.value = drafts[mode];
     renderChrome();
+  }
+
+  // P2-2 аудита #35: качество — свойство сессии; переключение чипа пишет draft активной сессии.
+  function setQuality(q) {
+    if (!MUSIC_MODELS[q]) return;
+    quality = q;
+    if (activeSession) { if (!activeSession.draft) activeSession.draft = {}; activeSession.draft.quality = q; saveDraftSoon(); }
+    renderChrome();
+  }
+
+  function paintStyleFamilyBadge() {
+    const family = activeSession?.draft?.styleFamily;
+    if (family) { els.styleFamilyBadge.textContent = 'стиль: ' + family; els.styleFamilyBadge.hidden = false; }
+    else els.styleFamilyBadge.hidden = true;
   }
 
   function renderChrome() {
@@ -1567,7 +1735,7 @@
     const isMusic = mode === 'music';
     els.studio.classList.toggle('is-advanced', isMusic && advanced);
     document.querySelectorAll('.music-only').forEach(el => { el.hidden = !isMusic; });
-    document.querySelectorAll('.chat-only').forEach(el => { el.hidden = mode !== 'chat'; });
+    document.querySelectorAll('.chat-only').forEach(el => { el.hidden = true; });
     document.querySelectorAll('.photo-only').forEach(el => { el.hidden = mode !== 'photo'; });
     renderKeyChip();
     els.advanced.hidden = !(isMusic && advanced);
@@ -1577,6 +1745,7 @@
     els.modelName.textContent = MODEL_LABELS[quality];
     els.vocalSeg.querySelectorAll('.seg-btn').forEach(b => b.setAttribute('aria-pressed', String(Number(b.dataset.vocal) === (instrumental ? 1 : 0))));
     els.tuneToggle.setAttribute('aria-pressed', String(advanced));
+    paintStyleFamilyBadge();
     // F-37: подпись зависит от режима (песня/инструментал); на узких экранах
     // виден короткий лейбл, полный — всегда в aria-label и title.
     els.prepareMusic.setAttribute('aria-label', instrumental ? 'Подготовить трек' : 'Подготовить песню');
@@ -1596,27 +1765,39 @@
   }
 
   function updateEnabled() {
-    // Один ход диалога за раз (чат и разговорный музыкальный режим): генерации медиа не блокируют.
+    // Один ход диалога за раз: генерации медиа не блокируют.
     // T-20/F-06: занятость привязана к сессии — стрим в другой сессии не блокирует ввод здесь.
     const hasInput = Boolean(promptValue() || (mode === 'music' && advanced && els.lyrics.value.trim()));
     const busyKind = sessionBusy.get(activeSession?.id)?.kind;
-    const dialogBusy = (mode === 'chat' && busyKind === 'chat') || (mode === 'music' && !advanced && busyKind === 'music-chat');
+    // Диалог один на фокус «Создание музыки»; фото и явные генерации живут параллельно.
+    const dialogBusy = mode === 'music' && busyKind === 'chat';
     els.send.disabled = storageBlocked || !hasInput || dialogBusy;
     $('chatPending').hidden = !dialogBusy;
     els.genTrack.disabled = storageBlocked || mode !== 'music' || !hasInput;
-    els.improveLyrics.disabled = improving.has('lyrics') || !els.lyrics.value.trim();
-    els.improvePrompt.disabled = improving.has('prompt') || !els.musicPrompt.value.trim();
-    els.improvePhoto.disabled = improving.has('photo') || mode !== 'photo' || !els.prompt.value.trim();
-    els.prepareMusic.disabled = storageBlocked || mode !== 'music' || !hasInput || producerRequests.has(activeSession?.id);
+    els.improveLyrics.disabled = improvingHas(activeSession?.id, 'lyrics') || !els.lyrics.value.trim();
+    els.improvePrompt.disabled = improvingHas(activeSession?.id, 'prompt') || !els.musicPrompt.value.trim();
+    els.improvePhoto.disabled = improvingHas(activeSession?.id, 'photo') || mode !== 'photo' || !els.prompt.value.trim();
+    // #35 W1-2: продюсер — роль одного диалога; его занятость в том же sessionBusy.
+    els.prepareMusic.disabled = storageBlocked || mode !== 'music' || !hasInput || Boolean(busyKind);
   }
 
-  let runningOps = 0;
-  function setBusy(delta, statusText) { // delta=true — операция началась, false — закончилась; счётчик, не глобальный флаг
-    runningOps = Math.max(0, runningOps + (delta ? 1 : -1));
-    els.improveLyrics.classList.toggle('busy', runningOps > 0);
-    els.improvePrompt.classList.toggle('busy', runningOps > 0);
-    setStatus(runningOps > 0 ? (statusText || 'Работаем…') : '', runningOps > 0);
+  // Аудит #35: статус «Работаем…» горит только от операций АКТИВНОЙ сессии;
+  // чужие показывает бейдж в шапке, статус остаётся «готов».
+  const busyBySession = new Map();
+  function paintBusy() {
+    const busy = (busyBySession.get(activeSession?.id) || 0) > 0;
+    els.improveLyrics.classList.toggle('busy', busy);
+    els.improvePrompt.classList.toggle('busy', busy);
+    setStatus(busy ? (paintBusy.text || 'Работаем…') : '', busy);
     updateEnabled();
+  }
+  paintBusy.text = '';
+  function setBusy(delta, statusText) { // delta=true — операция началась, false — закончилась
+    const id = activeSession?.id;
+    const next = Math.max(0, (busyBySession.get(id) || 0) + (delta ? 1 : -1));
+    if (next === 0) busyBySession.delete(id); else busyBySession.set(id, next);
+    if (statusText) paintBusy.text = statusText;
+    paintBusy();
   }
 
   // F-42: одинаковые предупреждения не стакаются — по ключу обновляется живая
@@ -1660,20 +1841,24 @@
   async function create() {
     if (storageBlocked || !activeSession || !needKey()) return;
     const text = promptValue();
-    if ((!text && !(mode === 'music' && advanced && els.lyrics.value.trim())) || (mode === 'chat' && sessionBusy.get(activeSession?.id)?.kind === 'chat')) return;
-    if (mode === 'chat') return createChat(text);
+    if (!text && !(mode === 'music' && advanced && els.lyrics.value.trim())) return;
     if (mode === 'photo') return createPhoto(text);
-    // Решение владельца 15.11: в Simple-режиме send = разговор с наставником
-    // (вариант B «Студия-агент»), генерация — явные кнопки. «Тонко настроить»
-    // (Custom-путь) работает как раньше: send = createMusic.
+    if (sessionBusy.get(activeSession?.id)?.kind === 'chat') return;
+    // #35 W1-2: один диалог. Simple-режим = разговор с наставником (смена владельца
+    // 15.11), генерация — явные кнопки. «Тонко настроить» (Custom) = createMusic.
     if (advanced) return createMusic(text);
-    return createMusicChat(text);
+    return createChat(text);
   }
 
+  // ---- единый диалог (#35 W1-2): один поток, роли переключаются внутри ----------
+  // Вместо «трёх чатов»: createChat и разговорный муз-режим (бывший createMusicChat)
+  // слились в один поток на session.history (срез −80). Ответ роли с draft-блоком
+  // рендерится карточкой music_draft; ответы без черновика — обычная карточка диалога.
   async function createChat(text) {
     const session = activeSession;
     const turn = { role: 'user', content: text };
     const assistant = currentAssistant();
+    const snapshot = { instrumental, quality };
     card('user', 'Вы', text, session);
     feedPush({ t: 'user', who: 'Вы', text }, session);
     els.prompt.value = '';
@@ -1694,16 +1879,31 @@
     setBusy(true, who + ' печатает…');
     let sink = null; // T-39: создаётся в try, досрочно синхронизируется в catch
     try {
-      const messages = [{ role: 'system', content: assistant.system }, ...session.history.filter(m => m && ['user', 'assistant'].includes(m.role) && typeof m.content === 'string').slice(-80), turn];
+      const messages = [
+        { role: 'system', content: assistant.system + musicDraftInstruction + '\n\n' + musicSessionContext(snapshot) },
+        // Единый поток v2: один срез −80 вместо старых −80 (чат) и −40 (муз-диалог).
+        ...session.history.filter(m => m && ['user', 'assistant', 'system'].includes(m.role) && typeof m.content === 'string').slice(-80),
+        turn
+      ];
       // T-39: чанки копятся и применяются одним кадром (без layout thrash).
       sink = streamSink(textSpan, wait);
       const full = await chatStream({ messages, signal: handle.controller.signal, onChunk: piece => sink.push(piece) });
       sink.dispose();
       stopRow.remove();
-      body.textContent = full; // чистый текст вместо служебных узлов
+      body.classList.remove('streaming');
+      const parsed = parseMusicDraft(full, snapshot.instrumental);
+      body.textContent = parsed.text || '';
       session.history.push(turn, { role: 'assistant', content: full });
-      feedPush({ t: 'assistant', who, text: full, track: true }, session); // T-33: флаг вместо копии текста
-      addMakeTrackAction(body.closest('.card'), full);
+      session.updatedAt = Date.now();
+      if (parsed.draft) {
+        const entry = { t: 'music_draft', who, text: parsed.text, draft: parsed.draft,
+          assistant: who, instrumental: snapshot.instrumental, applied: false, createdAt: Date.now() };
+        renderMusicDraftContent(body, entry, session);
+        feedPush(entry, session);
+      } else {
+        feedPush({ t: 'assistant', who, text: full, track: true }, session); // T-33: флаг вместо копии текста
+        addMakeTrackAction(body.closest('.card'), full);
+      }
     } catch (error) {
       stopRow.remove();
       sink?.sync(); // T-39: недоставленный в кадр текст не пропадает
@@ -1716,8 +1916,8 @@
         } else body.closest('.card').remove();
       } else {
         if (!body.textContent.trim()) body.closest('.card').remove(); // пустая карточка без ответа не висит
-        if (session === activeSession && mode === 'chat' && !els.prompt.value.trim()) els.prompt.value = text;
-        else if (session === activeSession && mode !== 'chat' && !drafts.chat.trim()) drafts.chat = text;
+        if (session === activeSession && mode === 'music' && !els.prompt.value.trim()) els.prompt.value = text;
+        else if (session === activeSession && mode !== 'music' && !drafts.music.trim()) drafts.music = text;
         errorCard(error, session);
       }
     } finally {
@@ -1742,11 +1942,12 @@
     + 'Поле lyrics — текст песни с латинскими тегами частей [Verse], [Chorus], [Bridge] (для инструментала — пустая строка). '
     + 'Не используй markdown и не дублируй содержимое черновика в тексте ответа.';
 
-  function musicSessionContext() {
+  function musicSessionContext(snapshot) {
+    const s = snapshot || { instrumental, quality };
     return 'Текущее состояние студии (опирайся на него, если релевантно):\n'
       + 'Промпт: ' + (els.musicPrompt.value.trim() || '—') + '\n'
       + 'Лирика: ' + (els.lyrics.value.trim() || '—') + '\n'
-      + 'Режим: ' + (instrumental ? 'инструментал' : 'песня') + ', качество: ' + MODEL_LABELS[quality] + '.';
+      + 'Режим: ' + (s.instrumental ? 'инструментал' : 'песня') + ', качество: ' + (MODEL_LABELS[s.quality] || 'Flash') + '.';
   }
 
   function parseMusicDraft(full, isInstrumental) {
@@ -1774,77 +1975,8 @@
     return { text, draft };
   }
 
-  async function createMusicChat(text) {
-    const session = activeSession;
-    if (sessionBusy.get(session.id)?.kind === 'music-chat') return;
-    const assistant = currentAssistant();
-    // Один наставник на диалог: смена роли обнуляет историю (делается и в чипе).
-    if (!session.musicChat || session.musicChat.assistant !== assistant.id) {
-      session.musicChat = { assistant: assistant.id, history: [] };
-    }
-    const history = session.musicChat.history;
-    const snapshot = { instrumental, quality };
-    card('user', 'Вы', text, session);
-    feedPush({ t: 'user', who: 'Вы', text }, session);
-    els.prompt.value = '';
-    updateEnabled();
-    const who = assistant.name;
-    const body = card('assistant', who, '', session);
-    const handle = trackedHandle('music-chat', session, who); // ✕ в карточке гасит только этот стрим
-    sessionBusy.set(session.id, { kind: 'music-chat', stop: () => handle.stop() });
-    const textSpan = document.createElement('span');
-    const wait = waitLine('chat');
-    const stopRow = document.createElement('div');
-    stopRow.className = 'wait-row';
-    stopRow.append(wait);
-    appendStop(stopRow, handle);
-    body.append(textSpan, stopRow);
-    body.classList.add('streaming');
-    body.closest('.card')?.setAttribute('aria-busy', 'true'); // F-49
-    setBusy(true, who + ' печатает…');
-    let sink = null; // T-39
-    try {
-      const messages = [
-        { role: 'system', content: assistant.system + musicDraftInstruction + '\n\n' + musicSessionContext() },
-        ...history.filter(m => m && ['user', 'assistant'].includes(m.role) && typeof m.content === 'string').slice(-40),
-        { role: 'user', content: text }
-      ];
-      sink = streamSink(textSpan, wait); // T-39: один reflow на кадр
-      const full = await chatStream({ messages, signal: handle.controller.signal, onChunk: piece => sink.push(piece) });
-      sink.dispose();
-      stopRow.remove();
-      body.classList.remove('streaming');
-      const parsed = parseMusicDraft(full, snapshot.instrumental);
-      body.textContent = parsed.text || '';
-      const entry = { t: 'music_draft', who, text: parsed.text, draft: parsed.draft,
-        assistant: who, instrumental: snapshot.instrumental, applied: false, createdAt: Date.now() };
-      if (parsed.draft) renderMusicDraftContent(body, entry, session);
-      history.push({ role: 'user', content: text }, { role: 'assistant', content: full });
-      session.updatedAt = Date.now();
-      feedPush(entry, session);
-    } catch (error) {
-      stopRow.remove();
-      sink?.sync(); // T-39
-      if (error.name === 'AbortError') {
-        if (body.textContent.trim()) {
-          const note = document.createElement('div');
-          note.className = 'stopped-note';
-          note.textContent = '⏹ остановлено';
-          body.append(note);
-        } else body.closest('.card').remove();
-      } else {
-        if (!body.textContent.trim()) body.closest('.card').remove();
-        if (session === activeSession && mode === 'music' && !advanced && !els.prompt.value.trim()) els.prompt.value = text;
-        errorCard(error, session);
-      }
-    } finally {
-      sessionBusy.delete(session.id);
-      handle.unregister?.();
-      body.classList.remove('streaming');
-      body.closest('.card')?.removeAttribute('aria-busy'); // F-49
-      setBusy(false); updateEnabled();
-    }
-  }
+  // createMusicChat удалён (#35 W1-2): разговорный муз-режим влит в createChat —
+  // единый поток session.history, смена роли не обнуляет историю.
 
   // F-12: после «Принять в поля» — автопереход в advanced и подсветка полей,
   // куда попал черновик (вместо подсказки «показать: Тонко настроить»).
@@ -1907,10 +2039,11 @@
     };
     const writeFields = () => {
       els.musicPrompt.value = promptField.value;
-      // Семейство стиля из резолвера: мозг построит конструкцию под него.
-      // Живёт на поле и сбрасывается, как только автор правит текст вручную.
-      if (entry.draft.style) els.musicPrompt.dataset.styleFamily = entry.draft.style;
-      else delete els.musicPrompt.dataset.styleFamily;
+      // P1 аудита #35: семейство стиля — состояние СЕССИИ (session.draft.styleFamily),
+      // а не dataset на DOM-поле: не переживает чужие сессии молча.
+      if (!session.draft || typeof session.draft !== 'object') session.draft = {};
+      if (entry.draft.style) session.draft.styleFamily = entry.draft.style;
+      else delete session.draft.styleFamily;
       if (lyricsField) els.lyrics.value = lyricsField.value;
       saveDraft(session);
     };
@@ -1927,9 +2060,8 @@
       if (!(await persistSessions())) { state.textContent = 'Не удалось сохранить резервную копию; поля не изменены.'; return; }
       entry.applied = true;
       writeFields();
-      // T-21: название черновика — на сессии, не в глобале: переживёт смену
-      // сессии и не перехватывается параллельной генерацией из другой сессии.
-      session.pendingDraftTitle = titleField.value.trim() || null;
+      // P2-4 аудита #35: pendingDraftTitle на сессии удалён — название уходит
+      // в генерацию только явным действием ИЗ ЭТОЙ карточки (кнопка «Сгенерировать трек»).
       saveDraft(session);
       await persistSessions();
       revert.hidden = false;
@@ -2084,18 +2216,18 @@
 
   async function createMusic(description, ctx = {}) {
     const session = activeSession;
-    // T-21: контекст генерации (название, источник лирики, родительская джоба) —
-    // аргумент источника запуска, а не глобальные pending-переменные: параллельные
-    // запуски не перехватывают чужое название/источник. repeatOf (после «Повторить
-    // с правками») живёт на сессии и потребляется этим запуском.
-    const parentJobId = ctx.parentJobId || session.repeatOf?.jobId || null;
-    if (parentJobId) session.repeatOf = null;
+    // T-21/P2-4: контекст генерации (название, источник лирики, родительская джоба) —
+    // аргумент источника запуска. repeatOf после «Повторить с правками» живёт в
+    // pendingRepeats по id сессии и потребляется следующим запуском этой сессии.
+    const pendingRepeat = pendingRepeats.get(session.id);
+    const parentJobId = ctx.parentJobId || pendingRepeat?.jobId || null;
+    if (parentJobId && !ctx.parentJobId) pendingRepeats.delete(session.id);
     // Зафиксировать настройки до автолирики: пользователь может менять их во время ожидания.
     const snapshot = { advanced, quality, instrumental, parentJobId };
     const draftSource = ctx.lyricsSource || null;
-    // Название из «Принять в поля» живёт на сессии до первого запуска генерации.
-    const draftTitle = ctx.title ?? session.pendingDraftTitle ?? null;
-    session.pendingDraftTitle = null;
+    // Название приходит только явным действием карточки-источника (P2-4 аудита #35):
+    // «Сгенерировать трек» из черновика передаёт ctx.title, композер — null.
+    const draftTitle = ctx.title ?? null;
     // Сборка (#109): исходная идея пользователя сохраняется неизменной (в карточку
     // и журнал идёт она), а в модель уходит чистая сборка без markdown и болтовни.
     const rawIdea = snapshot.advanced ? els.musicPrompt.value.trim() : description;
@@ -2194,9 +2326,9 @@
       // глубина и стилевая атмосфера, а именно их не хватало на прослушивании.
       // Исходная идея в карточке/сессии по-прежнему не переписывается (правило #109).
       const CAPTION_BUDGET = BRIIX_MUSIC_BRAIN.rules.MAX_CAPTION;
-      // Семейство стиля из резолвера (черновик наставника) — если автор не
-      // переписал описание вручную: мозг соберёт конструкцию под этот стиль.
-      const styleFamily = els.musicPrompt.dataset.styleFamily || undefined;
+      // P1 аудита #35: семейство стиля читается из состояния сессии — генерация в
+      // сессии B больше не наследует стиль сессии A молча.
+      const styleFamily = session.draft?.styleFamily || undefined;
       const brainFor = budget => BRIIX_MUSIC_BRAIN.buildCaption(style || lyrics || '', {
         kind: snapshot.instrumental ? 'instrumental' : 'song',
         language: BriixProducer.detectExplicitLanguage(rawIdea) || (snapshot.instrumental ? null : 'en'),
@@ -2377,8 +2509,11 @@
     const basePath = trusted.pathname.replace(/\/+$/, '');
     const filePrefix = basePath + '/files/';
     const fileName = url.pathname.startsWith(filePrefix) ? url.pathname.slice(filePrefix.length) : '';
+    // P3-2 аудита #35: allow-list query — ?refetch=1 на /files/{id}.m4a разрешён
+    // (принудительная пересборка M4A из WAV по контракту), остальные query/hash — как раньше.
+    const refetchAllowed = url.search === '?refetch=1' && url.pathname.startsWith(filePrefix) && url.pathname.endsWith('.m4a');
     if (!['http:', 'https:'].includes(url.protocol) || url.origin !== trusted.origin || url.username || url.password ||
-        url.search || url.hash || !/^[a-zA-Z0-9._-]+$/.test(fileName) || fileName === '.' || fileName === '..') {
+        (url.search && !refetchAllowed) || url.hash || !/^[a-zA-Z0-9._-]+$/.test(fileName) || fileName === '.' || fileName === '..') {
       return Promise.reject(new BusError('unsafe_url', 'Недоверенный адрес файла.'));
     }
     // T-26: известный офлайн — сразу честная ошибка, слот очереди не занимается.
@@ -2419,8 +2554,10 @@
   }
 
   // The review lives in its originating session; it never submits a music job.
+  // #35 W1-2: «Подготовить песню» — действие роли «Продюсер» в едином диалоге;
+  // занятость в общем sessionBusy (отдельного канала producerRequests больше нет).
   async function prepareMusic() {
-    if (storageBlocked || !activeSession || mode !== 'music' || producerRequests.has(activeSession.id) || !needKey()) return;
+    if (storageBlocked || !activeSession || mode !== 'music' || sessionBusy.has(activeSession.id) || !needKey()) return;
     const session = activeSession;
     const snapshot = { idea: (advanced ? els.musicPrompt.value : els.prompt.value), lyrics: els.lyrics.value,
       quick: els.prompt.value, style: els.musicPrompt.value, advanced, instrumental };
@@ -2429,7 +2566,7 @@
       card('notice', 'Продюсер', 'Идея или текст слишком длинные для подготовки. Сократите их самостоятельно.'); return;
     }
     const handle = trackedHandle('producer', session, 'подготовка черновика');
-    producerRequests.set(session.id, handle);
+    sessionBusy.set(session.id, { kind: 'producer', stop: () => handle.stop() });
     const stage = card('stage', 'Музыкальный продюсер', '', session);
     const wait = waitRow('music', 'writing-lyrics');
     appendStop(wait.row, handle);
@@ -2465,7 +2602,7 @@
       }
     } finally {
       clearTimeout(timer); wait.stop(); stage.closest('.card')?.remove();
-      producerRequests.delete(session.id); handle.unregister?.(); setBusy(false);
+      sessionBusy.delete(session.id); handle.unregister?.(); setBusy(false); updateEnabled();
     }
   }
 
@@ -2562,10 +2699,10 @@
       }
       entry.applied = true;
       els.musicPrompt.value = style.value;
-      // Семейство стиля из резолвера (если наставник его верул) — мозг возьмёт
-      // конструкцию под этот стиль. Правка поля вручную сбрасывает подсказку.
-      if (entry.style) els.musicPrompt.dataset.styleFamily = entry.style;
-      else delete els.musicPrompt.dataset.styleFamily;
+      // P1 аудита #35: семейство стиля — на сессии (см. writeFields черновика наставника).
+      if (!session.draft || typeof session.draft !== 'object') session.draft = {};
+      if (entry.style) session.draft.styleFamily = entry.style;
+      else delete session.draft.styleFamily;
       if (lyrics) els.lyrics.value = lyrics.value;
       advanced = true; renderChrome(); saveDraft(session); await persistSessions();
       revert.hidden = false; state.textContent = 'Поля заполнены — проверьте их в композере.';
@@ -2598,6 +2735,8 @@
       }
       entry.applied = true;
       els.musicPrompt.value = style.value;
+      if (!session.draft || typeof session.draft !== 'object') session.draft = {};
+      if (entry.style) session.draft.styleFamily = entry.style; else delete session.draft.styleFamily;
       if (lyrics) els.lyrics.value = lyrics.value;
       advanced = true; renderChrome(); saveDraft(session);
       await persistSessions();
@@ -2608,10 +2747,10 @@
   }
 
   async function improve(field) {
-    if (storageBlocked || improving.has(field)) return;
+    if (storageBlocked || improvingHas(activeSession?.id, field)) return;
     if (!needKey()) return;
     const session = activeSession;
-    improving.add(field);
+    improvingAdd(session.id, field); // ✨-блокировки — на сессию (аудит #35)
     const el = field === 'lyrics' ? els.lyrics : els.musicPrompt;
     const original = el.value;
     const button = field === 'lyrics' ? els.improveLyrics : els.improvePrompt;
@@ -2627,7 +2766,7 @@
       sessionUndo(session, field, original);
       el.value = improved.trim();
       (field === 'lyrics' ? els.undoLyrics : els.undoPrompt).hidden = false;
-    } catch (error) { errorCard(error, session); } finally { improving.delete(field); button.classList.remove('busy'); setBusy(false); }
+    } catch (error) { errorCard(error, session); } finally { improvingDelete(session.id, field); button.classList.remove('busy'); setBusy(false); }
   }
 
   function undo(field) {
@@ -2641,11 +2780,11 @@
 
   // ✨ в режиме «Фото»: арт-директор улучшает промпт перед отправкой.
   async function improvePhoto() {
-    if (storageBlocked || improving.has('photo')) return;
+    if (storageBlocked || improvingHas(activeSession?.id, 'photo')) return;
     const session = activeSession;
     const original = els.prompt.value.trim();
     if (!original || !needKey()) return;
-    improving.add('photo');
+    improvingAdd(session.id, 'photo');
     setBusy(true, 'Улучшаем промпт…');
     els.improvePhoto.classList.add('busy');
     try {
@@ -2665,7 +2804,7 @@
       els.prompt.value = improved.trim();
       els.undoPhoto.hidden = false;
     } catch (error) { errorCard(error, session); }
-    finally { improving.delete('photo'); els.improvePhoto.classList.remove('busy'); setBusy(false); updateEnabled(); }
+    finally { improvingDelete(session.id, 'photo'); els.improvePhoto.classList.remove('busy'); setBusy(false); updateEnabled(); }
   }
 
   function undoPhoto() {
@@ -2678,18 +2817,27 @@
   }
 
   function newSessionRecord() {
-    return { id: crypto.randomUUID(), title: 'Новый чат', titleSet: false, createdAt: Date.now(), updatedAt: Date.now(), feed: [], history: [] };
+    // Дефолты v2-сессии: роль — наставник, настройки из localStorage только как
+    // дефолт (P2-2/P2-3 аудита #35: дальше выбор живёт в draft сессии).
+    return { id: crypto.randomUUID(), assistantId: 'mentor', title: 'Новый чат', titleSet: false, createdAt: Date.now(), updatedAt: Date.now(), feed: [], history: [], draft: { quality: 'flash', instrumental } };
   }
   function saveDraft(session) {
     if (!session) return;
     drafts[mode] = els.prompt.value;
-    session.draft = { prompts: { ...drafts }, lyrics: els.lyrics.value, musicPrompt: els.musicPrompt.value, mode, advanced };
+    // P2-2/P2-3: quality/instrumental пишутся в draft сессии; styleFamily
+    // уже на session.draft — не затирается,spread сохраняет его.
+    session.draft = { ...session.draft, prompts: { ...drafts }, lyrics: els.lyrics.value, musicPrompt: els.musicPrompt.value, mode, advanced, quality, instrumental };
   }
   function loadDraft(session) {
     const draft = session.draft || {};
     for (const key of Object.keys(drafts)) drafts[key] = draft.prompts?.[key] || '';
-    mode = ['chat', 'photo', 'music'].includes(draft.mode) ? draft.mode : 'chat';
+    mode = ['music', 'photo'].includes(draft.mode) ? draft.mode : 'music';
     advanced = !!draft.advanced;
+    // P2-1: роль активной сессии; у сессий без роли (новых) — наставник.
+    if (typeof session.assistantId !== 'string' || !CHAT_ROLES.some(a => a.id === session.assistantId)) session.assistantId = 'mentor';
+    // P2-2/P2-3: качество и режим трека — из draft сессии.
+    quality = draft.quality === 'pro' ? 'pro' : 'flash';
+    instrumental = typeof draft.instrumental === 'boolean' ? draft.instrumental : instrumental;
     els.prompt.value = drafts[mode]; els.lyrics.value = draft.lyrics || ''; els.musicPrompt.value = draft.musicPrompt || '';
     // T-22: кнопки возврата отражают бэкапы именно этой сессии.
     els.undoLyrics.hidden = session.undo?.lyrics == null;
@@ -2850,7 +2998,8 @@
     els.feed.innerHTML = ''; sessionRoots.clear(); sessionProfile = null; activeSession = null;
     els.prompt.value = ''; els.lyrics.value = ''; els.musicPrompt.value = '';
     Object.keys(drafts).forEach(k => { drafts[k] = ''; });
-    mode = 'chat'; advanced = false; renderChrome(); setView('chat');
+    schemaRejected = false; if (schemaBanner) { schemaBanner.remove(); schemaBanner = null; }
+    mode = 'music'; advanced = false; quality = 'flash'; renderChrome(); setView('chat');
     try {
       const opened = await BriixSessionStore.open(nick);
       sessionProfile = opened.profile; sessionBackend = opened.backend;
@@ -2865,6 +3014,7 @@
       ensureRoot(activeSession); rootFor(activeSession).hidden = false; loadDraft(activeSession);
       storageBlocked = false;
       await persistSessions();
+      await restorePendingV1(); // П1 SPEC #35: несохранённое из прошлой v1-вкладки
       if (sessionBackend === 'local' && !storageDirty) {
         els.storageWarning.hidden = false;
         els.storageWarning.textContent = 'IndexedDB недоступна: сессии хранятся в localStorage этого браузера, объём ограничен.';
@@ -2900,7 +3050,7 @@
   // T-24: выход при живых операциях — явный выбор «остановить и выйти / остаться»,
   // а не тихий отказ (A20: refusal-карточка была невидима на вкладке «Библиотека»).
   const OP_KIND_LABELS = {
-    chat: 'ответ наставника', 'music-chat': 'разговор с наставником',
+    chat: 'ответ наставника',
     music: 'генерация музыки', photo: 'генерация фото',
     producer: 'подготовка черновика', resume: 'ожидание генерации'
   };
@@ -3200,6 +3350,27 @@
     observer.observe(frame);
   }
 
+  // #35 W1-4: экспортные варианты (WAV/обложка) из Библиотеки — тот же честный
+  // путь, что в ленте: нет файла на сервере — честная ошибка, без фейков.
+  async function exportFromLib(entry, input, fileOrPath, ext, label) {
+    const path = /^https?:|^\//.test(fileOrPath) ? fileOrPath : '/files/' + fileOrPath;
+    try {
+      const blob = await fileBlob(path, 1);
+      const name = mediaFileName('music', input, blob, ext);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url; link.download = name;
+      document.body.append(link); link.click(); link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      BRIIX_TOASTS.toast('Скачано: ' + name + ' (' + fmtBytes(blob.size) + ')', { kind: 'done', key: 'download' });
+    } catch (error) {
+      const why = error.code === 'not_found' || error.status === 404
+        ? 'сервер пока не отдаёт этот формат (нет файла) — доступно M4A'
+        : (error.message || 'ошибка загрузки');
+      showLibError(els.lib, label + ': ' + why);
+    }
+  }
+
   function libCard(entry) {
     const div = document.createElement('div');
     const owner = currentUser();
@@ -3340,7 +3511,9 @@
       coverFrame: div.querySelector('.lib-cover'),
       loadBlob: () => fileBlob(entry.file, 0),
       menuItems: () => [
-        { label: 'Скачать', onPick: () => download.click() },
+        { label: 'Скачать аудио (M4A)', onPick: () => download.click() },
+        { label: 'Скачать WAV — мастер без тегов', onPick: () => exportFromLib(entry, input, entry.job + '.wav', 'wav', 'WAV-мастер') },
+        { label: 'Скачать обложку', onPick: () => exportFromLib(entry, input, entry.cover || entry.job + '-cover.png', 'png', 'Обложка') },
         { label: 'Копировать промпт', onPick: () => copyText(input.promptSent || entry.prompt || '', 'промпт') },
         { label: 'Копировать лирику', onPick: () => copyText(entry.lyrics || input.lyrics || '', 'лирика') },
         ...(lyricsWrap ? [{ label: 'Показать лирику', onPick: () => {
@@ -3499,7 +3672,9 @@
     const btn = e.target.closest('.seg-btn');
     if (!btn) return;
     instrumental = btn.dataset.vocal === '1';
-    try { localStorage.setItem('briix-studio-instrumental', instrumental ? '1' : '0'); } catch {}
+    // P2-3 аудита #35: режим трека — состояние сессии (localStorage остаётся
+    // только дефолтом НОВОЙ сессии и здесь не перезаписывается).
+    if (activeSession) { if (!activeSession.draft || typeof activeSession.draft !== 'object') activeSession.draft = {}; activeSession.draft.instrumental = instrumental; saveDraftSoon(); }
     renderChrome();
   });
 
@@ -3550,8 +3725,9 @@
   els.prompt.addEventListener('input', updateEnabled);
   els.lyrics.addEventListener('input', updateEnabled);
   els.musicPrompt.addEventListener('input', () => {
-    // Ручная правка описания отменяет подсказку резолвера: семейство могло устареть.
-    if (els.musicPrompt.dataset.styleFamily) delete els.musicPrompt.dataset.styleFamily;
+    // P1 аудита #35: ручная правка описания отменяет подсказку резолвера —
+    // семейство стиля живёт на сессии и чистится там же.
+    if (activeSession?.draft?.styleFamily) { delete activeSession.draft.styleFamily; paintStyleFamilyBadge(); }
     updateEnabled();
   });
 

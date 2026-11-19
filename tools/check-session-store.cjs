@@ -115,6 +115,7 @@ const { launch } = require('./browser-env.cjs');
         feed: [{ t: 'user', who: 'Вы', text: 'привет' }], history: [{ role: 'user', content: 'привет' }] };
       const broken = { id: 'broken-1', title: 'Битая' }; // есть id и title, нет feed/history
       const noTitle = { title: null }; // нет ни id, ни валидного title
+      // #35: профиль v1 при открытии мигрирует (v1→v2) и санируется той же транзакцией.
       const raw = { schemaVersion: 1, nick: 'санирование', revision: 3, activeSessionId: 'broken-1', sessions: [null, noTitle, broken, valid], legacyBackup: null };
       const rawWrite = () => new Promise((resolve, reject) => {
         const req = indexedDB.open('briix-studio-sessions', 1);
@@ -150,9 +151,15 @@ const { launch } = require('./browser-env.cjs');
     assert.equal(repaired.title, 'Битая', 'валидный title битой записи сохранён, не затёрт дефолтом');
     assert.deepEqual(repaired.feed, [], 'битой записи проставлен пустой feed');
     assert.deepEqual(repaired.history, [], 'битой записи проставлен пустой history');
-    assert.deepEqual(validKept, sanitizeIdb.valid, 'валидная запись не тронута');
+    // #35: миграция добавляет v2-поля (assistantId, draft) и повышает revision на 1;
+    // лента/история валидной записи не тронуты.
+    assert.deepEqual(validKept.feed, sanitizeIdb.valid.feed, 'валидная запись: лента не тронута');
+    assert.deepEqual(validKept.history, sanitizeIdb.valid.history, 'валидная запись: история не тронута');
+    assert.equal(validKept.assistantId, 'mentor', 'валидной записи проставлен v2-assistantId');
+    assert.deepEqual(validKept.draft, { quality: 'flash', instrumental: false }, 'валидной записи проставлен v2-draft');
+    assert.equal(sanitizeIdb.stored.schemaVersion, 2, 'мигрированный профиль записан обратно в IDB');
     assert.equal(sanitizeIdb.stored.sessions.length, 3, 'санированный профиль записан обратно в IDB');
-    assert.equal(sanitizeIdb.stored.revision, 3, 'revision при санитизации не меняется');
+    assert.equal(sanitizeIdb.stored.revision, 4, 'revision повышен миграцией на 1 (3 → 4)');
     assert.equal(sanitizeIdb.stored.sessions[2].title, 'Живой чат', 'валидная запись цела и в хранилище');
 
     // Тот же сценарий на локальном бэкенде (fallback-путь open()).
@@ -253,8 +260,11 @@ const { launch } = require('./browser-env.cjs');
       const validSession = { id: 'v1', title: 'Живой', titleSet: true, createdAt: 1, updatedAt: 2, history: [], feed: [
         { t: 'producer_draft', who: 'Продюсер', snapshot: { idea: 'ок' }, backups: [{ quick: 'q' }] }
       ] };
-      const validProfile = { schemaVersion: 1, nick: 'changed-семантика', revision: 7, activeSessionId: 'v1', sessions: [validSession], legacyBackup: null };
-      const brokenProfile = { schemaVersion: 1, nick: 'changed-семантика', revision: 7, activeSessionId: 's1', sessions: [
+      // #35: валидный профиль сеем уже в v2 — проверяем «нет переписывания без изменений»
+      // именно для v2-семантики (v1-профиль теперь закономерно мигрирует и пишется).
+      const validSessionV2 = { ...validSession, assistantId: 'mentor', draft: { quality: 'flash', instrumental: false } };
+      const validProfile = { schemaVersion: 2, nick: 'changed-семантика', revision: 7, activeSessionId: 'v1', sessions: [validSessionV2], legacyBackup: null };
+      const brokenProfile = { schemaVersion: 2, nick: 'changed-семантика', revision: 7, activeSessionId: 's1', sessions: [
         { id: 's1', title: 'Битая', backups: [null] }, { t: 'producer_draft' }
       ], legacyBackup: null };
       const rawWrite = raw => new Promise((resolve, reject) => {
@@ -279,7 +289,7 @@ const { launch } = require('./browser-env.cjs');
         // всегда десериализует копию) — наблюдаемый контракт: put не было и содержимое
         // сессии не изменилось.
         result.validSessionSame = openedValid.sessions[0].feed[0] === undefined ? false :
-          JSON.stringify(openedValid.sessions[0]) === JSON.stringify(validSession);
+          JSON.stringify(openedValid.sessions[0]) === JSON.stringify(validSessionV2);
         await rawWrite(brokenProfile);
         puts = 0;
         await BriixSessionStore.openProfile('changed-семантика');

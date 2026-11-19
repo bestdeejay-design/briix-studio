@@ -744,3 +744,45 @@ button:disabled { cursor: not-allowed; opacity: .4; }
 }
 .boot-fallback button:hover { background: var(--accent-hover); }
 .boot-fallback button:active { background: var(--accent-active); }
+
+/* #35 UI v2 волна 1 */
+/* П1 SPEC: блокирующий баннер «обновите страницу» при schema-отказе записи */
+.schema-banner {
+  margin: 8px 16px 0;
+  padding: 12px;
+  border: 1px solid var(--danger);
+  background: var(--danger-soft);
+  color: var(--danger);
+  border-radius: 8px;
+  font-size: 13px;
+}
+.schema-banner p { margin: 0 0 8px; font-weight: 600; }
+.schema-banner .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+/* P1 аудита: бейдж семейства стиля рядом с полем — подсказка резолвера видна */
+.style-family-badge {
+  display: inline-block;
+  margin: 2px 0;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft, rgba(217, 119, 87, 0.15));
+  color: var(--accent);
+  font-size: 12px;
+}
+/* П3 SPEC: честный статус обложки у карточки трека */
+.cover-status {
+  margin: 4px 0;
+  padding: 6px 10px;
+  border: 1px dashed var(--amber);
+  border-radius: 8px;
+  color: var(--amber);
+  font-size: 12px;
+}
+/* #35 UI v2: на узких экранах музыкальный композер должен оставлять ленте место:
+ * «Новый чат» сжимается до иконки (дубль в диалоге «История» остаётся),
+ * подсказка Enter убирается (полный смысл — в F-50-подсказке диалога). */
+@media (max-width: 480px) {
+  #newChat .lbl-full { display: none; }
+  #newChat .lbl-short { display: inline; }
+  #newChat { min-width: 44px; } /* тач-таргет иконки ≥44 (F-36/F-37) */
+  .composer-hint.enter-hint { display: none; }
+}

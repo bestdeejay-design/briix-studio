@@ -34,7 +34,7 @@ if (location.hostname === 'briix.ru' || location.hostname === 'www.briix.ru') {
  *     занят (идут операции / есть несохраненный текст) — перезагрузка только
  *     по его нажатию «Обновить», молча работа не сносим.
  * window.__BRIIX_BOOT_TIMEOUT / __BRIIX_RECHECK_MS — хуки сюиты check-cache-selfheal. */
-window.__BRIIX_BUILD__ = '52c7f0cce3';
+window.__BRIIX_BUILD__ = 'b39bac6bcf';
 (function () {
   var SS_KEY = 'briix-bust', MAX_BUSTS = 2, WINDOW_MS = 60000;
   var BOOT_TIMEOUT = window.__BRIIX_BOOT_TIMEOUT || 9000;
@@ -148,9 +148,9 @@ window.__BRIIX_BUILD__ = '52c7f0cce3';
   setTimeout(function () { clearInterval(cleanTimer); }, 45000);
 })();
 </script>
-<link rel="stylesheet" href="studio.css?v=a4b3be1aca">
+<link rel="stylesheet" href="studio.css?v=da540a99e8">
 <!-- T-35: главный скрипт стартует заранее; URL совпадает с тегом ниже (иначе двойная загрузка) -->
-<link rel="preload" as="script" href="studio.js?v=d07dac7ddd">
+<link rel="preload" as="script" href="studio.js?v=1533f12da2">
 </head>
 <body>
 
@@ -232,17 +232,14 @@ window.__BRIIX_BUILD__ = '52c7f0cce3';
     <div class="composer" id="composer">
 
       <nav class="modes" id="modes" aria-label="Режим студии">
-        <button class="mode" data-mode="chat" aria-pressed="true">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a8 8 0 0 1-8 8H5l-2 2V12a8 8 0 0 1 8-8h2a8 8 0 0 1 8 8z"/></svg>
-          Чат
+        <!-- #35 UI v2: один фокус + сменные наставники вместо трёх чатов -->
+        <button class="mode" data-mode="music" aria-pressed="true">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V6l11-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></svg>
+          Создание музыки
         </button>
         <button class="mode" data-mode="photo" aria-pressed="false">
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4 17l5-5 4 4 3-3 4 4"/></svg>
           Фото
-        </button>
-        <button class="mode" data-mode="music" aria-pressed="false">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V6l11-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></svg>
-          Музыка
         </button>
       </nav>
 
@@ -270,6 +267,8 @@ window.__BRIIX_BUILD__ = '52c7f0cce3';
         </div>
         <div class="field-block">
           <span class="field-label">Стиль / промпт</span>
+          <!-- #35 W1-3: бейдж семейства стиля — подсказка резолвера видна, а не живёт молча в DOM -->
+          <span id="styleFamilyBadge" class="style-family-badge" role="status" hidden></span>
           <div class="field-shell">
             <textarea id="musicPrompt" class="ta" aria-label="Стиль и музыкальный промпт" rows="2" placeholder="Жанр, темп, вокал, инструменты…"></textarea>
             <button id="improvePrompt" class="improve" disabled aria-label="Улучшить стиль">
@@ -294,7 +293,7 @@ window.__BRIIX_BUILD__ = '52c7f0cce3';
         <button id="addBtn" class="tool icon-only" aria-label="Добавить вложение" title="Вложения — скоро">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
         </button>
-        <button id="newChat" class="tool chip chat-only" hidden title="Начать новую сессию, сохранив текущую">Новый чат</button>
+        <button id="newChat" class="tool chip" aria-label="Новый чат" title="Начать новую сессию, сохранив текущую"><span class="lbl-full">Новый чат</span><span class="lbl-short" aria-hidden="true">＋</span></button>
         <button id="improvePhoto" class="tool chip photo-only" hidden disabled title="Арт-директор улучшит промпт">✨ Улучшить</button>
         <button id="undoPhoto" class="tool chip photo-only undo-chip" hidden>↩ Вернуть как было</button>
         <div class="menu-anchor">
@@ -325,7 +324,7 @@ window.__BRIIX_BUILD__ = '52c7f0cce3';
 
       <!-- Мета-полоса -->
       <div class="meta">
-        <span id="metaLeft">briix.ru · Чат · Наставник</span>
+        <span id="metaLeft">briix.ru · Создание музыки · Наставник</span>
         <span id="status" class="status" role="status">готов</span>
       </div>
     </div>
@@ -368,11 +367,11 @@ window.__BRIIX_BUILD__ = '52c7f0cce3';
 <script defer src="catalog.js?v=a9dd9e6116"></script>
 <script defer src="ops.js?v=760bf48ea0"></script>
 <script defer src="toasts.js?v=50285e4a33"></script>
-<script defer src="session-store.js?v=9f617ae645"></script>
+<script defer src="session-store.js?v=123521a1f3"></script>
 <script defer src="waveform.js?v=0ee97fc2a9"></script>
 <script defer src="player.js?v=778d4b4c76"></script>
 <script defer src="producer-brain.js?v=9b3f7d0a72"></script>
 <script defer src="music-brain.js?v=ff50826eb6"></script>
-<script defer src="studio.js?v=d07dac7ddd"></script>
+<script defer src="studio.js?v=1533f12da2"></script>
 </body>
 </html>
