@@ -7,3 +7,4 @@ test-results/
 # Бенчмарк мозга v2: аудио и ключ слепого прослушивания не коммитим (#20)
 bench/out/
 bench/KEY.md
+.DS_Store
