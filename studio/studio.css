@@ -302,7 +302,9 @@ button:disabled { cursor: not-allowed; opacity: .4; }
   animation: shimmer 1.4s linear infinite;
 }
 @keyframes shimmer { to { background-position: -200% 0; } }
-.stage-elapsed { font-variant-numeric: tabular-nums; font-size: 11px; color: var(--faint); margin-left: auto; }
+/* #35 приёмка: секундомер — не мелкий служебный, а заметная часть статуса:
+ * «прошло время» отвечает на вопрос «зависло или работает». */
+.stage-elapsed { font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 600; color: var(--muted); margin-left: auto; }
 .wait-row { display: flex; align-items: center; gap: 8px; width: 100%; }
 .stage-stop {
   width: 44px; height: 44px; flex-shrink: 0;
@@ -317,10 +319,10 @@ button:disabled { cursor: not-allowed; opacity: .4; }
 .sp-seg { flex: 1; height: 4px; border-radius: 2px; background: var(--hover); overflow: hidden; }
 .sp-fill { height: 100%; width: 0; background: var(--accent); transition: width .6s ease; }
 .sp-seg.done .sp-fill { width: 100%; opacity: .5; }
-.stage-progress-label { margin-top: 4px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.stage-progress-label { margin-top: 4px; font-size: 12px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
 /* Честный ориентир ожидания из каталога моделей (F-59): замер стенда,
  * мягкая шкала «прошло X из ~Y»; задержка ×1,5 — спокойный янтарный тон. */
-.stage-eta { margin-top: 2px; font-size: 11px; color: var(--faint); font-variant-numeric: tabular-nums; }
+.stage-eta { margin-top: 2px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .stage-eta.late { color: var(--amber); }
 .card .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .action {
@@ -491,6 +493,24 @@ button:disabled { cursor: not-allowed; opacity: .4; }
 /* R6 (F-13): диалог подтверждения — на базе паттерна сессий */
 .confirm-dialog { max-width: 420px; }
 .confirm-dialog .session-new.danger { color: var(--danger); border-color: var(--danger); }
+/* P1 приёмки UX (#35): диалог подтверждения и шаг-карточка онбординга ключа —
+ * модалка по центру с затемнением фона на десктопе (раньше диалог наследовал
+ * «левый лист» истории: панель, прижатая к углу без затемнения, выглядела
+ * сломанной вёрсткой). На мобайле формат не меняем. */
+@media (min-width: 481px) {
+  .confirm-overlay { align-items: center; justify-content: center; }
+  /* Спецификатор .sessions-overlay .confirm-dialog — перебить «лист» .sessions-dialog,
+   * который объявлен ниже по файлу (height:100%, border-right). */
+  .sessions-overlay .confirm-dialog {
+    height: auto; max-height: min(80dvh, 560px);
+    width: min(90vw, 420px);
+    border: 1px solid var(--line-focus);
+    border-radius: var(--radius-card);
+    box-shadow: 0 24px 64px var(--shadow);
+  }
+}
+.key-onboard { max-width: 440px; }
+.key-onboard .key-row { margin-top: 4px; }
 .confirm-body { white-space: pre-line; }
 /* Мини-плеер (T-51-остаток): тонкая полоса под шапкой, пока играет трек */
 .mini-player { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; padding: 6px 16px; border-bottom: 1px solid var(--line); background: var(--surface-1); color: var(--muted); font-size: 12px; }
@@ -786,4 +806,29 @@ button:disabled { cursor: not-allowed; opacity: .4; }
   #newChat .lbl-short { display: inline; }
   #newChat { min-width: 44px; } /* тач-таргет иконки ≥44 (F-36/F-37) */
   .composer-hint.enter-hint { display: none; }
+}
+/* #35 приёмка (SE-320): на 320×568 композер съедал ~85% экрана и лента не была
+ * видна. Компактная компоновка: короче поля и шапка, «＋ Новый» сжимается до
+ * иконки (скрепка вложения различает смысл — см. index.html), режим трека —
+ * своя строка, подсказка продюсера остаётся видимой, но в одну строку (F-37).
+ * Цель — композер ≤60% высоты вьюпорта, лента видна всегда. */
+@media (max-width: 360px), (max-height: 600px) and (max-width: 400px) {
+  .composer { padding: 4px; gap: 4px; }
+  /* Тач-таргеты ≥44 не ужимаем (мобайл-правило выше): компактаем только воздух. */
+  .modes { padding: 0; gap: 2px; }
+  .mode { min-height: 44px; padding: 0 6px; font-size: 12.5px; }
+  .mode svg { width: 14px; height: 14px; }
+  .prompt { min-height: 44px; max-height: 120px; font-size: 15px; padding: 2px 8px; }
+  .producer-entry { flex-wrap: nowrap; gap: 4px 6px; align-items: center; }
+  .producer-entry span { font-size: 10px; line-height: 1.3; min-width: 0; } /* F-37: пояснение видно, но компактно */
+  .toolbar { gap: 2px; }
+  .tool { font-size: 12px; }
+  #newChat .lbl-short { display: none; } /* «＋» дублирует aria-label; на 320 — иконка (вложение — скрепка) */
+  #vocalSeg { order: 10; flex-basis: 100%; justify-content: center; } /* режим трека — своя строка */
+  .seg-btn { padding: 4px 8px; font-size: 12px; }
+  .meta { padding-top: 2px; }
+  /* «Тонко настроить» на SE: поля компактнее, композер не съедает ленту */
+  #lyrics { min-height: 64px; padding-top: 36px; }
+  #musicPrompt { min-height: 52px; padding-top: 36px; }
+  .advanced { gap: 8px; }
 }

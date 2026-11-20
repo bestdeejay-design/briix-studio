@@ -321,6 +321,9 @@ function bffServer(port) {
       if (user) {
         localStorage.setItem('briix-studio-profiles', JSON.stringify({ [user]: { pinHash: 'x', created: 0 } }));
         localStorage.setItem('briix-studio-user', user);
+        // Онбординг ключа (#35) «уже пройден» для основного юзера сюиты: блоки
+        // ниже проверяют инлайн-форму, сам шаг-карточка — блоком 2b (boarder/snoozer).
+        if (user === 'tester') localStorage.setItem('briix-studio-key-onboarded-' + user, String(Date.now()));
       }
     }, { port: BFF_PORT, user });
     await p.goto(URL_);
@@ -397,6 +400,29 @@ function bffServer(port) {
   await p.locator('#keySave').click();
   assert.equal(await p.evaluate(() => localStorage.getItem('briix-media-live-token')), TOKEN, 'чекбокс «запомнить» кладёт ключ в localStorage');
   ok('missing key shows inline card; sessionStorage by default, remember → localStorage (T-42)', {});
+
+  // 2b. Онбординг ключа (#35 приёмка): первый вход без ключа — ОДИН модальный
+  //     шаг-карточка «Подключите стенд» по центру; «Позже» запоминается — при
+  //     следующей загрузке модалки нет.
+  p = await page({ token: '', user: 'boarder' });
+  await p.waitForSelector('.key-onboard', { timeout: 5000 });
+  assert.equal(await p.locator('.key-onboard h2').innerText(), 'Подключите стенд', 'онбординг: заголовок шаг-карточки');
+  await p.locator('.key-onboard input[type="password"]').fill(TOKEN);
+  await p.locator('.key-onboard .save').click();
+  await p.waitForSelector('.key-onboard', { state: 'detached' });
+  assert.equal(await p.evaluate(() => sessionStorage.getItem('briix-media-live-token-session')), TOKEN, 'онбординг: ключ сохранён в sessionStorage');
+  await p.reload();
+  await p.waitForSelector('#send');
+  assert.equal(await p.locator('.key-onboard').count(), 0, 'онбординг: с ключом модалки нет');
+  // «Позже» — решение запоминается, модалка не повторяется на следующем входе.
+  p = await page({ token: '', user: 'snoozer' });
+  await p.waitForSelector('.key-onboard', { timeout: 5000 });
+  await p.locator('.key-onboard .ops-actions .action').click(); // «Позже»
+  await p.waitForSelector('.key-onboard', { state: 'detached' });
+  await p.reload();
+  await p.waitForSelector('#send');
+  assert.equal(await p.locator('.key-onboard').count(), 0, 'онбординг: «Позже» показывается один раз');
+  ok('key onboarding: single modal step-card on first keyless entry; later/saved both stick (#35)', {});
 
   // 3. Чат-стрим + inline-кнопка «Сделать из этого трек».
   p = await page();

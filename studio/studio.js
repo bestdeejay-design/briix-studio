@@ -1276,8 +1276,9 @@
       wrap.append(coverStatus);
     }
     // F-18: название трека видно сразу — раньше его не было в интерфейсе вовсе
-    // (только внутри свёрнутого transparency-блока).
-    const trackTitle = String(input.title || input.prompt || '').slice(0, 120).trim();
+    // (только внутри свёрнутого transparency-блока). #35 приёмка: заголовок —
+    // title трека, а не сырой промпт; черновик-JSON распарсен, не показан как есть.
+    const trackTitle = (cleanDraftTitle(input.title) || cleanDraftTitle(input.prompt) || String(input.title || input.prompt || '')).slice(0, 120).trim();
     if (trackTitle) {
       const titleEl = document.createElement('div');
       titleEl.className = 'track-title';
@@ -1408,7 +1409,8 @@
   // не даёт .m4a — P3-3 аудита #35).
   function mediaFileName(kind, meta, blob, variant) {
     if (kind === 'music') {
-      const title = String(meta.title || meta.prompt || '').trim();
+      // #35 приёмка: черновик-JSON в meta.title не должен стать именем файла.
+      const title = (cleanDraftTitle(meta.title) || cleanDraftTitle(meta.prompt) || String(meta.title || meta.prompt || '')).trim();
       return safeFileName(title.length > 2 ? title : 'BRIIX track', meta.artist || currentUser(), variant || extOf(blob));
     }
     return 'briix-photo-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.' + (variant || extOf(blob));
@@ -1425,6 +1427,16 @@
   }
 
   function libEntry(job) { return libLoad().find(x => x.job === job); }
+
+  // #35 приёмка: компактные даты в Библиотеке — «сегодня, 13:36»; секунды и
+  // полный год в глазах читателя — шум. Прошедшие дни — дата + время.
+  function fmtLibDate(ts) {
+    const d = new Date(ts);
+    if (!Number.isFinite(d.getTime())) return '';
+    const time = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+    if (d.toDateString() === new Date().toDateString()) return 'сегодня, ' + time;
+    return d.toLocaleDateString('ru-RU') + ', ' + time;
+  }
 
   // Единое меню «⋯» карточки трека: 7 действий вместо россыпи кнопок.
   // Мобильный — bottom-sheet (CSS), десктоп — dropdown у кнопки.
@@ -1748,6 +1760,12 @@
     els.modelName.textContent = MODEL_LABELS[quality];
     els.vocalSeg.querySelectorAll('.seg-btn').forEach(b => b.setAttribute('aria-pressed', String(Number(b.dataset.vocal) === (instrumental ? 1 : 0))));
     els.tuneToggle.setAttribute('aria-pressed', String(advanced));
+    // #35 приёмка: «Вернуть как было» видно только когда есть что возвращать.
+    // Видимость выводится из состояния сессии при каждом рендере — чип больше
+    // не может «зависнуть» видимым после переключения режима или чужих правок.
+    els.undoLyrics.hidden = activeSession?.undo?.lyrics == null;
+    els.undoPrompt.hidden = activeSession?.undo?.musicPrompt == null;
+    els.undoPhoto.hidden = activeSession?.undo?.prompt == null;
     paintStyleFamilyBadge();
     // F-37: подпись зависит от режима (песня/инструментал); на узких экранах
     // виден короткий лейбл, полный — всегда в aria-label и title.
@@ -1840,7 +1858,84 @@
       : 'Ключ ещё не задан.';
   }
 
-  // ---- потоки -------------------------------------------------------------------
+  // ---- P1 приёмки UX (#35): ключ как шаг онбординга -----------------------------
+  // Первый вход без ключа — один модальный шаг-карточка «Подключить стенд»
+  // (центр экрана, затемнение) вместо жёлтого баннера над композером и формы
+  // внизу страницы, которые новичок не связывает. Показывается один раз за
+  // профиль: решение («Позже») запоминается — повторный вход не мигает модалкой;
+  // дальше ключ живёт в профиле (меню) и в честных карточках при 401.
+  const KEY_ONBOARD_KEY = nick => 'briix-studio-key-onboarded-' + nick;
+  function keyOnboarding() {
+    const nick = currentUser();
+    if (!nick || token()) return;
+    let seen = null;
+    try { seen = localStorage.getItem(KEY_ONBOARD_KEY(nick)); } catch { /* приватный режим */ }
+    if (seen) return;
+    try { localStorage.setItem(KEY_ONBOARD_KEY(nick), String(Date.now())); } catch { /* приватный режим */ }
+    const overlay = document.createElement('div');
+    overlay.className = 'sessions-overlay confirm-overlay key-onboard-overlay';
+    const dialog = document.createElement('section');
+    dialog.className = 'sessions-dialog confirm-dialog key-onboard';
+    dialog.setAttribute('role', 'dialog');
+    dialog.setAttribute('aria-modal', 'true');
+    dialog.setAttribute('aria-labelledby', 'key-onboard-title');
+    dialog.tabIndex = -1;
+    const head = document.createElement('div');
+    head.className = 'sessions-head';
+    const h = document.createElement('h2');
+    h.id = 'key-onboard-title';
+    h.textContent = 'Подключите стенд';
+    head.append(h);
+    const text = document.createElement('p');
+    text.className = 'sessions-help confirm-body';
+    text.textContent = 'Студия работает с вашим локальным стендом. Вставьте ключ приватного доступа — тот же, что в Настройках демо. Без ключа идеи и черновики сохраняются, но генерация музыки и фото недоступна.';
+    const row = document.createElement('div');
+    row.className = 'key-row';
+    const input = document.createElement('input');
+    input.type = 'password';
+    input.autocomplete = 'off';
+    input.placeholder = 'вставьте ключ';
+    input.setAttribute('aria-label', 'Ключ приватного доступа');
+    const save = document.createElement('button');
+    save.type = 'button';
+    save.className = 'save';
+    save.textContent = 'Подключить';
+    row.append(input, save);
+    const status = document.createElement('p');
+    status.className = 'hint';
+    status.setAttribute('aria-live', 'polite');
+    const actions = document.createElement('div');
+    actions.className = 'ops-actions';
+    const later = document.createElement('button');
+    later.type = 'button';
+    later.className = 'action';
+    later.textContent = 'Позже';
+    actions.append(later);
+    dialog.append(head, text, row, status, actions);
+    overlay.append(dialog);
+    document.body.append(overlay);
+    const finish = () => {
+      document.removeEventListener('keydown', onKey);
+      overlay.remove();
+    };
+    const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); finish(); } };
+    document.addEventListener('keydown', onKey);
+    overlay.addEventListener('click', e => { if (e.target === overlay) finish(); });
+    later.addEventListener('click', finish);
+    const submit = async () => {
+      const value = input.value.trim();
+      if (!value) { status.textContent = 'Ключ пуст — вставьте ключ из Настроек демо.'; input.focus(); return; }
+      setToken(value, { remember: false });
+      renderKeyChip();
+      BRIIX_TOASTS.toast('Ключ сохранён — до закрытия этой вкладки. Запомнить можно в профиле.', { kind: 'done' });
+      finish();
+      updateEnabled();
+    };
+    save.addEventListener('click', submit);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); submit(); } });
+    input.focus();
+  }
+
   async function create() {
     if (storageBlocked || !activeSession || !needKey()) return;
     const text = promptValue();
@@ -1939,6 +2034,22 @@
   // self-refine цикл работает, потому что контекст диалога сохраняется.
   const MUSIC_DRAFT_OPEN = '[briix-draft]';
   const MUSIC_DRAFT_CLOSE = '[/briix-draft]';
+  // P2 приёмки UX (#35): сырой черновик-JSON не должен попадать в заголовки UI.
+  // Старые записи могли сохранить title/prompt целиком вместе с обёрткой
+  // [briix-draft] {...} — на карточке такое выглядит как мусор. Извлекаем
+  // человекое название из JSON; распарсить не удалось — пустая строка
+  // (вызывающие переходят к следующему фолбэку).
+  function cleanDraftTitle(value) {
+    const raw = String(value || '');
+    const open = raw.indexOf(MUSIC_DRAFT_OPEN);
+    if (open < 0) return raw.trim();
+    const close = raw.lastIndexOf(MUSIC_DRAFT_CLOSE);
+    const payload = (close > open ? raw.slice(open + MUSIC_DRAFT_OPEN.length, close) : raw.slice(open + MUSIC_DRAFT_OPEN.length)).trim();
+    try {
+      const value = JSON.parse(payload);
+      return String(value && value.title || '').trim();
+    } catch { return ''; }
+  }
   const musicDraftInstruction = '\n\nКаждый твой ответ заканчивается блоком черновика строго в таком формате:\n'
     + MUSIC_DRAFT_OPEN + '\n{"title":"название песни","prompt":"описание звучания","lyrics":"текст песни","style":"семейство стиля или пустая строка"}\n' + MUSIC_DRAFT_CLOSE + '\n'
     + 'Поле prompt пиши ТОЛЬКО по-английски одной строкой (жанр, темп, вокал, инструменты, продакшн; не выдумывай темп, если он не задан). '
@@ -2478,13 +2589,16 @@
       wait.stop();
       watchStage.disconnect();
       stageBody.closest('.card').remove();
-      // T-27: загрузка файла отменяема вместе с операцией (✕ / смена сессии).
-      const blob = await fileBlob(result.result_url, 1, handle.controller.signal);
-      // Единый рендер-путь с restore-карточкой: обложка = PLAY, волна, меню «⋯».
+      // P0 приёмки UX (#35): карточка «Трек готов» появляется в ленте МГНОВЕННО
+      // по факту ready-джобы, файл докачивается лениво (обложка = PLAY, до клика
+      // аудио не грузится — тот же путь, что у restore-карточки). Раньше сначала
+      // качали блоб (до 60 с) и только потом рисовали карточку — новичок видел
+      // пустую ленту и уходил искать трек в Библиотеку. Отмена (✕ / смена
+      // сессии) по-прежнему гасит загрузку (T-27) — сигнал в loadBlob.
       const trackCard = renderTrackCard(session, {
         who: 'Трек готов (' + MODEL_LABELS[snapshot.quality] + ')',
         job: id, cover: result.cover_url, input, file: result.result_url,
-        loadBlob: () => Promise.resolve(blob)
+        loadBlob: () => fileBlob(result.result_url, 0, handle.controller.signal)
       });
       trackCard.ensureLoaded().then(audio => tryPlay(audio, trackCard.body)).catch(() => {});
       feedPush({ t: 'media', who: 'Трек готов (' + MODEL_LABELS[snapshot.quality] + ')', kind: 'music', file: result.result_url, job: id, cover: result.cover_url || '', input }, session);
@@ -2973,7 +3087,7 @@
       const button = document.createElement('button'); button.type = 'button'; button.className = 'session-item';
       button.setAttribute('aria-current', String(session === activeSession));
       const title = document.createElement('span'); title.textContent = session?.title || 'Новый чат';
-      const date = document.createElement('time'); date.textContent = new Date(session?.updatedAt || session?.createdAt || Date.now()).toLocaleString('ru-RU');
+      const date = document.createElement('time'); date.textContent = fmtLibDate(session?.updatedAt || session?.createdAt || Date.now());
       button.append(title, date); button.addEventListener('click', () => selectSession(session)); els.sessionsList.append(button);
     }
   }
@@ -3100,6 +3214,7 @@
     }
     updateEnabled(); renderKeyChip();
     resumeSessionJobs(activeSession); // T-52: судьба джоб прошлой сессии — в ленту
+    keyOnboarding(); // P1 приёмки UX (#35): один модальный шаг «подключить стенд» при первом входе без ключа
   }
 
   // T-20/F-06: индикатор в шапке — «в другой сессии идёт работа»; клик переносит
@@ -3462,7 +3577,7 @@
       const modelKey = Object.keys(MUSIC_MODELS).find(key => MUSIC_MODELS[key] === entry.model);
       whoText += ' · ' + (MODEL_LABELS[modelKey] || entry.model);
     }
-    whoText += ' · ' + new Date(entry.created).toLocaleString('ru-RU');
+    whoText += ' · ' + fmtLibDate(entry.created);
     who.textContent = whoText;
     const row = document.createElement('div');
     row.className = 'actions';
@@ -3572,7 +3687,7 @@
     }
     // Музыкальная карточка библиотеки = тот же единый компонент, что и в ленте
     // (.track-card): обложка-мини = PLAY, волна из пиков, lazy-загрузка по клику.
-    addTrackCover(div, entry.job, entry.cover, true, entry.title || entry.prompt || '');
+    addTrackCover(div, entry.job, entry.cover, true, cleanDraftTitle(entry.title) || cleanDraftTitle(entry.prompt) || entry.title || entry.prompt || '');
     const sourceInput = sourceSession?.feed.find(item => item && item.job === entry.job)?.input || sourceSession?.jobs?.find(item => item.job === entry.job)?.input || {};
     const input = {
       ...sourceInput,
