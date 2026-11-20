@@ -1,0 +1,27 @@
+{
+  "description": "Слуховой гейт #40: пары «строка наставника (A) vs строка + слоевая сборка мозга (B)». Две волны по 6 треков; владелец слушает оба плеча каждой пары. Лирика — общая, из bench/lyrics-12.json (lyricsId), seed парный внутри трека (tools/bench-ab.cjs).",
+  "waves": [
+    {
+      "wave": 1,
+      "lines": [
+        { "id": "c101", "title": "Night Bus", "lyricsId": "01", "prompt": "moody synth-pop for a late-night city ride, pulsing bass, airy female vocals" },
+        { "id": "c102", "title": "Paper Boats", "lyricsId": "02", "prompt": "gentle acoustic folk, fingerpicked guitar, soft male voice, warm and close" },
+        { "id": "c103", "title": "Iron Sky", "lyricsId": "03", "prompt": "epic industrial rock, heavy distorted guitars, pounding drums, shouted chorus" },
+        { "id": "c104", "title": "Honey Slow", "lyricsId": "04", "prompt": "slow r&b groove, silky vocals, warm electric piano, laid-back drums" },
+        { "id": "c105", "title": "Glasshouse", "lyricsId": "05", "prompt": "dreamy shoegaze, wall of reverb guitars, buried whisper vocals" },
+        { "id": "c106", "title": "Kite Weather", "lyricsId": "06", "prompt": "bright indie pop, jangly guitars, upbeat tempo, cheerful duet" }
+      ]
+    },
+    {
+      "wave": 2,
+      "lines": [
+        { "id": "c201", "title": "Cold Frame", "lyricsId": "07", "prompt": "minimal techno, hypnotic loop, deep sub bass, sparse clicks, no vocals" },
+        { "id": "c202", "title": "Salt & Pine", "lyricsId": "08", "prompt": "coastal americana, lap steel guitar, weathered male vocals, mid-tempo" },
+        { "id": "c203", "title": "Neon Rain", "lyricsId": "09", "prompt": "80s-inspired retrowave, gated reverb drums, analog synth leads, nostalgic" },
+        { "id": "c204", "title": "Root Cellar", "lyricsId": "10", "prompt": "gritty delta blues, slide guitar, raspy voice, raw one-take feel" },
+        { "id": "c205", "title": "Aurora Kids", "lyricsId": "11", "prompt": "ethereal art pop, choir pads, glacial piano, fragile high vocals" },
+        { "id": "c206", "title": "Dust Line", "lyricsId": "12", "prompt": "desert post-rock, slow build from clean arpeggios to massive distorted climax" }
+      ]
+    }
+  ]
+}

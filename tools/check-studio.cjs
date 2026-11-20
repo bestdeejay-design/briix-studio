@@ -1761,15 +1761,20 @@ function bffServer(port) {
   assert.equal(state.jobPosts.length, 0, 'refinement turn still does not generate');
   const refinePost = state.chatPosts.at(-1);
   assert.ok(refinePost.messages.some(m => m.role === 'user' && m.content === 'хочу песню про осень'), 'dialog history is sent to the mentor');
-  // Явная генерация из draft-блока: promptReady-путь, промпт наставника уходит как есть.
+  // Явная генерация из draft-блока (#40): строка наставника — вход (brief), слова
+  // автора первыми; в модель уходит строка + слоевой caption мозга (≤640).
   await p.locator('.music-draft').last().getByRole('button', { name: 'Сгенерировать трек' }).click();
   await p.waitForSelector('#feed audio', { timeout: 30000 });
   assert.equal(state.jobPosts.length, 1, 'draft Generate creates exactly one job');
-  assert.equal(state.jobPosts[0].prompt, 'dream pop, 90 BPM, warm female vocals', 'promptReady path: the mentor prompt is not rewritten');
+  const mentorPrompt = state.jobPosts[0].prompt;
+  assert.ok(mentorPrompt.startsWith('dream pop, 90 BPM, warm female vocals'), '#40: авторская строка наставника идёт первой и не переписывается');
+  assert.ok(mentorPrompt.length <= 640, '#40: итоговый промпт в бюджете 640');
+  assert.ok(mentorPrompt.length > 'dream pop, 90 BPM, warm female vocals'.length, '#40: слоевой caption мозга дозирован к строке наставника');
   assert.match(state.jobPosts[0].params.lyrics, /Новая строка/);
   assert.equal(state.jobPosts[0].params.title, 'Черновик наставника', 'params.title carries the draft title');
   assert.equal(state.jobPosts[0].params.artist, 'tester', 'params.artist is the user nick');
-  assert.equal(state.chatPosts.filter(x => x.stream === false && x.max_tokens === 300).length, 0, 'promptReady path skips silent translation');
+  assert.equal(state.chatPosts.filter(x => x.stream === false && x.max_tokens === 300).length, 0, 'ASCII-путь наставника не зовёт молчаливый перевод');
+  assert.ok(await p.locator('.brain-layers-badge', { hasText: 'промт собран мозгом' }).isVisible(), '#40: честная плашка слоёв мозга в карточке');
   // Диалог и черновики персистятся в session-store (#35 W1-2: единый поток на сессии).
   const savedDialog = await p.evaluate(async () => {
     const { profile } = await BriixSessionStore.open('tester');
@@ -1789,6 +1794,17 @@ function bffServer(port) {
   await p.waitForFunction(() => document.querySelectorAll('#feed audio').length >= 1, {}, { timeout: 30000 });
   assert.equal(state.jobPosts.length, 2, 'composer Generate button creates a job without a dialog turn');
   assert.ok(/^[\x20-\x7E]*$/.test(state.jobPosts[1].prompt), 'quick-path assembly still yields an English prompt');
+  // #109/#40: расширенный ASCII-промпт автора в advanced уходит как есть —
+  // мозговая сборка не применяется и плашки слоёв нет.
+  resetBff();
+  const authorPrompt = 'dream pop, 90 BPM, warm female vocals, sidechain pads, tape hiss intro, wide stereo chorus, dry intimate outro';
+  await p.locator('#tuneToggle').click();
+  await p.waitForFunction(() => !document.getElementById('advanced').hidden);
+  await p.locator('#musicPrompt').fill(authorPrompt);
+  await p.locator('#genTrack').click();
+  await p.waitForFunction(() => document.querySelectorAll('#feed audio').length >= 1, {}, { timeout: 30000 });
+  assert.equal(state.jobPosts.at(-1).prompt, authorPrompt, '#109: расширенный ASCII-промпт автора уходит в модель без перегенерации');
+  assert.equal(await p.locator('.card').last().locator('.brain-layers-badge').count(), 0, '#40/#109: плашки «собран мозгом» у авторского промпта нет');
   ok('music chat: send converses without jobs, mentor system used, draft accept/generate, dialog persisted, explicit composer Generate');
 
   // ---- Анатомия карточки трека (общая для ленты и Библиотеки) --------------------

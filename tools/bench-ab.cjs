@@ -21,6 +21,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const vm = require('node:vm');
 
 const ROOT = path.resolve(__dirname, '..');
 const OUT_DIR = path.join(ROOT, 'bench/out');
@@ -36,6 +37,47 @@ const prompts = JSON.parse(fs.readFileSync(path.join(ROOT, 'bench/prompts-12.jso
 const lyrics = JSON.parse(fs.readFileSync(path.join(ROOT, 'bench/lyrics-12.json'), 'utf8')).lyrics;
 const lyricById = new Map(lyrics.map(l => [l.id, l]));
 
+// ---- Режим #40: слуховой гейт «строка наставника vs слоевая сборка» ----------
+// Запуск: node tools/bench-ab.cjs --chat --wave 1 [--wave 2]
+// A = строка наставника как есть (то, что до #40 уходило в модель),
+// B = та же строка (слова автора первыми) + слоевой caption мозга
+// (buildCaption, бюджет ≤640) — ровно та сборка, что теперь работает в чате.
+// Две волны, обе нужно прослушать; ключ обезличен, как в базовом режиме.
+const CHAT = process.argv.includes('--chat');
+const WAVE = Number((process.argv.find((a, i) => process.argv[i - 1] === '--wave')) || 1);
+
+// Зеркало продакшн-сборки studio.js (#40): строка наставника — вход, слова
+// автора первыми, brain-теги дозируются теми, которых в строке ещё нет.
+function mentorPromptB(line) {
+  const brainScope = {};
+  vm.runInNewContext(fs.readFileSync(path.join(ROOT, 'studio/music-brain.js'), 'utf8'), brainScope);
+  const brain = brainScope.BRIIX_MUSIC_BRAIN;
+  const budget = Math.max(240, brain.rules.MAX_CAPTION - (line.length + 2));
+  const built = brain.buildCaption(line, {
+    kind: /без\s+(слов|вокал|текст)|no\s+vocals|instrumental/i.test(line) ? 'instrumental' : 'song',
+    language: 'en',
+    bpm: brain.detectBpm(line),
+    maxTags: budget
+  });
+  const low = line.toLowerCase();
+  const add = (built.caption || '').split(',').map(t => t.trim()).filter(t => t && !low.includes(t.toLowerCase()));
+  return add.length ? line + ', ' + add.join(', ') : line;
+}
+
+const chatPlan = wave => {
+  const data = JSON.parse(fs.readFileSync(path.join(ROOT, 'bench/mentor-lines.json'), 'utf8'));
+  const w = data.waves.find(x => x.wave === wave);
+  if (!w) throw new Error('волна ' + wave + ' не найдена в bench/mentor-lines.json');
+  return w.lines.map(l => ({
+    track: l.id, title: l.title, seed: pairSeed(l.id),
+    lyrics: lyricById.get(l.lyricsId)?.lyrics || '',
+    files: {
+      A: { prompt: l.prompt },
+      B: { prompt: mentorPromptB(l.prompt) }
+    }
+  }));
+};
+
 // Один seed на трек для ОБЕИХ версий: иначе A и B расходятся ещё и по шуму
 // сэмплера, и слепое сравнение меряет удачу, а не caption. Одинаковый seed
 // делает пару «x/y» парной — различие объясняется только промтом.
@@ -50,19 +92,24 @@ function coin(trackId) {
   return h[0] % 2 === 0;
 }
 
-const plan = prompts.tracks.map(t => {
-  const aFirst = coin(t.track);
+const pairOf = (track, promptA, promptB) => {
+  const aFirst = coin(track);
   return {
-    track: t.track,
-    title: t.title,
-    seed: pairSeed(t.track),
-    lyrics: lyricById.get(t.track)?.lyrics || '',
     files: {
-      x: { source: aFirst ? 'A' : 'B', prompt: aFirst ? t.promptA : t.promptB },
-      y: { source: aFirst ? 'B' : 'A', prompt: aFirst ? t.promptB : t.promptA }
+      x: { source: aFirst ? 'A' : 'B', prompt: aFirst ? promptA : promptB },
+      y: { source: aFirst ? 'B' : 'A', prompt: aFirst ? promptB : promptA }
     }
   };
-});
+};
+const plan = CHAT
+  ? chatPlan(WAVE).map(p => Object.assign(p, pairOf(p.track, p.files.A.prompt, p.files.B.prompt)))
+  : prompts.tracks.map(t => {
+      const p = pairOf(t.track, t.promptA, t.promptB);
+      return { track: t.track, title: t.title, seed: pairSeed(t.track), lyrics: lyricById.get(t.track)?.lyrics || '', files: p.files };
+    });
+const sourceLabel = s => CHAT
+  ? (s === 'A' ? 'строка наставника (A)' : 'слоевая сборка мозга (B)')
+  : (s === 'A' ? 'владелец (A)' : 'мозг v2 (B)');
 
 async function bff(method, url, body) {
   const res = await fetch(BASE.replace(/\/$/, '') + url, {
@@ -108,6 +155,7 @@ async function generate(job, label) {
   fs.mkdirSync(OUT_DIR, { recursive: true });
   if (DRY) {
     console.log('DRY-RUN: генерация не выполняется' + (BASE ? ' (нет MEDIA_BFF_TOKEN)' : ' (нет MEDIA_BFF_URL)'));
+    if (CHAT) console.log(`Режим #40 (chat): A = строка наставника, B = слоевая сборка; волна ${WAVE} из 2`);
     console.log('План: ' + plan.length + ' треков × 2 версии, последовательно, wav, model=' + MODEL + ', duration=' + DURATION + ', парный seed на трек');
     for (const p of plan) console.log(`  track-${p.track}: x ← ${p.files.x.source}, y ← ${p.files.y.source}  seed=${p.seed}  (${p.title})`);
     console.log('\nКлюч НЕ пишется в dry-run: bench/KEY.md появится только вместе с файлами.');
@@ -121,7 +169,7 @@ async function generate(job, label) {
     // нагрузка на стенд разная и сравнение грязное).
     await generate(p, 'x');
     await generate(p, 'y');
-    key.push(`| track-${p.track} | track-${p.track}-x.wav | ${p.files.x.source === 'A' ? 'владелец (A)' : 'мозг v2 (B)'} | track-${p.track}-y.wav | ${p.files.y.source === 'A' ? 'владелец (A)' : 'мозг v2 (B)'} |`);
+    key.push(`| track-${p.track} | track-${p.track}-x.wav | ${sourceLabel(p.files.x.source)} | track-${p.track}-y.wav | ${sourceLabel(p.files.y.source)} |`);
   }
   fs.writeFileSync(KEY_FILE, [
     '# КЛЮЧ A/B — открывать ТОЛЬКО после голосования',
@@ -131,7 +179,9 @@ async function generate(job, label) {
     ...key,
     '',
     `Генерация: model=${MODEL}, duration=${DURATION}s, wav, последовательно. Seed парный внутри трека (одинаковый у x и y), значения — в plan.`,
-    'A = caption владельца (REFERENCE-ALBUM), B = caption music-brain v2 (buildCaption).',
+    CHAT
+      ? `A = строка наставника как есть, B = та же строка + слоевой caption мозга (buildCaption ≤640). Волна ${WAVE} из 2 (issue #40).`
+      : 'A = caption владельца (REFERENCE-ALBUM), B = caption music-brain v2 (buildCaption).',
     'VOCAL-блок у обеих версий одинаковый.'
   ].join('\n') + '\n');
   console.log('Готово. Ключ: bench/KEY.md (не открывать до голосования).');

@@ -1601,6 +1601,14 @@
 
   // Transparency-блок: что уехало в модель (#109) + происхождение лирики и имя/исполнитель.
   function addMusicDetails(container, input) {
+    // #40: честная плашка — промт ушёл в модель слоевой сборкой мозга. Не ставится,
+    // когда в модель ушёл нетронутый авторский ASCII-промпт (правило #109).
+    if (Number.isInteger(input.brainLayers) && input.brainLayers > 0) {
+      const badge = document.createElement('p');
+      badge.className = 'producer-note brain-layers-badge';
+      badge.textContent = 'промт собран мозгом: ' + input.brainLayers + ' ' + layersWord(input.brainLayers);
+      container.append(badge);
+    }
     const details = document.createElement('details'); details.className = 'track-details';
     const summary = document.createElement('summary'); summary.textContent = 'Что уехало в модель';
     const text = document.createElement('div');
@@ -2170,7 +2178,9 @@
       revert.hidden = false;
       // T-21: контекст идёт аргументом — параллельная генерация B не подхватит
       // название/источник лирики черновика A.
-      await createMusic(els.musicPrompt.value, { title: titleField.value.trim() || null, lyricsSource: 'наставник: ' + entry.who }); // promptReady-путь: английский промпт черновика уходит как есть
+      // #40: строка наставника — вход (brief) для слоевого buildCaption, не готовый
+      // промпт: в модель уходит слоевая сборка мозга (≤640), слова автора приоритетны.
+      await createMusic(els.musicPrompt.value, { title: titleField.value.trim() || null, lyricsSource: 'наставник: ' + entry.who, mentorBrief: true });
     }));
     actions.append(apply, revert, generate); body.append(actions);
   }
@@ -2241,6 +2251,28 @@
   }
 
   // Brain-теги приоритетнее: добавляем к переводу только те, которых ещё нет.
+  // #40: сколько слоёв реально вошло в слоевой caption мозга (anchor/voice/
+  // rhythm/space/depth/tail) — для честной плашки в карточке трека.
+  function brainLayerCount(layers) {
+    if (!layers || typeof layers !== 'object') return 0;
+    let n = 0;
+    const len = a => (Array.isArray(a) ? a.length : 0);
+    if (layers.anchor && (len(layers.anchor.genre) || len(layers.anchor.era))) n++;
+    if (layers.voice && (len(layers.voice.tags) || layers.voice.identityTag)) n++;
+    if (layers.rhythm && (layers.rhythm.bpm || layers.rhythm.phrase || len(layers.rhythm.bass))) n++;
+    if (layers.space && (len(layers.space.instruments) || len(layers.space.atmosphere) || len(layers.space.production) || len(layers.space.place))) n++;
+    if (layers.space?.depth && len(layers.space.depth.tags)) n++;
+    if (layers.tail && (len(layers.tail.dynamics) || len(layers.tail.mood) || len(layers.tail.concept))) n++;
+    return n;
+  }
+  // 1 слой / 2 слоя / 5 слоёв — русская плюрализация для плашки.
+  function layersWord(n) {
+    const mod10 = n % 10, mod100 = n % 100;
+    if (mod10 === 1 && mod100 !== 11) return 'слой';
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'слоя';
+    return 'слоёв';
+  }
+
   function mergePromptTags(base, tags) {
     if (!base) return tags || '';
     if (!tags) return base;
@@ -2414,9 +2446,24 @@
       const brainBudget = extra => Math.max(240, CAPTION_BUDGET - (extra ? extra.length + 2 : 0));
       let brain = brainFor(CAPTION_BUDGET);
       let finalPrompt;
-      if (snapshot.advanced && style && BriixProducer.isAsciiOnly(style)) {
-        // Пользователь/продюсер уже собрал английский промпт: не переписываем его.
+      // #40: честная плашка «промт собран мозгом: N слоёв» — заполняется, когда
+      // в уходящий промпт внёс вклад слоевой caption мозга (0 = чистый авторский
+      // ASCII-промпт без мозговой сборки, правило #109).
+      let brainLayers = 0;
+      const mentorBrief = ctx.mentorBrief === true;
+      if (snapshot.advanced && style && BriixProducer.isAsciiOnly(style) && !mentorBrief) {
+        // Пользователь/продюсер уже собрал английский промпт: не переписываем его
+        // (правило #109) — мозговая сборка не применяется.
         finalPrompt = style;
+      } else if (mentorBrief && style && BriixProducer.isAsciiOnly(style)) {
+        // Чат-сценарий (#40): строка наставника — ВХОД (brief), а не готовый промпт.
+        // Слова автора идут первыми и не теряются (чистый caption без автора
+        // теряет смысл: «female» в «male»), слоевой caption мозга (roles/mix/
+        // form/depth/атмосфера, бюджет ≤640 с учётом строки) дозируется теми
+        // тегами, которых в идее ещё нет.
+        brain = brainFor(brainBudget(style));
+        finalPrompt = mergePromptTags(style, brain.caption);
+        brainLayers = brainLayerCount(brain.layers);
       } else if (style && !BriixProducer.isAsciiOnly(style)) {
         // Не-ASCII идея (например русская) → связный английский перевод через
         // producer-чат; brain-теги приоритетнее сырого перевода и остаются,
@@ -2426,15 +2473,18 @@
         catch (error) { if (error.name === 'AbortError' || error.code === 'cancelled') throw error; }
         if (fluent) brain = brainFor(brainBudget(fluent));
         finalPrompt = fluent ? mergePromptTags(fluent, brain.tags) : (brain.tags || style);
+        brainLayers = brainLayerCount(brain.layers);
       } else if (style) {
-        // Быстрый путь с уже английской идеей: brain-теги обязательны —
-        // добавляем те, которых в идее ещё нет.
+        // Быстрый путь с уже английской идеей (simple-композер): brain-теги
+        // обязательны — добавляем те, которых в идее ещё нет (#40: слоевой вход).
         brain = brainFor(brainBudget(style));
         finalPrompt = mergePromptTags(style, brain.tags);
+        brainLayers = brainLayerCount(brain.layers);
       } else {
         // Только лирика: Brain отдельно собирает описание звучания; исходные
         // строки остаются только в params.lyrics и не дублируются в prompt.
         finalPrompt = brain.tags || '';
+        brainLayers = brainLayerCount(brain.layers);
       }
       if (snapshot.advanced && !snapshot.instrumental && lyrics) {
         const structure = BriixProducer.structureWarnings(lyrics); // ручная лирика: предупредить, не навязывать
@@ -2466,7 +2516,7 @@
       // promptSent — ровно то, что ушло в модель; повтор подставляет исходную идею.
       const requestBase = rawIdea || lyrics;
       const input = { prompt: requestBase, promptSent: finalPrompt !== requestBase ? finalPrompt : undefined, lyrics, model: MUSIC_MODELS[snapshot.quality], instrumental: snapshot.instrumental, parentJobId: snapshot.parentJobId,
-        title: trackTitle, artist: currentUser(),
+        title: trackTitle, artist: currentUser(), brainLayers: brainLayers > 0 ? brainLayers : undefined,
         lyricsSource: draftSource || (snapshot.advanced ? 'написал пользователь' : (vocal && !lyrics ? 'автолирика (автор песен)' : 'написал пользователь')) };
       const id = await submitJob({ type: 'music', prompt: finalPrompt, params });
       handle.jobId = id; // ✕ после отправки отменяет джобу и на сервере (T-05)
