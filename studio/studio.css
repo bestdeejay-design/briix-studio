@@ -778,6 +778,15 @@ button:disabled { cursor: not-allowed; opacity: .4; }
   color: var(--amber);
   font-size: 12px;
 }
+/* P4 #35: честная фактическая длительность, если трек длиннее запрошенного */
+.length-note {
+  margin: 4px 0;
+  padding: 6px 10px;
+  border: 1px dashed var(--amber);
+  border-radius: 8px;
+  color: var(--amber);
+  font-size: 12px;
+}
 /* #35 UI v2: на узких экранах музыкальный композер должен оставлять ленте место:
  * «Новый чат» сжимается до иконки (дубль в диалоге «История» остаётся),
  * подсказка Enter убирается (полный смысл — в F-50-подсказке диалога). */

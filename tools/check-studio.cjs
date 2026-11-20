@@ -1263,6 +1263,42 @@ function bffServer(port) {
   assert.equal(state.pollAttempts, 5, 'two temporary errors followed by three status requests');
   ok('429 and 503 polling recovers without duplicate generation');
 
+  // P1-2 #35: затяжной 429-шторм больше не «сдаётся» после 5 сбоев: экспоненциальный
+  // backoff продолжается, статус в карточке честный («продолжаем ждать»), POST один,
+  // джоба не теряется и доходит до карточки, когда сервер отвечает.
+  resetBff(); state.pollFailures = [429, 429, 429, 429, 429, 429];
+  p = await page();
+  await p.locator('.mode[data-mode="photo"]').click();
+  await p.locator('#prompt').fill('Проверка упорства поллинга');
+  await p.locator('#send').click();
+  await p.waitForFunction(() => document.querySelector('#status')?.textContent.includes('продолжаем ждать'), {}, { timeout: 30000 });
+  assert.equal(state.jobPosts.length, 1, 'persistent failures never resubmit the job');
+  await p.waitForSelector('.card img.media-in', { timeout: 30000 });
+  assert.ok(state.pollAttempts >= 8, 'polling keeps trying past five failures (' + state.pollAttempts + ')');
+  assert.equal(state.jobPosts.length, 1, 'still a single POST after recovery');
+  await p.context().close();
+  ok('persistent 429 polling: exponential backoff past 5 failures, honest status, job not lost');
+
+  // P1-2 #35: повторный «Сгенерировать» с теми же данными при живой джобе — диалог
+  // «наблюдать существующую», дубль GPU-джобы не создаётся.
+  resetBff(); state.pollFailures = [429, 429, 429, 429, 429, 429, 429, 429];
+  p = await page();
+  await p.locator('.mode[data-mode="photo"]').click();
+  await p.locator('#prompt').fill('Проверка защиты от дублей');
+  await p.locator('#send').click();
+  // Джоба «жива» (поллинг ещё идёт, запись в session.jobs) — жмём отправку повторно
+  // с тем же промптом (первая отправка очистила поле).
+  await p.waitForFunction(() => document.querySelector('#status')?.textContent.includes('продолжаем ждать'), {}, { timeout: 30000 });
+  await p.locator('#prompt').fill('Проверка защиты от дублей');
+  await p.locator('#send').click();
+  await p.waitForSelector('.confirm-dialog', { timeout: 10000 });
+  assert.match(await p.locator('.confirm-dialog').innerText(), /уже выполняется/, 'диалог честно называет живую джобу');
+  await p.locator('.confirm-dialog .session-new').click(); // «Наблюдать»
+  await p.waitForFunction(() => [...document.querySelectorAll('.card.stage')].some(c => c.textContent.includes('(продолжение)')), {}, { timeout: 10000 }); // карточка «Фото (продолжение)»
+  assert.equal(state.jobPosts.length, 1, 'duplicate GPU job is never submitted');
+  await p.context().close();
+  ok('duplicate guard: same-params resubmit offers to watch the existing job, no second POST');
+
   // Узкий и низкий экран: оба измерения видимых кнопок и отсутствие горизонтального переполнения.
   p = await page({ viewport: { width: 320, height: 568 } });
   await p.locator('.mode[data-mode="music"]').click();
@@ -1786,7 +1822,8 @@ function bffServer(port) {
   // Отдельная кнопка «Сгенерировать трек» в композере: явная генерация без диалога.
   await p.locator('#prompt').fill('спокойный эмбиент для чтения');
   await p.locator('#genTrack').click();
-  await p.waitForFunction(() => document.querySelectorAll('#feed audio').length >= 1, {}, { timeout: 30000 });
+  // P3 #35: mini-player restore доигружает прежний трек — ждём именно НОВОЕ аудио.
+  await p.waitForFunction(() => document.querySelectorAll('#feed audio').length >= 2, {}, { timeout: 30000 });
   assert.equal(state.jobPosts.length, 2, 'composer Generate button creates a job without a dialog turn');
   assert.ok(/^[\x20-\x7E]*$/.test(state.jobPosts[1].prompt), 'quick-path assembly still yields an English prompt');
   ok('music chat: send converses without jobs, mentor system used, draft accept/generate, dialog persisted, explicit composer Generate');

@@ -26,12 +26,15 @@
     };
   }
 
-  async function load(base, { force = false } = {}) {
+  async function load(base, { force = false, key = '' } = {}) {
     if (!base) throw new Error('catalog: адрес сервера не задан');
+    // P3 #35: без ключа /v1/models не дёргаем — раньше каждая загрузка студии
+    // без ключа давала 401 и красную ошибку в консоли.
+    if (!key) throw new Error('catalog: ключ не задан — каталог не запрашивается');
     if (!force && cache && Date.now() - cache.at < TTL_MS) return true;
     if (inflight) return inflight;
     inflight = (async () => {
-      const response = await fetch(String(base).replace(/\/+$/, '') + '/v1/models');
+      const response = await fetch(String(base).replace(/\/+$/, '') + '/v1/models', { headers: { Authorization: 'Bearer ' + key } });
       if (!response.ok) throw new Error('catalog: HTTP ' + response.status);
       const payload = await response.json();
       const list = Array.isArray(payload && payload.data) ? payload.data : [];

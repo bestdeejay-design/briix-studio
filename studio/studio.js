@@ -75,9 +75,15 @@
   } catch { /* ignore */ }
   const headers = () => ({ Authorization: 'Bearer ' + token(), 'Content-Type': 'application/json' });
 
-  // Каталог моделей (F-59): один запрос за сессию, без авторизации. Сбой
-  // не мешает работе — ожидание просто останется без ориентира времени.
-  BRIIX_CATALOG.load(server()).catch(() => {});
+  // Каталог моделей (F-59): один запрос за сессию. P3 #35: без ключа /v1/models
+  // не дёргаем (каждая загрузка студии давала 401 в консоли); сбой не мешает
+  // работе — ожидание просто останется без ориентира времени.
+  function loadCatalog() {
+    const key = token();
+    if (!key) return;
+    BRIIX_CATALOG.load(server(), { key }).catch(() => {});
+  }
+  loadCatalog();
 
   class BusError extends Error {
     constructor(code, message, status = 0) { super(message || code); this.code = code; this.status = status; }
@@ -103,8 +109,10 @@
       throw new BusError(code, message, response.status);
     }
     if (response.status === 429 || response.status === 503) {
+      // P1-2 (#35): прокси отдаёт 429 без Retry-After и с пустой очередью —
+      // «очередь заполнена» было враньём. Честно: сервер временно не отвечает.
       const error = response.status === 429
-        ? new BusError('queue_full', 'Очередь сервера заполнена.', 429)
+        ? new BusError('queue_full', 'Сервер временно не отвечает — перегружен. Мы повторим автоматически.', 429)
         : new BusError('unavailable', 'Сервер или бэкенд недоступен.', 503);
       error.retryAfter = response.headers.get('Retry-After');
       throw error;
@@ -226,11 +234,13 @@
           if (error.status === 401 || error.name === 'AbortError') throw error;
           // T-26: известный офлайн — не сбой, а пауза: счётчик не растёт.
           if (error.code === 'offline') { failures = 0; retryWait = 0; onRetry?.(0); continue; }
+          // P1-2 (#35): молча не сдаёмся после 5 сбоев — экспоненциальный backoff
+          // (Retry-After → 1/2/4/8… с, потолок паузы 30 с) до общего потолка
+          // ожидания (timeoutMs). Честный статус в карточке — через onRetry.
           failures++;
-          if (failures >= 5) throw error;
           retryWait = retryDelay({ headers: { get: () => error.retryAfter } }, failures - 1);
-          if (retryWait > 30000) throw error;
-          onRetry?.(failures);
+          if (retryWait > 30000) retryWait = 30000;
+          onRetry?.(failures, retryWait);
           continue;
         }
         if (failures) { failures = 0; retryWait = 0; onRetry?.(0); }
@@ -248,7 +258,11 @@
           throw new BusError(data.status, 'Задача не завершилась: ' + reason + '.');
         }
       }
-      throw new BusError('timeout', 'Задача выполняется слишком долго — ожидание прервано.');
+      // P1-2 (#35): исчерпание поллинга не теряет джобу — она продолжает
+      // выполняться на сервере, продолжить наблюдение можно из Библиотеки
+      // (серверный список /jobs) или при следующем открытии сессии
+      // (session.jobs не settles — restore возобновит поллинг).
+      throw new BusError('watch_expired', 'Сервер долго не отвечал на статус — мы перестали следить, но генерация продолжается на сервере. Результат появится в Библиотеке.');
     } finally { activePolls--; }
   }
 
@@ -648,6 +662,28 @@
     session.updatedAt = Date.now();
     persistSessions();
   }
+  // P1-2 (#35): защита от дублей GPU-джоб. После сбоя поллинга джоба продолжает
+  // работать на сервере (запись остаётся в session.jobs); повторное «Сгенерировать»
+  // с теми же данными не создаёт вторую генерацию, а предлагает наблюдать
+  // существующую. Отпечаток — нормализованные входные данные генерации.
+  function jobFingerprint(kind, data) {
+    const norm = v => String(v || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    return JSON.stringify(kind === 'photo'
+      ? ['photo', norm(data.prompt)]
+      : ['music', norm(data.prompt), norm(data.lyrics), data.model || '', data.instrumental ? 1 : 0]);
+  }
+  async function guardDuplicateJob(session, kind, data) {
+    const fp = jobFingerprint(kind, data);
+    const rec = (Array.isArray(session.jobs) ? session.jobs : []).find(r => r?.kind === kind && jobFingerprint(r.kind, r.input || {}) === fp);
+    if (!rec) return true;
+    const watch = await BRIIX_TOASTS.confirmDialog({
+      title: 'Такая генерация уже выполняется',
+      body: 'Задача с этими же данными ещё выполняется на сервере — новая генерация создала бы дубль. Наблюдать существующую?',
+      confirmLabel: 'Наблюдать'
+    });
+    if (watch) resumeWaitingJob(session, rec);
+    return false;
+  }
   // T-52: выполненная джоба покидает session.jobs — результат уже в ленте (feed),
   // повторный рендер при следующей загрузке не нужен.
   function settleSessionJob(session, jobId) {
@@ -765,17 +801,27 @@
     if (session !== activeSession) return;
     const stageBody = card('stage', rec.kind === 'music' ? 'Музыка (продолжение)' : 'Фото (продолжение)', '', session);
     const eta = etaNote(rec.kind === 'music' ? (rec.input?.model || '') : 'flux-2-klein-4b', 'продолжение');
-    const wait = waitRow(rec.kind === 'music' ? 'music' : 'image', rec.kind === 'music' ? 'synthesizing' : 'generating', { onTick: eta.update });
+    // P3 (#35): начальная стадия — честная: вокал на сервере всегда начинается
+    // с «лирика», инструментал — с «разогрев модели» (не прыгаем вперёд).
+    const resumeStages = rec.kind === 'music'
+      ? (rec.input?.instrumental ? ['model-warmup', 'generating', 'album-cover'] : ['writing-lyrics', 'synthesizing', 'album-cover'])
+      : ['generating'];
+    const wait = waitRow(rec.kind === 'music' ? 'music' : 'image', resumeStages[0], { onTick: eta.update });
     const handle = trackedHandle('resume', session, rec.kind === 'music' ? 'ожидание трека' : 'ожидание фото');
     handle.jobId = rec.job;
     appendStop(wait.row, handle);
     stageBody.append(wait.row, eta.el);
+    let resumeStageIdx = 0;
     (async () => {
       try {
         const result = await pollJob(rec.job, { shouldStop: () => handle.cancelled, onStatus: d => {
-          if (d.stage) stageBody.querySelector('[data-wait]')?.setAttribute('data-wait-stage', d.stage);
-        }, onRetry: n => setStatus(n ? ('Связь прерывается, пробуем снова (' + n + '/5)…') : 'Работаем…', true) });
-        settleSessionJob(session, rec.job);
+          // P3 (#35): этапы только вперёд — серверный откат не отматывает прогресс.
+          if (!d.stage) return;
+          const i = resumeStages.indexOf(d.stage);
+          if (i < resumeStageIdx) return;
+          resumeStageIdx = i;
+          stageBody.querySelector('[data-wait]')?.setAttribute('data-wait-stage', d.stage);
+        }, onRetry: retryStatus });
         wait.stop();
         stageBody.closest('.card').remove();
         await finishResumedJob(session, rec, result);
@@ -838,8 +884,16 @@
   }
 
   function setStatus(text, isBusy) {
-    els.status.textContent = text || 'готов';
+    // P3 (#35): при оффлайне строка композера не рапортует «готов».
+    els.status.textContent = text || (netOnline ? 'готов' : 'нет сети');
     els.status.classList.toggle('busy', Boolean(isBusy));
+  }
+  // P1-2 (#35): честный статус при сбоях поллинга — не «связь прерывается (n/5)»,
+  // а «сервер не отвечает на статус, продолжаем ждать» без обещанной сдачи после 5.
+  function retryStatus(n, waitMs) {
+    setStatus(n
+      ? 'Сервер не отвечает на статус, продолжаем ждать (сбой ' + n + ', пауза ' + Math.max(1, Math.round((waitMs || 0) / 1000)) + ' с)…'
+      : 'Работаем…', true);
   }
 
   function currentAssistant() {
@@ -927,7 +981,7 @@
   attachMenu(els.modelChip, els.modelMenu, () => {
     // Честная карточка модели (F-59): идентификатор + замеренный ориентир +
     // статус из каталога. Каталог может быть не загружен — тогда без статуса.
-    BRIIX_CATALOG.load(server()).catch(() => {});
+    loadCatalog();
     return Object.keys(MUSIC_MODELS).map(q => {
       const id = MUSIC_MODELS[q];
       const cat = BRIIX_CATALOG.model(id);
@@ -1129,9 +1183,10 @@
   function errorTitle(error) {
     if (error.code === 'network') return 'Нет соединения';
     if (error.code === 'unauthorized') return 'Ключ';
-    if (error.code === 'queue_full' || error.code === 'unavailable') return 'Сервер занят';
+    if (error.code === 'queue_full' || error.code === 'unavailable') return 'Сервер перегружен';
     if (error.code === 'job_gone' || error.code === 'expired') return 'Файл устарел';
     if (error.code === 'timeout') return 'Долго нет ответа';
+    if (error.code === 'watch_expired') return 'Наблюдение прервано';
     if (error.code === 'bad_response' || error.code === 'empty_stream') return 'Сервер ответил странно';
     return 'Ошибка';
   }
@@ -1253,6 +1308,19 @@
     frame.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
   }
 
+  // P3 #35: jobId → ленивая загрузка карточки ленты. restoreMiniPlayer доигружает
+  // последний игравший трек после перезагрузки: карточка претендует на аудио
+  // (BriixPlayer.claim) — мини-плеер возвращается вpaused-состоянии, звук сам
+  // не включается.
+  const feedCardLoaders = new Map();
+  function restoreMiniPlayer() {
+    let saved;
+    try { saved = JSON.parse(sessionStorage.getItem('briix-mini-last') || 'null'); } catch { return; }
+    const job = saved && saved.job;
+    if (!job) return;
+    const load = feedCardLoaders.get(job);
+    if (load) load().catch(() => { /* карточка недоступна — плеер не показываем */ });
+  }
   // Единый рендер трек-карточки (лента fresh/restore и Библиотека — один компонент,
   // класс-маркер .track-card): обложка (или внешняя мини-обложка), название трека
   // заголовком (F-18), волна из серверных пиков (сразу, до загрузки аудио),
@@ -1360,7 +1428,31 @@
         audio.addEventListener('loadedmetadata', paintTime);
         audio.addEventListener('durationchange', paintTime);
         paintTime();
-        audio.addEventListener('play', () => { frame.classList.add('playing'); frame.setAttribute('aria-label', 'Пауза'); });
+        // P4 (#35): сервер вернул трек длиннее запрошенного — расхождение
+        // называется честно в карточке (фактическая длительность и так видна
+        // в таймкоде, но «дольше, чем заказывали» выделяем отдельно).
+        // Поле lengthHint — только клиентская память о заказанной длине;
+        // в params/запросах длительность по-прежнему не отправляется (SPEC).
+        audio.addEventListener('loadedmetadata', () => {
+          const requested = Number(input.lengthHint);
+          if (!Number.isFinite(requested) || requested <= 0 || !(audio.duration > requested + 2)) return;
+          let note = wrap.querySelector('.length-note');
+          if (!note) {
+            note = document.createElement('div');
+            note.className = 'length-note';
+            note.setAttribute('role', 'status');
+            wrap.append(note);
+          }
+          note.textContent = 'Трек длиннее запрошенного: фактически ' + BriixPlayer.fmtTime(audio.duration)
+            + ' при заказанных ' + BriixPlayer.fmtTime(requested) + '.';
+        });
+        audio.addEventListener('play', () => {
+          frame.classList.add('playing');
+          frame.setAttribute('aria-label', 'Пауза');
+          // P3 #35: запоминаем последний игравший трек — после перезагрузки
+          // мини-плеер возвращается к нему (restoreMiniPlayer).
+          if (job) { try { sessionStorage.setItem('briix-mini-last', JSON.stringify({ job, at: Date.now() })); } catch { /* приватный режим */ } }
+        });
         audio.addEventListener('pause', () => { frame.classList.remove('playing'); frame.setAttribute('aria-label', 'Слушать трек'); });
         return audio;
       } catch (error) {
@@ -1373,6 +1465,9 @@
       }
     })();
     makeCoverPlayable(frame, state, ensureLoaded);
+    // P3 #35: реестр ленивых загрузок карточек ленты — для восстановления
+    // мини-плеера после перезагрузки (без автозвука: аудио остаётся на паузе).
+    if (job) feedCardLoaders.set(job, ensureLoaded);
     return { body: wrap, ensureLoaded };
   }
 
@@ -1890,7 +1985,13 @@
       ];
       // T-39: чанки копятся и применяются одним кадром (без layout thrash).
       sink = streamSink(textSpan, wait);
-      const full = await chatStream({ messages, signal: handle.controller.signal, onChunk: piece => sink.push(piece) });
+      // P1-1 (#35): у чата тот же клиентский потолок, что у продюсера/автолирики
+      // (150 с, лимит каталога chat 180): молчащий Z.ai больше не висит вечно.
+      const full = await chatStream({
+        messages,
+        signal: AbortSignal.any([handle.controller.signal, AbortSignal.timeout(150000)]),
+        onChunk: piece => sink.push(piece)
+      });
       sink.dispose();
       stopRow.remove();
       body.classList.remove('streaming');
@@ -1910,6 +2011,8 @@
     } catch (error) {
       stopRow.remove();
       sink?.sync(); // T-39: недоставленный в кадр текст не пропадает
+      // P1-1 (#35): таймаут — не «остановлено вручную»: честная карточка ошибки.
+      if (error.name === 'TimeoutError') error = new BusError('timeout', 'Наставник не ответил за 150 секунд — соединение прервано. Можно отправить идею ещё раз.');
       if (error.name === 'AbortError') {
         if (body.textContent.trim()) { // частичный ответ остаётся в ленте
           const note = document.createElement('div');
@@ -1918,9 +2021,11 @@
           body.append(note);
         } else body.closest('.card').remove();
       } else {
-        if (!body.textContent.trim()) body.closest('.card').remove(); // пустая карточка без ответа не висит
-        if (session === activeSession && mode === 'music' && !els.prompt.value.trim()) els.prompt.value = text;
-        else if (session === activeSession && mode !== 'music' && !drafts.music.trim()) drafts.music = text;
+        // Частичный ответ уже виден в ленте — в поле не возвращаем (не дублируем).
+        const partial = Boolean(body.textContent.trim());
+        if (!partial) body.closest('.card').remove(); // пустая карточка без ответа не висит
+        if (!partial && session === activeSession && mode === 'music' && !els.prompt.value.trim()) els.prompt.value = text;
+        else if (!partial && session === activeSession && mode !== 'music' && !drafts.music.trim()) drafts.music = text;
         errorCard(error, session);
       }
     } finally {
@@ -2198,12 +2303,19 @@
     appendStop(wait.row, handle);
     stageBody.append(wait.row, eta.el);
     try {
+      // P1-2 (#35): активная джоба с тем же запросом — предлагаем наблюдать, не дублируем GPU.
+      if (!(await guardDuplicateJob(session, 'photo', { prompt: text }))) {
+        wait.stop();
+        stageBody.closest('.card').remove();
+        card('notice', 'Уже выполняется', 'Наблюдение за существующей задачей показано в ленте.', session);
+        return;
+      }
       const id = await submitJob({ type: 'image', prompt: text, params: { artist: currentUser() } }); // T-41: фото-джоба атрибутируема в общем списке /jobs
       handle.jobId = id; // ✕ после отправки отменяет джобу и на сервере (T-05)
       recordSessionJob(session, id, 'photo', { prompt: text });
       const result = await pollJob(id, { shouldStop: () => handle.cancelled, onStatus: d => {
         if (d.stage) stageBody.querySelector('[data-wait]')?.setAttribute('data-wait-stage', d.stage);
-      }, onRetry: n => setStatus(n ? ('Связь прерывается, пробуем снова (' + n + '/5)…') : 'Работаем…', true) });
+      }, onRetry: retryStatus });
       settleSessionJob(session, id);
       wait.stop();
       stageBody.closest('.card').remove();
@@ -2325,7 +2437,9 @@
     feedPush({ t: 'user', who: 'Вы', text: requestText }, session);
     const stageBody = card('stage', 'Музыка', '', session); // мгновенно, включая фазу автолирики
     const eta = etaNote(MUSIC_MODELS[snapshot.quality], MODEL_LABELS[snapshot.quality]);
-    const wait = waitRow('music', !vocal ? 'model-warmup' : (vocal && !lyrics ? 'writing-lyrics' : 'synthesizing'), { onTick: eta.update });
+    // P3 (#35): вокал всегда стартует с честной стадии «лирика» — сервер
+    // перетирает угаданный «синтез» на «лирику», и прогресс визуально шёл назад.
+    const wait = waitRow('music', !vocal ? 'model-warmup' : 'writing-lyrics', { onTick: eta.update });
     const handle = trackedHandle('music', session); // ✕ гасит автолирику и поллинг этой джобы
     appendStop(wait.row, handle);
     stageBody.append(wait.row);
@@ -2367,11 +2481,25 @@
       bar.setAttribute('aria-valuenow', String(Math.max(0, idx)));
       bar.setAttribute('aria-valuetext', label);
     };
+    // P3 (#35): статус этапа монотонный — назад не откатывается. Первая серверная
+    // стадия принимается всегда (может легитимно перекрыть клиентскую догадку),
+    // дальше — только вперёд по stages; неизвестные стадии пропускаем.
+    let stageIdx = Math.max(0, stages.indexOf(curStage));
+    const advanceStage = s => {
+      const i = stages.indexOf(s);
+      if (i >= 0 && i < stageIdx) return;
+      if (i >= 0) stageIdx = i;
+      // Атрибут ведёт фразу ожидания (wait-phrases пере-пулится по стадии);
+      // сработает и watchStage — он увидит ту же стадию и не зациклится.
+      stageBody.querySelector('[data-wait]')?.setAttribute('data-wait-stage', s);
+      curStage = s;
+      paint();
+    };
     paint();
     stageBody.append(bar, barLabel, eta.el);
     const watchStage = new MutationObserver(() => {
       const now = stageBody.querySelector('[data-wait]')?.getAttribute('data-wait-stage');
-      if (now && now !== curStage) { curStage = now; paint(); }
+      if (now && now !== curStage) advanceStage(now);
     });
     watchStage.observe(stageBody, { subtree: true, attributes: true, attributeFilter: ['data-wait-stage'] });
     setBusy(true, vocal && !lyrics ? 'Пишем текст песни…' : 'Отправляем задачу…');
@@ -2468,12 +2596,20 @@
       const input = { prompt: requestBase, promptSent: finalPrompt !== requestBase ? finalPrompt : undefined, lyrics, model: MUSIC_MODELS[snapshot.quality], instrumental: snapshot.instrumental, parentJobId: snapshot.parentJobId,
         title: trackTitle, artist: currentUser(),
         lyricsSource: draftSource || (snapshot.advanced ? 'написал пользователь' : (vocal && !lyrics ? 'автолирика (автор песен)' : 'написал пользователь')) };
+      // P1-2 (#35): активная джоба с теми же данными — предлагаем наблюдать, не дублируем GPU.
+      if (!(await guardDuplicateJob(session, 'music', input))) {
+        wait.stop();
+        watchStage.disconnect();
+        stageBody.closest('.card').remove();
+        card('notice', 'Уже выполняется', 'Наблюдение за существующей задачей показано в ленте.', session);
+        return;
+      }
       const id = await submitJob({ type: 'music', prompt: finalPrompt, params });
       handle.jobId = id; // ✕ после отправки отменяет джобу и на сервере (T-05)
       recordSessionJob(session, id, 'music', input);
       const result = await pollJob(id, { shouldStop: () => handle.cancelled, onStatus: d => {
-        if (d.stage) stageBody.querySelector('[data-wait]')?.setAttribute('data-wait-stage', d.stage);
-      }, onRetry: n => setStatus(n ? ('Связь прерывается, пробуем снова (' + n + '/5)…') : 'Работаем…', true) });
+        if (d.stage) advanceStage(d.stage);
+      }, onRetry: retryStatus });
       settleSessionJob(session, id);
       wait.stop();
       watchStage.disconnect();
@@ -2611,7 +2747,7 @@
         if (response.blob) return response.blob;
         const status = response.response.status;
         if ((status !== 429 && status !== 503) || attempt >= 3) {
-          if (status === 429) throw new BusError('rate_limited', 'Слишком много запросов (429). Повторите через минуту.', 429);
+          if (status === 429) throw new BusError('rate_limited', 'Сервер временно перегружен (429). Попробуйте ещё раз через минуту.', 429);
           if (status === 401) throw new BusError('unauthorized', 'Ключ не принят (401). Проверьте ключ в профиле.', 401);
           if (status === 404) throw new BusError('not_found', 'Файл не найден (404); срок хранения мог истечь.', 404);
           throw new BusError('http', 'Файл не получен (' + status + ').', status);
@@ -2942,6 +3078,7 @@
     renderOpsBadge(); // T-20: чужая занятость меняется при смене сессии
     persistSessions();
     resumeSessionJobs(session); // T-52: незакрытые генерации сессии продолжают ждать
+    restoreMiniPlayer(); // P3 #35: мини-плеер возвращается после перезагрузки
   }
   async function selectSession(session) {
     if (!session || storageBlocked || sessionTransition) return;
@@ -3090,6 +3227,7 @@
       document.documentElement.setAttribute('data-storage-ready', '1'); // хук сюит (#35)
       await persistSessions();
       await restorePendingV1(); // П1 SPEC #35: несохранённое из прошлой v1-вкладки
+      restoreMiniPlayer(); // P3 #35: мини-плеер возвращается после перезагрузки
       if (sessionBackend === 'local' && !storageDirty) {
         els.storageWarning.hidden = false;
         els.storageWarning.textContent = 'IndexedDB недоступна: сессии хранятся в localStorage этого браузера, объём ограничен.';
@@ -3708,10 +3846,12 @@
   window.addEventListener('offline', () => {
     netOnline = false;
     paintNetBanner();
+    if (!els.status.classList.contains('busy')) setStatus(null, false); // P3 #35: не «готов», когда сети нет
   });
   window.addEventListener('online', () => {
     netOnline = true;
     paintNetBanner();
+    if (!els.status.classList.contains('busy')) setStatus(null, false);
     for (const resolve of onlineWaiters) resolve();
     onlineWaiters.clear();
     refreshAfterReturn();
@@ -3822,6 +3962,7 @@
       BRIIX_TOASTS.toast('Ключ удалён.', { kind: 'info' });
     } else {
       setToken(value, { remember: els.keyRemember.checked });
+      loadCatalog(); // P3 #35: ключ появился — теперь можно запросить каталог моделей
       BRIIX_TOASTS.toast(els.keyRemember.checked
         ? 'Ключ сохранён — запомнен в этом браузере.'
         : 'Ключ сохранён — до закрытия этой вкладки.', { kind: 'done' });

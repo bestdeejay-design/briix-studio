@@ -1,10 +1,10 @@
 {
-  "build": "f70c30c26c",
+  "build": "8ff8e9cef2",
   "assets": {
-    "studio.css": "ad28337a46",
-    "studio.js": "3db9da02a1",
+    "studio.css": "2ab05a8b9d",
+    "studio.js": "0268a671d6",
     "wait-ui.js": "8c1753e686",
-    "catalog.js": "a9dd9e6116",
+    "catalog.js": "cc3486a7fc",
     "ops.js": "760bf48ea0",
     "toasts.js": "50285e4a33",
     "session-store.js": "123521a1f3",
