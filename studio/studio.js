@@ -2999,6 +2999,7 @@
     els.prompt.value = ''; els.lyrics.value = ''; els.musicPrompt.value = '';
     Object.keys(drafts).forEach(k => { drafts[k] = ''; });
     schemaRejected = false; if (schemaBanner) { schemaBanner.remove(); schemaBanner = null; }
+    document.documentElement.removeAttribute('data-storage-ready'); // хук сюит: готов после open()
     mode = 'music'; advanced = false; quality = 'flash'; renderChrome(); setView('chat');
     try {
       const opened = await BriixSessionStore.open(nick);
@@ -3013,6 +3014,7 @@
       sessionProfile.activeSessionId = activeSession.id;
       ensureRoot(activeSession); rootFor(activeSession).hidden = false; loadDraft(activeSession);
       storageBlocked = false;
+      document.documentElement.setAttribute('data-storage-ready', '1'); // хук сюит (#35)
       await persistSessions();
       await restorePendingV1(); // П1 SPEC #35: несохранённое из прошлой v1-вкладки
       if (sessionBackend === 'local' && !storageDirty) {
@@ -3093,6 +3095,7 @@
     els.feed.innerHTML = ''; els.lib.innerHTML = '';
     els.prompt.value = ''; els.lyrics.value = ''; els.musicPrompt.value = '';
     Object.keys(drafts).forEach(k => { drafts[k] = ''; });
+    document.documentElement.removeAttribute('data-storage-ready');
     mediaCacheClear(); // T-30/T-31: LRU-кэш медиа — все objectURL ревочатся
     coverUrlCache.forEach(url => URL.revokeObjectURL(url)); coverUrlCache.clear();
     feedObjectUrls.forEach(url => URL.revokeObjectURL(url)); feedObjectUrls.clear();

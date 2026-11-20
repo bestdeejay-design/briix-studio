@@ -879,26 +879,56 @@ function bffServer(port) {
   if (await p.locator('#advanced').isVisible()) await p.locator('#tuneToggle').click();
   const lift = await p.evaluate(() => {
     const send = document.getElementById('send');
+    const composer = document.getElementById('composer');
+    const feed = document.getElementById('feed');
+    const studio = document.querySelector('.studio');
+    const padPx = s => parseFloat(getComputedStyle(s).paddingBottom) || 0;
+    const padY = s => { const cs = getComputedStyle(s); return (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0); };
+    const compHBefore = composer.getBoundingClientRect().height;
+    const feedHBefore = feed.getBoundingClientRect().height;
+    const padBefore = padPx(studio);
     const before = send.getBoundingClientRect().bottom;
     const kb = window.__syncKbInset({ height: window.innerHeight - 260, offsetTop: 0 });
     const after = send.getBoundingClientRect().bottom;
+    const compShrink = compHBefore - composer.getBoundingClientRect().height;
+    const feedShrink = feedHBefore - feed.getBoundingClientRect().height;
+    const padDelta = padPx(studio) - padBefore;
     const css = getComputedStyle(document.documentElement).getPropertyValue('--kb-inset').trim();
+    // Низ композера выше линии клавиатуры — главный UX-инвариант F-35.
     const aboveKb = after <= window.innerHeight - kb + 2;
     window.__syncKbInset(window.visualViewport); // вернуть как было
-    return { kb, lifted: before - after, css, aboveKb };
+    return { kb, lifted: before - after, css, aboveKb, padDelta,
+      compShrink: Math.round(compShrink * 10) / 10,
+      feedShrink: Math.round(feedShrink * 10) / 10,
+      feedPadY: Math.round(padY(feed)) };
   });
-  // F-35 (атрибуция CI: ubuntu-раннер): семантика вместо магической константы
-  // подъёма. kb — детерминированная математика (innerHeight − высота vv);
-  // композер обязан подняться на ВСЮ высоту клавиатуры: aboveKb — главный
-  // семантический критерий, lifted — с допуском ±1px на суб-пиксельное
-  // округление getBoundingClientRect (раньше >=255 ронял раннер при дробных
-  // координатах), css — ровно ожидаемое значение визуального viewport.
+  // F-35 (факты CI #35, правка-2, из red-рана PR #38): kb=260, padding каркаса
+  // применяет inset ровно (8→268), но send поднимается на 240: недостающие ~20px
+  // — это СОБСТВЕННЫЙ padding ленты (#feed: 12+16px на ≤480px, studio.css:362/67):
+  // лента — единственный упругий элемент каркаса и не может сжаться ниже своего
+  // padding (border-box), остальное пространство отдаёт композеру. Величина
+  // зависит от media-ветки, не от шрифтов/среды.
+  // Семантика ассерта (констант нет — всё измерено из того же DOM):
+  //  1) inset применён: kb = 260, --kb-inset = 260px, padDelta = 260;
+  //  2) цепочка сходится: сдвиг send = padDelta − усадка ленты − усадка композера;
+  //  3) пол подъёма: send поднялся не меньше, чем kb минус несжимаемый padding
+  //     ленты (грубый UX-инвариант: даже при упоре ленты композер очищает
+  //     клавиатуру на всё, кроме её собственного padding);
+  //  4) низ композера выше линии клавиатуры (aboveKb).
   const KB = 260;
   assert.equal(lift.kb, KB, 'F-35: высота клавиатуры измерена');
+  assert.equal(lift.padDelta, KB, 'F-35: inset применён в padding каркаса ровно на kb');
   assert.equal(lift.css, KB + 'px', 'F-35: --kb-inset проставлен');
-  assert.equal(lift.aboveKb, true, 'F-35: композер целиком выше линии клавиатуры (поднят на всю высоту)');
-  assert.ok(lift.lifted >= KB - 1 && lift.lifted <= KB + 1,
-    'F-35: композер поднялся на высоту клавиатуры (±1px округления), сдвиг ' + Math.round(lift.lifted) + ' из ' + KB);
+  assert.ok(Math.abs(lift.lifted - (lift.feedShrink - lift.compShrink)) <= 1.5,
+    'F-35: цепочка сходится — сдвиг send = усадка ленты минус усадка композера (±1.5px): сдвиг '
+    + Math.round(lift.lifted) + ', лента ' + lift.feedShrink + ', композер ' + lift.compShrink);
+  assert.ok(lift.padDelta - lift.feedShrink <= lift.feedPadY,
+    'F-35: лента отдала всё, кроме собственного padding: остаток ' + Math.round(lift.padDelta - lift.feedShrink)
+    + ' из padding ленты ' + lift.feedPadY + 'px');
+  assert.ok(lift.lifted >= KB - lift.feedPadY,
+    'F-35: композер очистил клавиатуру минус несжимаемый padding ленты: сдвиг ' + Math.round(lift.lifted)
+    + ' из ' + KB + ' (padding ленты ' + lift.feedPadY + 'px)');
+  assert.equal(lift.aboveKb, true, 'F-35: низ композера выше линии клавиатуры');
   await p.close();
   ok('keyboard lifts the composer: interactive-widget + visualViewport fallback (F-35)', lift);
 
@@ -2374,6 +2404,7 @@ function bffServer(port) {
   for (const digit of '1234') await p.locator(`.pk[data-digit="${digit}"]`).click();
   await p.locator('#enterBtn').click();
   await p.waitForSelector('#studio:not([hidden])');
+  await p.waitForSelector('html[data-storage-ready="1"]', { timeout: 45000 });
   const migrated = await p.evaluate(async () => {
     const opened = await BriixSessionStore.open('мигрант');
     const s = opened.profile.sessions[0];
@@ -2399,6 +2430,7 @@ function bffServer(port) {
   assert.equal(migrated.s.history[3].via, 'music-chat', 'влитые элементы помечены via: music-chat');
   assert.deepEqual(migrated.rawFeed, [{ t: 'user', who: 'Вы', text: 'старое сообщение' }], 'feed не мигрирует — побайтово исходный');
   ok('v1→v2 migration at load: history merged, assistantId/draft restored, feed untouched');
+  await p.close(); // освободить IDB/локи перед сценарием (б) — на 2-ядерном CI иначе open() конкурирует
 
   // (б) v1-вкладка пишет в v2-хранилище → schema_unsupported, баннер + temporary-ключ;
   // после перезагрузки v2-код предлагает «Восстановить несохранённое» и удаляет ключ.
@@ -2408,6 +2440,10 @@ function bffServer(port) {
   for (const digit of '1234') await p.locator(`.pk[data-digit="${digit}"]`).click();
   await p.locator('#enterBtn').click();
   await p.waitForSelector('#studio:not([hidden])');
+  // Гонка теста: fill сразу после снятия hidden мог быть затёрт loadDraft'ом,
+  // когда startSession ещё открывает хранилище (медленнее на CI). Ждём явный
+  // сигнал готовности хранилища (data-storage-ready), потом вводим текст.
+  await p.waitForSelector('html[data-storage-ready="1"]', { timeout: 45000 });
   // Живой диалог — чтобы в pending-снапшоте было что сохранять.
   await p.locator('#prompt').fill('несохранённый текст вкладки');
   await p.locator('#send').click();
