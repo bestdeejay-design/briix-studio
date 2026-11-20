@@ -2445,11 +2445,28 @@ function bffServer(port) {
   try {
     await p.waitForFunction(() => !document.getElementById('send')?.disabled, null, { timeout: 45000 });
   } catch {
-    const diag = await p.evaluate(() => ({
-      storageWarning: document.getElementById('storageWarning')?.textContent?.slice(0, 160),
-      gateHidden: document.getElementById('gate')?.hidden,
-      profileNick: document.getElementById('profileNick')?.textContent
-    })).catch(() => ({}));
+    const diag = await p.evaluate(async () => {
+      let locks = null;
+      try { locks = await navigator.locks.query(); } catch (e) { locks = 'query-fail: ' + e.message; }
+      let idbProbe = null;
+      try {
+        idbProbe = await Promise.race([
+          new Promise(resolve => {
+            const req = indexedDB.open('briix-studio-sessions');
+            req.onsuccess = () => { const names = [...req.result.objectStoreNames]; req.result.close(); resolve('open-ok:' + names.join(',')); };
+            req.onerror = () => resolve('open-error');
+            req.onblocked = () => resolve('open-BLOCKED');
+          }),
+          new Promise(resolve => setTimeout(() => resolve('probe-timeout'), 4000))
+        ]);
+      } catch (e) { idbProbe = 'throw: ' + e.message; }
+      return {
+        storageWarning: document.getElementById('storageWarning')?.textContent?.slice(0, 160),
+        gateHidden: document.getElementById('gate')?.hidden,
+        profileNick: document.getElementById('profileNick')?.textContent,
+        locks: JSON.stringify(locks), idbProbe
+      };
+    }).catch(e => ({ diagErr: String(e) }));
     console.log('DBG-P1B: send остался disabled:', JSON.stringify(diag));
     throw new Error('П1(б): send не разблокировался после открытия хранилища');
   }
