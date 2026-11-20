@@ -100,6 +100,10 @@ jobs:
         run: node tools/check-music-brain.cjs
       - name: check-producer
         run: node tools/check-producer.cjs
+      - name: check-chat-draft
+        # #39: постобработка чат-черновиков наставников (vm, без браузера) —
+        # языковое правило #109 + запрет имён исполнителей в prompt/title.
+        run: node tools/check-chat-draft.cjs
       - name: check-session-store
         run: node tools/check-session-store.cjs
       - name: check-session-migration
