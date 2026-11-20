@@ -2429,6 +2429,7 @@ function bffServer(port) {
   assert.equal(migrated.s.history[3].via, 'music-chat', 'влитые элементы помечены via: music-chat');
   assert.deepEqual(migrated.rawFeed, [{ t: 'user', who: 'Вы', text: 'старое сообщение' }], 'feed не мигрирует — побайтово исходный');
   ok('v1→v2 migration at load: history merged, assistantId/draft restored, feed untouched');
+  await p.close(); // освободить IDB/локи перед сценарием (б) — на 2-ядерном CI иначе open() конкурирует
 
   // (б) v1-вкладка пишет в v2-хранилище → schema_unsupported, баннер + temporary-ключ;
   // после перезагрузки v2-код предлагает «Восстановить несохранённое» и удаляет ключ.
@@ -2438,8 +2439,20 @@ function bffServer(port) {
   for (const digit of '1234') await p.locator(`.pk[data-digit="${digit}"]`).click();
   await p.locator('#enterBtn').click();
   await p.waitForSelector('#studio:not([hidden])');
-  // Живой диалог — чтобы в pending-снапшоте было что сохранять.
+  // Живой диалог — чтобы в pending-снапшоте было что сохранять. send разблокируется,
+  // когда startSession открыл хранилище (на 2-ядерном CI это заметно дольше локального).
   await p.locator('#prompt').fill('несохранённый текст вкладки');
+  try {
+    await p.waitForFunction(() => !document.getElementById('send')?.disabled, null, { timeout: 45000 });
+  } catch {
+    const diag = await p.evaluate(() => ({
+      storageWarning: document.getElementById('storageWarning')?.textContent?.slice(0, 160),
+      gateHidden: document.getElementById('gate')?.hidden,
+      profileNick: document.getElementById('profileNick')?.textContent
+    })).catch(() => ({}));
+    console.log('DBG-P1B: send остался disabled:', JSON.stringify(diag));
+    throw new Error('П1(б): send не разблокировался после открытия хранилища');
+  }
   await p.locator('#send').click();
   await p.waitForSelector('#feed .card.assistant', { timeout: 15000 });
   // «Старая вкладка»: откатываем схему записи в хранилище до v1 (как будто её оставил v1-код).
