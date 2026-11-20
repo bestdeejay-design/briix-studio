@@ -2404,6 +2404,7 @@ function bffServer(port) {
   for (const digit of '1234') await p.locator(`.pk[data-digit="${digit}"]`).click();
   await p.locator('#enterBtn').click();
   await p.waitForSelector('#studio:not([hidden])');
+  await p.waitForSelector('html[data-storage-ready="1"]', { timeout: 45000 });
   const migrated = await p.evaluate(async () => {
     const opened = await BriixSessionStore.open('мигрант');
     const s = opened.profile.sessions[0];
@@ -2439,37 +2440,12 @@ function bffServer(port) {
   for (const digit of '1234') await p.locator(`.pk[data-digit="${digit}"]`).click();
   await p.locator('#enterBtn').click();
   await p.waitForSelector('#studio:not([hidden])');
-  // Живой диалог — чтобы в pending-снапшоте было что сохранять. send разблокируется,
-  // когда startSession открыл хранилище (на 2-ядерном CI это заметно дольше локального).
+  // Гонка теста: fill сразу после снятия hidden мог быть затёрт loadDraft'ом,
+  // когда startSession ещё открывает хранилище (медленнее на CI). Ждём явный
+  // сигнал готовности хранилища (data-storage-ready), потом вводим текст.
+  await p.waitForSelector('html[data-storage-ready="1"]', { timeout: 45000 });
+  // Живой диалог — чтобы в pending-снапшоте было что сохранять.
   await p.locator('#prompt').fill('несохранённый текст вкладки');
-  try {
-    await p.waitForFunction(() => !document.getElementById('send')?.disabled, null, { timeout: 45000 });
-  } catch {
-    const diag = await p.evaluate(async () => {
-      let locks = null;
-      try { locks = await navigator.locks.query(); } catch (e) { locks = 'query-fail: ' + e.message; }
-      let idbProbe = null;
-      try {
-        idbProbe = await Promise.race([
-          new Promise(resolve => {
-            const req = indexedDB.open('briix-studio-sessions');
-            req.onsuccess = () => { const names = [...req.result.objectStoreNames]; req.result.close(); resolve('open-ok:' + names.join(',')); };
-            req.onerror = () => resolve('open-error');
-            req.onblocked = () => resolve('open-BLOCKED');
-          }),
-          new Promise(resolve => setTimeout(() => resolve('probe-timeout'), 4000))
-        ]);
-      } catch (e) { idbProbe = 'throw: ' + e.message; }
-      return {
-        storageWarning: document.getElementById('storageWarning')?.textContent?.slice(0, 160),
-        gateHidden: document.getElementById('gate')?.hidden,
-        profileNick: document.getElementById('profileNick')?.textContent,
-        locks: JSON.stringify(locks), idbProbe
-      };
-    }).catch(e => ({ diagErr: String(e) }));
-    console.log('DBG-P1B: send остался disabled:', JSON.stringify(diag));
-    throw new Error('П1(б): send не разблокировался после открытия хранилища');
-  }
   await p.locator('#send').click();
   await p.waitForSelector('#feed .card.assistant', { timeout: 15000 });
   // «Старая вкладка»: откатываем схему записи в хранилище до v1 (как будто её оставил v1-код).
