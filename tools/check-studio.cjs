@@ -879,39 +879,38 @@ function bffServer(port) {
   if (await p.locator('#advanced').isVisible()) await p.locator('#tuneToggle').click();
   const lift = await p.evaluate(() => {
     const send = document.getElementById('send');
+    const composer = document.getElementById('composer');
+    const studio = document.querySelector('.studio');
+    const padPx = s => parseFloat(getComputedStyle(s).paddingBottom) || 0;
+    const compHBefore = composer.getBoundingClientRect().height;
+    const padBefore = padPx(studio);
     const before = send.getBoundingClientRect().bottom;
-    const wrapBefore = document.querySelector('.composer-wrap').getBoundingClientRect().top;
-    const padBefore = getComputedStyle(document.querySelector('.studio')).paddingBottom;
     const kb = window.__syncKbInset({ height: window.innerHeight - 260, offsetTop: 0 });
     const after = send.getBoundingClientRect().bottom;
-    const wrapAfter = document.querySelector('.composer-wrap').getBoundingClientRect().top;
-    const padAfter = getComputedStyle(document.querySelector('.studio')).paddingBottom;
+    const compShrink = compHBefore - composer.getBoundingClientRect().height;
+    const padDelta = padPx(studio) - padBefore;
     const css = getComputedStyle(document.documentElement).getPropertyValue('--kb-inset').trim();
+    // Низ композера выше линии клавиатуры — главный UX-инвариант F-35.
     const aboveKb = after <= window.innerHeight - kb + 2;
     window.__syncKbInset(window.visualViewport); // вернуть как было
-    return { kb, lifted: before - after, css, aboveKb, before, after,
-      wrapBefore: Math.round(wrapBefore), wrapAfter: Math.round(wrapAfter),
-      padBefore, padAfter,
-      ua: navigator.userAgent.slice(0, 80),
-      innerH: innerHeight, clientH: document.documentElement.clientHeight,
-      scrollH: document.documentElement.scrollHeight,
-      studioH: Math.round(document.querySelector('.studio').getBoundingClientRect().height),
-      width: innerWidth,
-      feedH: Math.round(document.getElementById('feed').getBoundingClientRect().height) };
+    return { kb, lifted: before - after, css, aboveKb, padDelta, compShrink: Math.round(compShrink * 10) / 10 };
   });
-  console.log('DBG35:', JSON.stringify(lift)); // временно: факты CI для #35 правка-2
-  // F-35 (атрибуция CI: ubuntu-раннер): семантика вместо магической константы
-  // подъёма. kb — детерминированная математика (innerHeight − высота vv);
-  // композер обязан подняться на ВСЮ высоту клавиатуры: aboveKb — главный
-  // семантический критерий, lifted — с допуском ±1px на суб-пиксельное
-  // округление getBoundingClientRect (раньше >=255 ронял раннер при дробных
-  // координатах), css — ровно ожидаемое значение визуального viewport.
+  // F-35 (факты CI #35, правка-2): kb и --kb-inset детерминированы (260), но
+  // композер на ≤480px содержит сжимаемый элемент — мета-полосу статуса
+  // (.meta { min-height: 0 }, studio.css:551) — при давлении подъёма она отдаёт
+  // свою высоту; на ubuntu-раннере это ~20px (шрифтовые метрики), локально 0.
+  // Правильная семантика (по факту CI): приложение применило inset РОВНО
+  // (padDelta = kb из того же источника, что и transform), send поднялся РОВНО
+  // на padDelta минус измеренную усадку композера (того же DOM), и низ
+  // композера выше линии клавиатуры. Констант нет — всё измерено здесь же.
   const KB = 260;
   assert.equal(lift.kb, KB, 'F-35: высота клавиатуры измерена');
+  assert.equal(lift.padDelta, KB, 'F-35: inset применён в padding каркаса ровно на kb');
   assert.equal(lift.css, KB + 'px', 'F-35: --kb-inset проставлен');
-  assert.equal(lift.aboveKb, true, 'F-35: композер целиком выше линии клавиатуры (поднят на всю высоту)');
-  assert.ok(lift.lifted >= KB - 1 && lift.lifted <= KB + 1,
-    'F-35: композер поднялся на высоту клавиатуры (±1px округления), сдвиг ' + Math.round(lift.lifted) + ' из ' + KB);
+  assert.equal(lift.aboveKb, true, 'F-35: низ композера выше линии клавиатуры');
+  assert.ok(Math.abs(lift.lifted - (lift.padDelta - lift.compShrink)) <= 1.5,
+    'F-35: сдвиг send = применённый inset минус усадка композера (±1.5px): сдвиг '
+    + Math.round(lift.lifted) + ', inset ' + lift.padDelta + ', усадка композера ' + lift.compShrink);
   await p.close();
   ok('keyboard lifts the composer: interactive-widget + visualViewport fallback (F-35)', lift);
 
