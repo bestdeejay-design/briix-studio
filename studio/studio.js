@@ -36,9 +36,12 @@
       { id: 'visual-designer', name: 'Визуальный дизайнер', system: 'Ты «Визуальный дизайнер» BRIIX (фото/кадр/свет/стиль). Помогай придумать визуальную концепцию: сюжет, настроение, палитру, свет, ракурс, стиль референса — и собирай из этого готовый англоязычный промпт для FLUX. Пояснения по-русски.' }
     ],
     music: [
-      { id: 'producer', name: 'Продюсер', system: 'Ты «Продюсер» — помогаешь довести музыкальный промпт для ACE-Step. Работай с англоязычным описанием стиля: жанр, BPM, вокал, инструменты, продакшн, структура, негативные указания. Отвечай по-русски кратко и конкретно, сам промпт — по-английски одной строкой.' },
-      { id: 'lyricist', name: 'Лирик', system: 'Ты «Лирик» — поэт-песенник. Помогай доработать лирику: образность, ритм, рифма, структура (куплет/припев/бридж), характер вокала в ремарках. Пиши по-русски (или в языке пользователя), держи строку пропеваемой, избегай штампов. Предлагай правки точечно, не переписывая всё без нужды.' },
-      { id: 'songwriter', name: 'Автор песни', system: 'Ты «Автор песни» BRIIX. Из темы пользователя пиши полную лирику: [verse], [pre-chorus], [chorus], [bridge], [outro] — образно и пропеваемо, без штампов, 16–40 строк. Всегда по-русски (если не попросили иначе). Пояснений минимум: коротко об управлении настроением и характером вокала.' }
+      // #39: языковое правило #109 (producer-brain) — единый источник для всех путей:
+      // язык не указан → английский; явно указан → язык пользователя.
+      // Имена исполнителей не писать: артист → семейство стиля (STYLE_FAMILIES producer-brain).
+      { id: 'producer', name: 'Продюсер', system: 'Ты «Продюсер» — помогаешь довести музыкальный промпт для ACE-Step. Работай с англоязычным описанием стиля: жанр, BPM, вокал, инструменты, продакшн, структура, негативные указания. Отвечай по-русски кратко и конкретно, сам промпт — по-английски одной строкой. Язык лирики: если пользователь явно указал язык (например «на русском») — на нём; если язык явно не указан — по-английски (отсутствие указания не означает русский). Если пользователь ссылается на исполнителя или группу, его имя в prompt и названии не пиши: выдели стиль и передай его семейством (pop, rock, edm, house, rap, hip-hop, funk, soul, jazz, ballad, techno, trap, ambient, cinematic, folk, lo-fi, synthwave и близкими).' },
+      { id: 'lyricist', name: 'Лирик', system: 'Ты «Лирик» — поэт-песенник. Помогай доработать лирику: образность, ритм, рифма, структура (куплет/припев/бридж), характер вокала в ремарках. Язык лирики: если пользователь явно указал язык (например «на русском») — на нём; если язык явно не указан — по-английски (отсутствие указания не означает русский). Держи строку пропеваемой, избегай штампов. Имена исполнителей в лирику и названия не пиши — передавай стиль через жанр и звучание. Предлагай правки точечно, не переписывая всё без нужды.' },
+      { id: 'songwriter', name: 'Автор песни', system: 'Ты «Автор песни» BRIIX. Из темы пользователя пиши полную лирику: [verse], [pre-chorus], [chorus], [bridge], [outro] — образно и пропеваемо, без штампов, 16–40 строк. Языковое правило строго: по умолчанию (язык не указан) лирика — НА АНГЛИЙСКОМ; на русском — только если пользователь явно попросил («на русском»); идея на русском не означает русскую лирику. Если тема ссылается на исполнителя («в стиле X»), его имя в названии и тексте не пиши — передай стиль через жанр, эпоху и звучание. Пояснений минимум: коротко об управлении настроением и характером вокала.' }
     ]
   };
 
@@ -1891,12 +1894,12 @@
       sink.dispose();
       stopRow.remove();
       body.classList.remove('streaming');
-      const parsed = parseMusicDraft(full, snapshot.instrumental);
+      const parsed = parseMusicDraft(full, snapshot.instrumental, text);
       body.textContent = parsed.text || '';
       session.history.push(turn, { role: 'assistant', content: full });
       session.updatedAt = Date.now();
       if (parsed.draft) {
-        const entry = { t: 'music_draft', who, text: parsed.text, draft: parsed.draft,
+        const entry = { t: 'music_draft', who, text: parsed.text, draft: parsed.draft, warnings: parsed.warnings,
           assistant: who, instrumental: snapshot.instrumental, applied: false, createdAt: Date.now() };
         renderMusicDraftContent(body, entry, session);
         feedPush(entry, session);
@@ -1937,10 +1940,12 @@
   const MUSIC_DRAFT_OPEN = '[briix-draft]';
   const MUSIC_DRAFT_CLOSE = '[/briix-draft]';
   const musicDraftInstruction = '\n\nКаждый твой ответ заканчивается блоком черновика строго в таком формате:\n'
-    + MUSIC_DRAFT_OPEN + '\n{"title":"название песни","prompt":"описание звучания","lyrics":"текст песни"}\n' + MUSIC_DRAFT_CLOSE + '\n'
+    + MUSIC_DRAFT_OPEN + '\n{"title":"название песни","prompt":"описание звучания","lyrics":"текст песни","style":"семейство стиля или пустая строка"}\n' + MUSIC_DRAFT_CLOSE + '\n'
     + 'Поле prompt пиши ТОЛЬКО по-английски одной строкой (жанр, темп, вокал, инструменты, продакшн; не выдумывай темп, если он не задан). '
     + 'Поле lyrics — текст песни с латинскими тегами частей [Verse], [Chorus], [Bridge] (для инструментала — пустая строка). '
-    + 'Не используй markdown и не дублируй содержимое черновика в тексте ответа.';
+    + 'Язык лирики — строго: ПО УМОЛЧАНИЮ (язык в идее не указан) лирика всегда НА АНГЛИЙСКОМ. Русская лирика — ТОЛЬКО если пользователь явно попросил «на русском». Сама идея на русском НЕ означает русскую лирику. '
+    + 'Имена исполнителей в title, prompt и lyrics не пиши: если пользователь ссылается на артиста («в стиле X», «как Y»), выдели стиль и укажи его семейство в поле style (pop, rock, edm, house, rap, hip-hop, funk, soul, jazz, ballad, techno, trap, ambient, cinematic, folk и близкие); стиль не определяется — пустая строка. '
+    + 'Внутри JSON-строк экранируй переносы строк как \\n. Не используй markdown и не дублируй содержимое черновика в тексте ответа.';
 
   function musicSessionContext(snapshot) {
     const s = snapshot || { instrumental, quality };
@@ -1950,7 +1955,68 @@
       + 'Режим: ' + (s.instrumental ? 'инструментал' : 'песня') + ', качество: ' + (MODEL_LABELS[s.quality] || 'Flash') + '.';
   }
 
-  function parseMusicDraft(full, isInstrumental) {
+  // >>> chat-draft-guard (#39): постобработка чат-черновиков через producer-brain.
+  // Решение владельца: лирика и промт только через мозг — имя артиста не попадает
+  // в prompt/title, языковое правило #109 едино для всех путей. Блок чистый
+  // (только BriixProducer + строки) и тестируется в vm без браузера
+  // (tools/check-chat-draft.cjs читает его между маркерами).
+
+  // Ссылки на исполнителя в идее: «в стиле X», «в духе X», «как у X», «наподобие X»,
+  // «like X», «style of X». Эвристика: имя — до знака препинания/союза-хвоста.
+  function extractArtistRefs(idea) {
+    const s = String(idea || '');
+    const names = [];
+    const push = name => {
+      const n = String(name || '').replace(/[«»"'’]+/g, '').replace(/\s+/g, ' ').trim();
+      if (n && n.length > 1 && !names.some(x => x.toLowerCase() === n.toLowerCase())) names.push(n);
+    };
+    for (const m of s.matchAll(/(?:в\s+стиле|в\s+духе|как\s+у|наподобие|подобно|style\s+of|in\s+the\s+style\s+of|like)\s+([A-Za-zА-Яа-яЁё0-9][^,.;:!?«»\n]*)/gi)) {
+      push(m[1].replace(/\s+(?:и|с|про|на|для|which|and|with)\s+.*$/i, ''));
+    }
+    return names;
+  }
+
+  function escapeRegExp(s) {
+    return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  // Защитная постобработка черновика: style — через normalizeStyle (неизвестное
+  // семейство отбрасывается), prompt — styleLeaks/имена → предупреждение в карточке,
+  // title — не равен имени артиста (совпало → пересборка из семейства/темы).
+  function guardMusicDraft(draft, idea) {
+    const warnings = [];
+    if (!draft || typeof draft !== 'object') return { draft, warnings };
+    draft.style = BriixProducer.normalizeStyle(draft.style);
+    const names = extractArtistRefs(idea);
+    const hits = text => names.filter(n => new RegExp(escapeRegExp(n), 'i').test(String(text || '')));
+    if (BriixProducer.styleLeaks(draft.prompt) > 0) {
+      warnings.push('В описании звучания есть отсылка «в духе исполнителя» — замените её на семейство стиля.');
+    }
+    const promptNames = hits(draft.prompt);
+    if (promptNames.length) {
+      warnings.push('Имя исполнителя (' + promptNames.join(', ') + ') попало в описание звучания — замените его семейством стиля.');
+    }
+    if (hits(draft.title).length || BriixProducer.styleLeaks(draft.title) > 0) {
+      warnings.push('Название совпало с именем исполнителя — заменено автоматически.');
+      let t = String(draft.title || '');
+      for (const n of names) t = t.replace(new RegExp(escapeRegExp(n), 'gi'), ' ');
+      t = t.replace(/[\s!.,;:«»"'()+\-–—]+/g, ' ').trim();
+      if (!t && draft.style) t = draft.style.replace(/\b\w/g, c => c.toUpperCase()); // из семейства
+      if (!t) { // из темы идеи без ссылки на артиста
+        t = String(idea || '')
+          .replace(/(?:в\s+стиле|в\s+духе|как\s+у|наподобие|подобно|style\s+of|in\s+the\s+style\s+of|like)\s+[^,.;:!?\n]*/gi, ' ')
+          .replace(/\s+/g, ' ').trim().slice(0, 60)
+          .replace(/^(?:песня|песню|песне|трек|сделай|напиши|сочини|создай)\s+/i, '').trim();
+        if (t) t = t.charAt(0).toUpperCase() + t.slice(1);
+      }
+      if (!t) t = 'Без названия';
+      draft.title = t.slice(0, BriixProducer.MAX_TITLE);
+    }
+    return { draft, warnings };
+  }
+  // <<< chat-draft-guard
+
+  function parseMusicDraft(full, isInstrumental, idea) {
     let text = full, draft = null;
     const open = full.indexOf(MUSIC_DRAFT_OPEN), close = full.lastIndexOf(MUSIC_DRAFT_CLOSE);
     if (open >= 0 && close > open) {
@@ -1967,12 +2033,14 @@
       // Фолбэк: слабая модель вернула «почти JSON» целиком — пробуем парсер продюсера.
       try {
         const result = BriixProducer.parse(full, { instrumental: isInstrumental, existingLyrics: '' });
-        draft = { title: result.title, prompt: result.prompt, lyrics: result.lyrics };
+        draft = { title: result.title, prompt: result.prompt, lyrics: result.lyrics, style: result.style };
         text = '';
       } catch { draft = null; }
     }
     if (draft && !draft.prompt && !draft.lyrics) draft = null;
-    return { text, draft };
+    let warnings = [];
+    if (draft) ({ draft, warnings } = guardMusicDraft(draft, idea)); // #39: постобработка через мозг
+    return { text, draft, warnings };
   }
 
   // createMusicChat удалён (#35 W1-2): разговорный муз-режим влит в createChat —
@@ -2001,6 +2069,11 @@
     const note = document.createElement('p'); note.className = 'producer-note';
     note.textContent = 'Черновик наставника. Проверьте смысл, язык и ограничения — помощник может ошибаться.';
     body.append(note);
+    for (const w of (Array.isArray(entry.warnings) ? entry.warnings : [])) { // #39: styleLeaks-эвристика в карточке
+      const warn = document.createElement('p'); warn.className = 'producer-note draft-warning';
+      warn.textContent = '⚠ ' + w;
+      body.append(warn);
+    }
     const makeField = (label, name, limit, multiline) => {
       const wrapper = document.createElement('label'); wrapper.className = 'producer-field';
       const text = document.createElement('span'); text.textContent = label;
