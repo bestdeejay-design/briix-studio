@@ -333,9 +333,6 @@
   let sessionProfile = null, sessionBackend = null, activeSession = null;
   let storageBlocked = true, storageDirty = false, pendingSaves = 0, saveQueue = Promise.resolve();
   const sessionRoots = new Map();
-  // #35 W1-2: отдельного канала занятости продюсера больше нет — один sessionBusy
-  // на сессию с типом операции (chat | producer | photo | resume).
-  let producerSaveTimer = null;
   const feedObjectUrls = new Set();
   function feedObjectURL(blob) {
     const url = URL.createObjectURL(blob);
@@ -609,7 +606,6 @@
     draftSaveTimer = setTimeout(() => { draftSaveTimer = null; saveDraft(activeSession); persistSessions(); }, 400);
   }
   window.addEventListener('pagehide', () => {
-    if (producerSaveTimer) { clearTimeout(producerSaveTimer); producerSaveTimer = null; persistSessions(); }
     if (draftSaveTimer) { clearTimeout(draftSaveTimer); draftSaveTimer = null; saveDraft(activeSession); persistSessions(); }
   });
   // T-29: системный диалог закрытия — только когда реально теряется запись,
@@ -2091,6 +2087,58 @@
     els.musicPrompt.focus({ preventScroll: true });
   }
 
+  // #41: черновик в чате — чтение, а не редактирование. Промт и лирика —
+  // сворачиваемые строки (тот же паттерн <details>, что «Что уехало в модель»
+  // в карточке трека) с кнопкой копирования целиком в буфер; короткое значение
+  // (название) — одна строка. Правки — в «Тонко настроить» после «Принять в
+  // поля»: чат объясняет, композер настраивает.
+  function legacyCopyText(value) {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = value; ta.setAttribute('readonly', '');
+      ta.style.cssText = 'position:fixed;left:-9999px;top:0';
+      document.body.append(ta); ta.select();
+      const ok = document.execCommand('copy');
+      ta.remove();
+      return ok;
+    } catch { return false; }
+  }
+  function copyToClipboard(text) {
+    const value = String(text ?? '');
+    if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(value).then(() => true, () => legacyCopyText(value));
+    return Promise.resolve(legacyCopyText(value));
+  }
+  function draftReadRow(label, text, { expandable = true } = {}) {
+    const value = String(text ?? '');
+    const copy = document.createElement('button');
+    copy.type = 'button'; copy.className = 'action draft-copy';
+    copy.textContent = 'Копировать';
+    copy.title = 'Скопировать целиком в буфер обмена';
+    copy.addEventListener('click', async event => {
+      event.preventDefault(); event.stopPropagation(); // клик в <summary> не должен сворачивать блок
+      const ok = await copyToClipboard(value);
+      BRIIX_TOASTS.toast(ok ? 'Скопировано в буфер обмена.' : 'Не получилось — разверните блок и выделите текст вручную.', { kind: ok ? 'done' : 'info' });
+    });
+    if (!expandable) {
+      const row = document.createElement('div'); row.className = 'draft-read draft-read-plain';
+      const name = document.createElement('span'); name.className = 'draft-read-label'; name.textContent = label;
+      const val = document.createElement('span'); val.className = 'draft-read-value'; val.textContent = value || '—';
+      row.append(name, val, copy);
+      return row;
+    }
+    const details = document.createElement('details'); details.className = 'draft-read';
+    const summary = document.createElement('summary');
+    const name = document.createElement('span'); name.className = 'draft-read-label'; name.textContent = label;
+    const flat = value.replace(/\s+/g, ' ').trim();
+    const preview = document.createElement('span'); preview.className = 'draft-read-preview';
+    preview.textContent = flat ? (flat.slice(0, 120) + (flat.length > 120 ? '…' : '')) : '—';
+    const hint = document.createElement('span'); hint.className = 'draft-read-hint'; hint.textContent = flat.length > 120 ? 'развернуть' : '';
+    summary.append(name, preview, hint, copy);
+    const full = document.createElement('div'); full.className = 'draft-read-full'; full.textContent = value || '—';
+    details.append(summary, full);
+    return details;
+  }
+
   // Draft-блок наставника: компактные поля + «Принять в поля» (с бэкапом/откатом,
   // паттерн renderProducerDraft) + «Сгенерировать трек» (явная генерация).
   // F-11: формулировки и набор действий совпадают с продюсерским черновиком.
@@ -2106,23 +2154,12 @@
       warn.textContent = '⚠ ' + w;
       body.append(warn);
     }
-    const makeField = (label, name, limit, multiline) => {
-      const wrapper = document.createElement('label'); wrapper.className = 'producer-field';
-      const text = document.createElement('span'); text.textContent = label;
-      const input = document.createElement(multiline ? 'textarea' : 'input');
-      if (!multiline) input.type = 'text';
-      input.value = entry.draft[name] || ''; input.maxLength = limit;
-      input.dataset.draftField = name;
-      input.addEventListener('input', () => {
-        entry.draft[name] = input.value; session.updatedAt = Date.now();
-        if (producerSaveTimer) clearTimeout(producerSaveTimer);
-        producerSaveTimer = setTimeout(() => { producerSaveTimer = null; persistSessions(); }, 400);
-      });
-      wrapper.append(text, input); body.append(wrapper); return input;
-    };
-    const titleField = makeField('Название (для заметок и имени трека)', 'title', BriixProducer.MAX_TITLE, false);
-    const promptField = makeField('Описание звучания', 'prompt', BriixProducer.MAX_PROMPT, true);
-    const lyricsField = entry.instrumental ? null : makeField('Лирика', 'lyrics', BriixProducer.MAX_LYRICS, true);
+    // #41: значения черновика — только чтение (строки с копированием);
+    // правки — в «Тонко настроить» после «Принять в поля».
+    body.append(draftReadRow('Название (для заметок и имени трека)', entry.draft.title, { expandable: false }));
+    body.append(draftReadRow('Описание звучания', entry.draft.prompt));
+    if (!entry.instrumental) body.append(draftReadRow('Лирика', entry.draft.lyrics));
+    const draftText = name => String(entry.draft?.[name] || '');
     const state = document.createElement('p'); state.className = 'producer-note'; state.setAttribute('role', 'status');
     state.textContent = entry.applied ? 'Поля заполнены из черновика.' : 'Пока ничего не изменено в полях генерации.';
     body.append(state);
@@ -2143,7 +2180,7 @@
       return entry.beforeApply;
     };
     const writeFields = () => {
-      els.musicPrompt.value = promptField.value;
+      els.musicPrompt.value = draftText('prompt');
       // P1 аудита #35: семейство стиля — состояние СЕССИИ (session.draft.styleFamily),
       // а не dataset на DOM-поле: не переживает чужие сессии молча.
       if (!session.draft || typeof session.draft !== 'object') session.draft = {};
@@ -2153,15 +2190,15 @@
       // при генерации она идёт ВХОДОМ в слоевой buildCaption, а не готовым промтом.
       // Ручная правка поля снимет метку (авторский текст не переписываем, #109).
       session.draft.brainPending = true;
-      if (lyricsField) els.lyrics.value = lyricsField.value;
+      if (!entry.instrumental) els.lyrics.value = draftText('lyrics');
       saveDraft(session);
     };
     apply.addEventListener('click', runOnce(async () => {
       if (storageBlocked || activeSession !== session || mode !== 'music') { state.textContent = 'Откройте эту сессию и режим «Музыка», чтобы принять черновик.'; return; }
       if (instrumental !== entry.instrumental) { state.textContent = 'Режим трека изменился. Верните исходный режим, чтобы принять черновик.'; return; }
-      if (!promptField.value.trim() && !(lyricsField && lyricsField.value.trim())) { state.textContent = 'Черновик пуст.'; return; }
-      if ((els.musicPrompt.value.trim() && els.musicPrompt.value !== promptField.value) ||
-          (els.lyrics.value.trim() && lyricsField && els.lyrics.value !== lyricsField.value)) {
+      if (!draftText('prompt').trim() && !(!entry.instrumental && draftText('lyrics').trim())) { state.textContent = 'Черновик пуст.'; return; }
+      if ((els.musicPrompt.value.trim() && els.musicPrompt.value !== draftText('prompt')) ||
+          (!entry.instrumental && els.lyrics.value.trim() && els.lyrics.value !== draftText('lyrics'))) {
         if (!(await BRIIX_TOASTS.confirmDialog({ title: 'Заменить поля черновиком наставника?', body: 'Текущие стиль и лирика будут заменены. Прежние значения сохранятся для возврата кнопкой «Вернуть как было».', confirmLabel: 'Заменить' }))) return;
       }
       backupFields();
@@ -2198,7 +2235,7 @@
     generate.addEventListener('click', runOnce(async () => {
       if (storageBlocked || activeSession !== session || mode !== 'music' || !needKey()) return;
       if (instrumental !== entry.instrumental) { state.textContent = 'Режим трека изменился. Верните исходный режим, чтобы сгенерировать черновик.'; return; }
-      if (!promptField.value.trim() && !(lyricsField && lyricsField.value.trim())) { state.textContent = 'Черновик пуст.'; return; }
+      if (!draftText('prompt').trim() && !(!entry.instrumental && draftText('lyrics').trim())) { state.textContent = 'Черновик пуст.'; return; }
       if (!entry.applied) { backupFields(); if (!(await persistSessions())) { state.textContent = 'Не удалось сохранить резервную копию; генерация не запущена.'; return; } }
       entry.applied = true;
       writeFields();
@@ -2207,7 +2244,7 @@
       revert.hidden = false;
       // T-21: контекст идёт аргументом — параллельная генерация B не подхватит
       // название/источник лирики черновика A.
-      await createMusic(els.musicPrompt.value, { title: titleField.value.trim() || null, lyricsSource: 'наставник: ' + entry.who }); // promptReady-путь: английский промпт черновика уходит как есть
+      await createMusic(els.musicPrompt.value, { title: draftText('title').trim() || null, lyricsSource: 'наставник: ' + entry.who }); // promptReady-путь: английский промпт черновика уходит как есть
     }));
     actions.append(apply, revert, generate); body.append(actions);
   }
@@ -2548,13 +2585,15 @@
       wait.stop();
       watchStage.disconnect();
       stageBody.closest('.card').remove();
-      // T-27: загрузка файла отменяема вместе с операцией (✕ / смена сессии).
-      const blob = await fileBlob(result.result_url, 1, handle.controller.signal);
       // Единый рендер-путь с restore-карточкой: обложка = PLAY, волна, меню «⋯».
+      // #41: карточка рендерится СРАЗУ по ready — блоб грузится лениво (LRU +
+      // ретрай по клику на обложку). Раньше полный блоб качался до рендера с
+      // потолком 60 с: длинный трек не успевал, ошибка загрузки убивала
+      // карточку целиком — готовый трек пропадал из сессии.
       const trackCard = renderTrackCard(session, {
         who: 'Трек готов (' + MODEL_LABELS[snapshot.quality] + ')',
         job: id, cover: result.cover_url, input, file: result.result_url,
-        loadBlob: () => Promise.resolve(blob)
+        loadBlob: () => fileBlob(result.result_url, 1)
       });
       trackCard.ensureLoaded().then(audio => tryPlay(audio, trackCard.body)).catch(() => {});
       feedPush({ t: 'media', who: 'Трек готов (' + MODEL_LABELS[snapshot.quality] + ')', kind: 'music', file: result.result_url, job: id, cover: result.cover_url || '', input }, session);
@@ -2610,10 +2649,11 @@
     const delay = Number.isFinite(seconds) ? seconds : Number.isFinite(date) ? Math.max(0, date) : 1000 * (2 ** attempt);
     return delay + Math.random() * 150;
   }
-  // T-27: таймаут на загрузку файла. Зависший сервер больше не держит слот
-  // общей очереди (их всего 2) до бесконечности: 60 с — и соединение рвётся
-  // с честным текстом. Прокидываем и signal операции (✕ / смена сессии).
-  const FILE_TIMEOUT_MS = 60000;
+  // T-27: таймаут на загрузку файла держал общий слот очереди (их всего 2)
+  // до бесконечности — с 60-секундным потолком на ВЕСЬ файл (#41). Теперь
+  // файлы качает fetchBlobStream: потолка на суммарное время нет, дедлайн
+  // взводится по простою (см. ниже), а fetchWithTimeout остался для прочих
+  // не-файловых запросов с жёстким лимитом.
   function fetchWithTimeout(url, options, signal, ms) {
     const controller = new AbortController();
     const state = { timedOut: false };
@@ -2628,12 +2668,61 @@
       if (signal) signal.removeEventListener('abort', onAbort);
     }).catch(error => {
       if (state.timedOut) {
-        const e = new BusError('timeout', 'Сервер не отдал файл за ' + Math.round(ms / 1000) + ' с — соединение прервано, попробуйте ещё раз.');
+        const e = new BusError('timeout', 'Сервер не ответил за ' + Math.round(ms / 1000) + ' с — соединение прервано, попробуйте ещё раз.');
         e.timedOut = true;
         throw e;
       }
       throw error;
     });
+  }
+  // #41: файлы качаются потоком, таймаут — по простою, а не по суммарному
+  // времени. Прежний потолок 60 с на весь файл рубил длинные треки (десятки МБ,
+  // pro-качество): канал жив и данные идут, но карточка умирала «на конце».
+  // Теперь: 90 с на первые байты (сервер может собирать M4A из WAV по контракту
+  // ?refetch=1 — это небыстро на длинных треках) и 45 с между порциями данных.
+  // Два разных отказа: получил 0 байт (сервер молчит) — честная ошибка сразу;
+  // байты шли и оборвались — транзиентный сбой, fileBlob повторит попытку.
+  const FILE_FIRST_BYTE_MS = 90000;
+  const FILE_IDLE_MS = 45000;
+  async function fetchBlobStream(url, options, signal) {
+    const controller = new AbortController();
+    const state = { timedOut: false, received: 0 };
+    let timer;
+    const arm = ms => { clearTimeout(timer); timer = setTimeout(() => { state.timedOut = true; controller.abort(); }, ms); };
+    const onAbort = () => controller.abort();
+    if (signal) {
+      if (signal.aborted) onAbort();
+      else signal.addEventListener('abort', onAbort, { once: true });
+    }
+    arm(FILE_FIRST_BYTE_MS);
+    try {
+      const response = await fetch(url, { ...options, signal: controller.signal });
+      if (!response.ok) return { response, blob: null };
+      if (!response.body) { const blob = await response.blob(); return { response, blob }; }
+      const reader = response.body.getReader();
+      const chunks = [];
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        state.received += value.byteLength;
+        chunks.push(value);
+        arm(FILE_IDLE_MS); // байты идут — дедлайн отодвигается
+      }
+      return { response, blob: new Blob(chunks, { type: response.headers.get('content-type') || 'application/octet-stream' }) };
+    } catch (error) {
+      if (state.timedOut) {
+        const e = state.received > 0
+          ? new BusError('timeout', 'Загрузка оборвалась: данные перестали идти. Попробуйте ещё раз — начнём заново.')
+          : new BusError('timeout', 'Сервер не начал отдавать файл за ' + Math.round(FILE_FIRST_BYTE_MS / 1000) + ' с — соединение прервано, попробуйте ещё раз.');
+        e.timedOut = true;
+        e.progressed = state.received > 0; // ретраить имеет смысл только обрыв на середине
+        throw e;
+      }
+      throw error;
+    } finally {
+      clearTimeout(timer);
+      if (signal) signal.removeEventListener('abort', onAbort);
+    }
   }
   // T-27: смена профиля/выход — очередь не дорабатывает загрузки прежнего
   // пользователя: ожидающие задачи снимаются сразу, слоты освобождаются.
@@ -2668,15 +2757,24 @@
       for (let attempt = 0; ; attempt++) {
         const response = await scheduledFile(async () => {
           if (currentUser() !== owner || token() !== credential || server() !== origin) throw new BusError('cancelled', 'Профиль или ключ изменился.');
-          try {
-            // Never follow redirects with the bearer: the destination may be another origin.
-            const result = await fetchWithTimeout(url.href, { headers: { Authorization: 'Bearer ' + credential }, redirect: 'error' }, signal, FILE_TIMEOUT_MS);
-            return { response: result, blob: result.ok ? await result.blob() : null };
-          } catch (error) {
-            if (error.timedOut) throw error; // T-27: текст про 60 с уже внутри
-            if (signal?.aborted) throw new BusError('cancelled', 'Загрузка файла отменена.');
-            throw new BusError('network', 'Файл недоступен: проверьте подключение или адрес.');
+          // #41: обрыв СЕРЕДИНЫ загрузки — транзиентный: до 3 попыток внутри
+          // слота. Молчащий сервер (0 байт) и прочие ошибки — сразу наверх.
+          let timedOutError = null;
+          for (let tryIdx = 0; tryIdx < 3; tryIdx++) {
+            try {
+              // Never follow redirects with the bearer: the destination may be another origin.
+              return await fetchBlobStream(url.href, { headers: { Authorization: 'Bearer ' + credential }, redirect: 'error' }, signal);
+            } catch (error) {
+              if (signal?.aborted) throw new BusError('cancelled', 'Загрузка файла отменена.');
+              if (!error.timedOut || !error.progressed) {
+                if (error instanceof BusError) throw error;
+                throw new BusError('network', 'Файл недоступен: проверьте подключение или адрес.');
+              }
+              timedOutError = error;
+              if (tryIdx < 2) await new Promise(r => setTimeout(r, 1500 * (tryIdx + 1)));
+            }
           }
+          throw timedOutError;
         }, priority);
         if (response.blob) return response.blob;
         const status = response.response.status;
@@ -2769,34 +2867,20 @@
       'Резервная копия ' + (i + 1) + ':\nБыстрый черновик: ' + (b.quick || '—') + '\nСтиль: ' + (b.style || '—') + '\nЛирика: ' + (b.lyrics || '—')).join('\n\n'); };
     refreshBackups(); details.append(backups);
     body.append(note, details);
-    const makeField = (label, name, limit, multiline) => {
-      const wrapper = document.createElement('label'); wrapper.className = 'producer-field';
-      const text = document.createElement('span'); text.textContent = label;
-      const input = document.createElement(multiline ? 'textarea' : 'input');
-      if (!multiline) input.type = 'text';
-      input.value = entry[name] || ''; input.maxLength = limit;
-      input.dataset.producerField = name;
-      if (name === 'lyrics') input.classList.add('producer-lyrics');
-      input.addEventListener('input', () => {
-        entry[name] = input.value; session.updatedAt = Date.now();
-        if (producerSaveTimer) clearTimeout(producerSaveTimer);
-        producerSaveTimer = setTimeout(() => { producerSaveTimer = null; persistSessions(); }, 400);
-      });
-      wrapper.append(text, input); body.append(wrapper); return input;
-    };
-    const title = makeField('Название (для заметок)', 'title', BriixProducer.MAX_TITLE, false);
-    const style = makeField('Описание звучания', 'prompt', BriixProducer.MAX_PROMPT, true);
-    const lyrics = entry.snapshot.instrumental ? null : makeField('Лирика', 'lyrics', BriixProducer.MAX_LYRICS, true);
+    // #41: значения черновика — только чтение (строки с копированием);
+    // правки — в «Тонко настроить» после «Принять в поля».
+    body.append(draftReadRow('Название (для заметок)', entry.title, { expandable: false }));
+    body.append(draftReadRow('Описание звучания', entry.prompt));
+    if (!entry.snapshot.instrumental) body.append(draftReadRow('Лирика', entry.lyrics));
+    const draftText = name => String(entry?.[name] || '');
     if (entry.snapshot.instrumental && entry.snapshot.lyrics.trim()) {
       const hint = document.createElement('p'); hint.className = 'producer-note';
       hint.textContent = 'Режим инструментала: ваша лирика не отправляется в генерацию и остаётся в поле студии.'; body.append(hint);
     }
     const warning = document.createElement('p'); warning.className = 'producer-warning'; warning.setAttribute('role', 'status');
-    const refreshWarning = () => {
-      const list = BriixProducer.warnings(entry.snapshot.idea, style.value, entry.snapshot.instrumental);
-      warning.textContent = list.join(' ');
-    };
-    style.addEventListener('input', refreshWarning); refreshWarning(); body.append(warning);
+    // #41: карточка только читается — предупреждения считаются один раз при рендере.
+    warning.textContent = BriixProducer.warnings(entry.snapshot.idea, draftText('prompt'), entry.snapshot.instrumental).join(' ');
+    body.append(warning);
     // Brain-ступень (#109): полный продюсерский caption ACE-Step (≤ 640) из
     // исходной идеи — провенанс для прозрачности. В модель уходит английский
     // промпт этого черновика; caption добавляется, только если он не английский.
@@ -2828,7 +2912,7 @@
     };
     apply.addEventListener('click', runOnce(async () => {
       if (storageBlocked || activeSession !== session || mode !== 'music') { state.textContent = 'Откройте эту сессию и режим «Музыка», чтобы принять черновик.'; return; }
-      if (!title.value.trim() || !style.value.trim() || (lyrics && !lyrics.value.trim())) { state.textContent = 'Заполните название, звучание и текст песни.'; return; }
+      if (!draftText('title').trim() || !draftText('prompt').trim() || (!entry.snapshot.instrumental && !draftText('lyrics').trim())) { state.textContent = 'Заполните название, звучание и текст песни.'; return; }
       if (instrumental !== entry.snapshot.instrumental) { state.textContent = 'Режим песни изменился. Верните исходный режим, чтобы принять черновик.'; return; }
       const changed = els.prompt.value !== entry.snapshot.quick || els.musicPrompt.value !== entry.snapshot.style || els.lyrics.value !== entry.snapshot.lyrics || (!entry.snapshot.advanced && (!!els.musicPrompt.value.trim() || (!entry.snapshot.instrumental && !!els.lyrics.value.trim())));
       if (changed && !(await BRIIX_TOASTS.confirmDialog({ title: 'Заменить поля подготовленным черновиком?', body: 'В студии есть изменённые или скрытые поля. Текущие значения сохранятся для возврата кнопкой «Вернуть как было».', confirmLabel: 'Заменить' }))) return;
@@ -2841,13 +2925,13 @@
         state.textContent = 'Поля изменились во время сохранения. Проверьте их и попробуйте снова.'; return;
       }
       entry.applied = true;
-      els.musicPrompt.value = style.value;
+      els.musicPrompt.value = draftText('prompt');
       // P1 аудита #35: семейство стиля — на сессии (см. writeFields черновика наставника).
       if (!session.draft || typeof session.draft !== 'object') session.draft = {};
       if (entry.style) session.draft.styleFamily = entry.style;
       else delete session.draft.styleFamily;
       session.draft.brainPending = true; // #40: продюсерский черновик — тоже строка мозга
-      if (lyrics) els.lyrics.value = lyrics.value;
+      if (!entry.snapshot.instrumental) els.lyrics.value = draftText('lyrics');
       advanced = true; renderChrome(); saveDraft(session); await persistSessions();
       revert.hidden = false; state.textContent = 'Поля заполнены — проверьте их в композере.';
       flashDraftFields(); // F-12
@@ -2872,22 +2956,22 @@
     generate.addEventListener('click', runOnce(async () => {
       if (storageBlocked || activeSession !== session || mode !== 'music' || !needKey()) return;
       if (instrumental !== entry.snapshot.instrumental) { state.textContent = 'Режим трека изменился. Верните исходный режим, чтобы сгенерировать черновик.'; return; }
-      if (!style.value.trim() && !(lyrics && lyrics.value.trim())) { state.textContent = 'Черновик пуст.'; return; }
+      if (!draftText('prompt').trim() && !(!entry.snapshot.instrumental && draftText('lyrics').trim())) { state.textContent = 'Черновик пуст.'; return; }
       if (!entry.applied) {
         entry.beforeApply = { quick: els.prompt.value, style: els.musicPrompt.value, lyrics: els.lyrics.value, advanced };
         (entry.backups ||= []).push(entry.beforeApply); refreshBackups();
         if (!(await persistSessions())) { state.textContent = 'Не удалось сохранить резервную копию; генерация не запущена.'; return; }
       }
       entry.applied = true;
-      els.musicPrompt.value = style.value;
+      els.musicPrompt.value = draftText('prompt');
       if (!session.draft || typeof session.draft !== 'object') session.draft = {};
       if (entry.style) session.draft.styleFamily = entry.style; else delete session.draft.styleFamily;
       session.draft.brainPending = true; // #40: продюсерский черновик — тоже строка мозга
-      if (lyrics) els.lyrics.value = lyrics.value;
+      if (!entry.snapshot.instrumental) els.lyrics.value = draftText('lyrics');
       advanced = true; renderChrome(); saveDraft(session);
       await persistSessions();
       revert.hidden = false;
-      await createMusic(els.musicPrompt.value, { title: title.value.trim() || null, lyricsSource: 'продюсер' });
+      await createMusic(els.musicPrompt.value, { title: draftText('title').trim() || null, lyricsSource: 'продюсер' });
     }));
     actions.append(apply, revert, generate); body.append(actions);
   }
@@ -3242,7 +3326,6 @@
     if (sessionTransition) return;
     if (sessionProfile) { saveDraft(activeSession); if (!(await persistSessions())) return; }
     libSeq++;
-    if (producerSaveTimer) { clearTimeout(producerSaveTimer); producerSaveTimer = null; }
     resetFileQueue(); // T-27: очередь не дорабатывает загрузки ушедшего профиля
     sessionProfile = null; activeSession = null; storageBlocked = true; sessionRoots.clear();
     els.feed.innerHTML = ''; els.lib.innerHTML = '';

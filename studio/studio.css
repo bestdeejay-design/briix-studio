@@ -740,6 +740,38 @@ button:disabled { cursor: not-allowed; opacity: .4; }
 }
 .producer-field textarea { resize: vertical; min-height: 84px; line-height: 1.5; }
 .producer-field textarea.producer-lyrics { min-height: 150px; }
+/* #41: черновик в чате — строки для чтения, не формы. Значение сворачивается
+ * до одной строки (details), разворачивается кликом; «Копировать» — целиком
+ * в буфер. Правки — в «Тонко настроить» после «Принять в поля». */
+.draft-read { border: 1px solid var(--line-focus); border-radius: 10px; background: var(--surface-2); }
+.draft-read summary {
+  min-height: 44px; display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+  cursor: pointer; font-size: 13px; list-style: none; overflow-wrap: anywhere;
+}
+.draft-read summary::-webkit-details-marker { display: none; }
+.draft-read summary::after {
+  content: '▸'; color: var(--muted); margin-left: auto; flex: 0 0 auto; font-size: 12px;
+}
+.draft-read[open] summary::after { content: '▾'; }
+.draft-read-label { color: var(--muted); flex: 0 0 auto; }
+.draft-read-preview { color: var(--ink); min-width: 0; flex: 1 1 auto; }
+.draft-read-hint { color: var(--muted); font-size: 12px; flex: 0 0 auto; }
+.draft-read-full {
+  padding: 0 12px 10px; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5;
+  font-size: 15px; color: var(--ink); user-select: text; cursor: text;
+}
+.draft-read-plain {
+  min-height: 44px; display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+  border: 1px solid var(--line-focus); border-radius: 10px; background: var(--surface-2);
+  font-size: 13px; overflow-wrap: anywhere;
+}
+.draft-read-plain .draft-read-value { color: var(--ink); min-width: 0; flex: 1 1 auto; font-size: 15px; user-select: text; }
+.draft-copy { flex: 0 0 auto; min-height: 32px; padding-inline: 10px; font-size: 12px; }
+@media (max-width: 480px) {
+  .draft-read summary { flex-wrap: wrap; }
+  .draft-read-preview { flex-basis: 100%; order: 3; }
+  .draft-read-hint { display: none; }
+}
 .producer-idea { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
 .producer-idea summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; }
 .producer-idea pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
