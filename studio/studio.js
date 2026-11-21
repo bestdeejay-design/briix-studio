@@ -292,13 +292,13 @@
     lyrics: $('lyrics'), musicPrompt: $('musicPrompt'),
     improveLyrics: $('improveLyrics'), improvePrompt: $('improvePrompt'),
     undoLyrics: $('undoLyrics'), undoPrompt: $('undoPrompt'),
-    tags: $('tags'), addBtn: $('addBtn'),
+    tags: $('tags'),
     assistantChip: $('assistantChip'), assistantName: $('assistantName'), assistantMenu: $('assistantMenu'),
     modelChip: $('modelChip'), modelName: $('modelName'), modelMenu: $('modelMenu'),
     vocalSeg: $('vocalSeg'), tuneToggle: $('tuneToggle'), prepareMusic: $('prepareMusic'),
     styleFamilyBadge: $('styleFamilyBadge'),
-    genTrack: $('genTrack'),
-    send: $('send'), feed: $('feed'), status: $('status'), metaLeft: $('metaLeft'),
+    genTrack: $('genTrack'), moreBtn: $('moreBtn'), morePanel: $('morePanel'),
+    send: $('send'), feed: $('feed'), status: $('status'),
     composer: $('composer'), keyCard: $('keyCard'), keyInput: $('keyInput'), keySave: $('keySave'),
     newChat: $('newChat'), improvePhoto: $('improvePhoto'), undoPhoto: $('undoPhoto'),
     gate: $('gate'), nickInput: $('nickInput'), pinDots: $('pinDots'), pinpad: $('pinpad'),
@@ -849,24 +849,28 @@
     return CHAT_ROLES.find(a => a.id === id) || CHAT_ROLES[0];
   }
 
-  function meta() {
-    const bits = [location.hostname, MODE_LABELS[mode]];
-    if (mode === 'music') bits.push(MODEL_LABELS[quality]);
-    else bits.push(currentAssistant().name.replace(/\s*\(.*\)\s*$/, ''));
-    els.metaLeft.textContent = bits.join(' · ');
-  }
+  function meta() { /* #35 компакт: левая подпись «домен · режим · наставник» убрана —
+    это дубль чипа наставника; в .meta остаётся только честный #status */ }
 
   // ---- дропдауны ------------------------------------------------------------
-  function closeMenus() {
-    document.querySelectorAll('.menu').forEach(m => { m.hidden = true; });
-    document.querySelectorAll('[aria-haspopup="menu"]').forEach(b => b.setAttribute('aria-expanded', 'false'));
+  // root — панель, внутри которой вложенные меню остаются открытыми (#35:
+  // «⋯»-панель держит открытой себя и вложенный список моделей).
+  function closeMenus(root) {
+    document.querySelectorAll('.menu').forEach(m => {
+      if (root && (m === root || root.contains(m))) return;
+      m.hidden = true;
+    });
+    document.querySelectorAll('[aria-haspopup="menu"]').forEach(b => {
+      if (root && root.contains(b)) return;
+      b.setAttribute('aria-expanded', 'false');
+    });
   }
 
   function attachMenu(chip, menu, buildItems) {
     chip.addEventListener('click', e => {
       e.stopPropagation();
       const willOpen = menu.hidden;
-      closeMenus();
+      closeMenus(chip.closest('.menu'));
       if (!willOpen) return;
       menu.innerHTML = '';
       for (const item of buildItems()) {
@@ -887,7 +891,7 @@
       menu.querySelector('button')?.focus();
     });
   }
-  document.addEventListener('click', closeMenus);
+  document.addEventListener('click', () => closeMenus());
   document.addEventListener('keydown', e => {
     const menu = e.target.closest?.('.menu:not([hidden])');
     if (e.key === 'Escape') {
@@ -946,7 +950,24 @@
     return els.feed.scrollHeight - els.feed.scrollTop - els.feed.clientHeight < 140;
   }
   function scrollFeed(force = false) {
-    if (force || isFeedNearBottom()) els.feed.scrollTop = els.feed.scrollHeight;
+    if (!(force || isFeedNearBottom())) return;
+    const top = els.feed.scrollHeight;
+    els.feed.scrollTop = top;
+    if (!force || restoringFeed) return; // restore-скролл не вооружает докрутку: короткая лента дала бы всегда-истинный порог
+    // F-39 (докрутка): ленивые медиа под низом дорисовываются ПОСЛЕ скролла и
+    // растягивают ленту — читатель клика по пилюле обязан оказаться у нового
+    // низа. Пока читателя не увели вверх (>140px от прежней точки), докручиваем;
+    // наблюдатель живёт коротко и не мешает дальнейшему чтению.
+    const reStick = () => {
+      if (els.feed.scrollTop >= top - els.feed.clientHeight - 140) els.feed.scrollTop = els.feed.scrollHeight;
+    };
+    let obs = null;
+    if (typeof MutationObserver === 'function') {
+      obs = new MutationObserver(reStick);
+      obs.observe(els.feed, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+      setTimeout(() => { obs.disconnect(); }, 900);
+    }
+    setTimeout(reStick, 450); // rAF сознательно не используется: T-39 держит кадр и считает очереди
   }
 
   // ---- F-39: пилюля «↓ N новых» ----------------------------------------------
@@ -1751,6 +1772,7 @@
     els.vocalSeg.querySelectorAll('.seg-btn').forEach(b => b.setAttribute('aria-pressed', String(Number(b.dataset.vocal) === (instrumental ? 1 : 0))));
     els.tuneToggle.setAttribute('aria-pressed', String(advanced));
     paintStyleFamilyBadge();
+    autoGrowPrompt();
     // F-37: подпись зависит от режима (песня/инструментал); на узких экранах
     // виден короткий лейбл, полный — всегда в aria-label и title.
     els.prepareMusic.setAttribute('aria-label', instrumental ? 'Подготовить трек' : 'Подготовить песню');
@@ -1767,6 +1789,14 @@
 
   function promptValue() {
     return activePromptEl().value.trim();
+  }
+
+  // #35 компакт: единое поле растёт с текстом (rows=1), потолок — прежние 200px.
+  function autoGrowPrompt() {
+    const el = els.prompt;
+    if (!el || el.hidden) return;
+    el.style.height = 'auto';
+    el.style.height = Math.min(200, Math.max(44, el.scrollHeight + 2)) + 'px';
   }
 
   function updateEnabled() {
@@ -1832,7 +1862,7 @@
   function renderKeyChip() {
     const has = Boolean(token());
     els.profileNick.textContent = currentUser() || '';
-    els.profileBtn.title = has ? 'Профиль — ключ доступа сохранён' : 'Профиль — ключ доступа не задан';
+    els.profileBtn.title = has ? 'Меню студии — ключ доступа сохранён' : 'Меню студии — ключ доступа не задан';
     // статус ключа виден всегда: в пункте меню и внутри карточки ключа
     els.profileKeyBtn.textContent = has ? 'Ключ доступа ✓' : 'Ключ доступа…';
     if (els.keyStatus) els.keyStatus.textContent = has
@@ -3793,11 +3823,14 @@
     setMode(button.dataset.mode);
   });
 
-  els.tuneToggle.addEventListener('click', () => { advanced = !advanced; renderChrome(); });
+  els.tuneToggle.addEventListener('click', () => { advanced = !advanced; closeMenus(); renderChrome(); });
   els.vocalSeg.addEventListener('click', e => {
     const btn = e.target.closest('.seg-btn');
     if (!btn) return;
     instrumental = btn.dataset.vocal === '1';
+    // #35 компакт: сегмент живёт в «⋯»-панели; после выбора панель закрываем —
+    // открытая панель перекрывает поле ввода и кнопку отправки.
+    closeMenus();
     // P2-3 аудита #35: режим трека — состояние сессии (localStorage остаётся
     // только дефолтом НОВОЙ сессии и здесь не перезаписывается).
     if (activeSession) { if (!activeSession.draft || typeof activeSession.draft !== 'object') activeSession.draft = {}; activeSession.draft.instrumental = instrumental; saveDraftSoon(); }
@@ -3810,9 +3843,10 @@
   els.genTrack.addEventListener('click', async () => {
     if (storageBlocked || !activeSession || mode !== 'music' || !needKey()) return;
     if (!promptValue() && !(advanced && els.lyrics.value.trim())) return;
+    closeMenus(); // #35: кнопка живёт в «⋯»-панели — запуск закрывает её
     await createMusic(promptValue());
   });
-  els.prepareMusic.addEventListener('click', prepareMusic);
+  els.prepareMusic.addEventListener('click', () => { closeMenus(); prepareMusic(); }); // #35: тоже в «⋯»-панели
   // F-33: черновик композера пишется на вводе (дебаунс 400 мс) — раньше
   // набранный текст терялся при закрытии вкладки без смены сессии.
   for (const el of [els.prompt, els.lyrics, els.musicPrompt]) el.addEventListener('input', saveDraftSoon);
@@ -3843,12 +3877,25 @@
     if (tag) insertTag(tag.dataset.tag);
   });
 
-  els.addBtn.addEventListener('click', e => {
-    e.stopPropagation();
-    card('notice', 'Вложения', 'Прикрепление файлов скоро — пока опишите всё текстом.');
-  });
+  els.addBtn = null; // #35 компакт: кнопка вложений-заглушки («скоро») убрана из UI
 
-  els.prompt.addEventListener('input', updateEnabled);
+  // ⋯-панель «Ещё» (#35 компакт): модель / режим трека / тонкая настройка /
+  // явная генерация / продюсер — редкое убрано с лица композера, но остаётся
+  // в одном тапе. Паттерн — как у меню профиля: клик мимо и Esc закрывают.
+  els.moreBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    const willOpen = els.morePanel.hidden;
+    closeMenus();
+    if (!willOpen) return;
+    els.morePanel.hidden = false;
+    els.moreBtn.setAttribute('aria-expanded', 'true');
+    els.morePanel.querySelector('button:not(:disabled)')?.focus();
+  });
+  // Клик по панели не уходит в document: клик по самой панели (не по её кнопкам)
+  // не должен схлопывать её — закрывают только осознанные действия и клик мимо.
+  els.morePanel.addEventListener('click', e => e.stopPropagation());
+
+  els.prompt.addEventListener('input', () => { autoGrowPrompt(); updateEnabled(); });
   els.lyrics.addEventListener('input', updateEnabled);
   els.musicPrompt.addEventListener('input', () => {
     // P1 аудита #35: ручная правка описания отменяет подсказку резолвера —

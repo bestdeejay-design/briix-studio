@@ -31,8 +31,10 @@ const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
     await page.waitForSelector('#storageWarning:not([hidden])');
     assert.match(await page.locator('#storageWarning').innerText(), /localStorage/);
     await page.getByText('Старый текст').waitFor();
+    await page.locator('#profileBtn').click(); // #35 компакт: «Новый чат»/«История» — за бургером
     await page.locator('#newChat').click();
     await page.waitForFunction(() => document.querySelectorAll('.session-feed:not([hidden]) .card').length === 0);
+    await page.locator('#profileBtn').click();
     await page.locator('#sessionsOpen').click();
     await page.locator('.session-item').filter({ hasText: 'Старый текст' }).click();
     await page.locator('#feed .session-feed:not([hidden])').getByText('Старый текст').waitFor({ state: 'visible' });
