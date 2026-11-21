@@ -2720,12 +2720,18 @@
       }
       // Brain Upgrade Spec §4 (lyrics-effect-brackets.md): брекеты динамики —
       // второй канал описания. Авторская разметка проходит без потерь; без неё
-      // мозг размечает секции сам (EN, ≤6, анти-монотонность: lift последнего
-      // припева, riser, куплет 2 ≠ куплет 1, брекет пространства). В модель
-      // уезжает размеченная лирика; авторский текст хранится в карточке целиком.
+      // мозг размечает секции сам (#47: стилевой профиль семейства — synthwave
+      // получает analog/gated-сигнатуры, jazz — brushes/upright, и т.д.; EN,
+      // ≤6, анти-монотонность: lift последнего припева, riser, куплет 2 ≠
+      // куплет 1, брекет пространства, соло; анти-дублирование с caption
+      // биграммами). В модель уезжает размеченная лирика; авторский текст
+      // хранится в карточке целиком.
       let lyricsForModel = lyrics, arrangementBadge = null;
       if (!snapshot.instrumental && lyrics && globalThis.BRIIX_MUSIC_BRAIN && typeof BRIIX_MUSIC_BRAIN.markLyricsDynamics === 'function') {
-        const marking = BRIIX_MUSIC_BRAIN.markLyricsDynamics(lyrics);
+        const marking = BRIIX_MUSIC_BRAIN.markLyricsDynamics(lyrics, {
+          style: styleFamily || undefined, // семейство из черновика сессии, если известно
+          caption: finalPrompt            // §2.4: брекеты не повторяют слои caption
+        });
         if (marking.marked) {
           lyricsForModel = marking.lyrics;
           arrangementBadge = 'Аранжировка размечена: ' + marking.marked + ' ' + ruPlural(marking.marked, 'секция', 'секции', 'секций');

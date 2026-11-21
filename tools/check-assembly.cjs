@@ -98,11 +98,12 @@ async function assemble({ idea = '', manualLyrics = '', instrumental = false, ad
   if (instrumental) params.instrumental = true;
   if (!instrumental && (songLanguage === 'ru' || songLanguage === 'en')) params.language = songLanguage;
   // Брекеты динамики (Brain Upgrade Spec §4, lyrics-effect-brackets.md): зеркало
-  // createMusic — лирика без авторской разметки размечается мозгом (EN, ≤6,
-  // анти-монотонность), авторский текст не меняется.
+  // createMusic — лирика без авторской разметки размечается мозгом (#47: стилевой
+  // профиль из caption, анти-дублирование с caption, EN, ≤6, анти-монотонность),
+  // авторский текст не меняется.
   let lyricsForModel = lyrics;
   if (!instrumental && lyrics) {
-    const marking = musicBrain.markLyricsDynamics(lyrics);
+    const marking = musicBrain.markLyricsDynamics(lyrics, { caption: finalPrompt });
     if (marking.marked) lyricsForModel = marking.lyrics;
   }
   if (lyrics) params.lyrics = lyricsForModel;
@@ -243,6 +244,26 @@ const tagged = await assemble({ idea: 'dream pop', manualLyrics: '[Куплет 
 assert.equal(tagged.params.lyrics, '[Verse 1]\nМой текст', 'only the tags are latinized (одна секция — разметке нечего обогащать)');
 assert.equal(brain.structureWarnings('Просто текст без тегов').length, 1, 'missing tags warned, not enforced');
 assert.ok(brain.structureWarnings('[Chorus]\nx\n[Verse]\ny').some(w => /раньше первого куплета/.test(w)));
+
+// (т) #47 стилевые брекеты: жанр из идеи доезжает до caption → разметка берёт
+// профиль семейства (synthwave → analog/arpeggio/gated/brass stabs), а не
+// нейтральный словарь; брекеты EN при русской лирике; эффекты не дублируют
+// слои caption биграммой (§2.4).
+const synthLyrics = '[Intro]\nНочной город\n[Verse 1]\nОгни\n[Pre-Chorus]\nВсё ближе\n[Chorus]\nНочной эфир\n[Verse 2]\nТише\n[Chorus]\nНочной эфир\n[Bridge]\nМост\n[Chorus]\nФинал\n[Outro]\nТишь';
+const synthAsm = await assemble({ idea: 'synthwave, 100 BPM, male baritone', manualLyrics: synthLyrics, advanced: true, brainPending: true });
+const synthFx = synthAsm.params.lyrics.match(/\[[^\]\n]+: [^\]\n]+\]/g) || [];
+assert.ok(synthFx.length >= 4, `synthwave: размечено ${synthFx.length} секций (лирика + слои)`);
+assert.ok(synthFx.every(b => /^[\[\]:A-Za-z0-9 ,'+-]+$/.test(b)), 'все брекеты EN ASCII при русской лирике');
+assert.ok(synthFx.some(b => /analog|arpeggio|gated|brass stabs|vinyl|choir pad|tape/i.test(b)),
+  'разметка взяла synthwave-сигнатуры (dm-signatures), а не нейтральный словарь');
+assert.equal(new Set(synthFx.map(b => b.replace(/^\[[^:]+: /, '').replace(/\]$/, ''))).size, synthFx.length,
+  'ни один брекет не повторяет другой дословно (§3)');
+const synthCapBigrams = new Set();
+{ const w = synthAsm.postPrompt.toLowerCase().match(/[a-z]+/g) || []; for (let i = 0; i + 1 < w.length; i++) synthCapBigrams.add(w[i] + ' ' + w[i + 1]); }
+assert.ok(synthFx.every(b => {
+  const w = b.toLowerCase().match(/[a-z]+/g) || [];
+  return !w.some((x, i) => synthCapBigrams.has(x + ' ' + w[i + 1]));
+}), 'брекеты не дублируют слои caption биграммой (§2.4)');
 
 // (ж) instrumental — без лирики, с флагом и brain-тегом instrumental.
 const inst = await assemble({ idea: 'Глубокий техно-бит без вокала', instrumental: true });
