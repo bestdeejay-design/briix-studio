@@ -98,6 +98,9 @@ jobs:
         run: node tools/check-assembly.cjs
       - name: check-music-brain
         run: node tools/check-music-brain.cjs
+      - name: check-lyrics-brain
+        # #48: lyrics-brain v2 теперь продакшн-модуль (мелодичность/десинк-гарда)
+        run: node tools/check-lyrics-brain.cjs
       - name: check-producer
         run: node tools/check-producer.cjs
       - name: check-chat-draft
