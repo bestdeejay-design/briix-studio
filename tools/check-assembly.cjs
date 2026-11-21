@@ -97,7 +97,15 @@ async function assemble({ idea = '', manualLyrics = '', instrumental = false, ad
   const params = { model: 'ace-step-flash' };
   if (instrumental) params.instrumental = true;
   if (!instrumental && (songLanguage === 'ru' || songLanguage === 'en')) params.language = songLanguage;
-  if (lyrics) params.lyrics = lyrics;
+  // Брекеты динамики (Brain Upgrade Spec §4, lyrics-effect-brackets.md): зеркало
+  // createMusic — лирика без авторской разметки размечается мозгом (EN, ≤6,
+  // анти-монотонность), авторский текст не меняется.
+  let lyricsForModel = lyrics;
+  if (!instrumental && lyrics) {
+    const marking = musicBrain.markLyricsDynamics(lyrics);
+    if (marking.marked) lyricsForModel = marking.lyrics;
+  }
+  if (lyrics) params.lyrics = lyricsForModel;
   // В POST уходит сборка (prompt), в карточку/сессию — исходная идея (input.prompt).
   const requestBase = idea || lyrics;
   const layerCount = layers => {
@@ -198,10 +206,15 @@ assert.equal(brain.latinizeTags('[Verse]\nМой куплет\n**Chorus**\nПр�
 assert.equal(brain.normalizeSectionTags('__Verse 2__\n##Припев\n*Outro'), '[Verse 2]\n[Chorus]\n[Outro]',
   'bold/heading/loose-asterisk tag-lines normalize');
 assert.equal(brain.normalizeSectionTags('Куплет 1\nOutro'), '[Verse 1]\n[Outro]', 'plain and numbered tag-lines normalize');
-// (о) ремарки вокала в скобках — валидны для ace-step, не трогаются.
+// (о) ремарки вокала в скобках — валидны для ace-step, не трогаются;
+//     обогащённые теги '[Припев: эффекты]' канонизируются по базе, эффекты бережём.
 assert.equal(brain.latinizeTags('[Verse]\n[voice raw and visceral]\nСтрока (шёпотом) **не тег**'),
   '[Verse]\n[voice raw and visceral]\nСтрока (шёпотом) **не тег**',
   'vocal-direction brackets and inline markdown are preserved');
+assert.equal(brain.latinizeTags('[Припев: эхо на голос]\nтекст'), '[Chorus: эхо на голос]\nтекст',
+  'обогащённый тег: секция канонизирована, эффекты целы');
+assert.equal(brain.structureWarnings('[Verse]\nx\n[Chorus: layered harmonies]\ny').length, 0,
+  'обогащённый припев — валидная секция, nag нет');
 // (п) markdown-теги = структура: предупреждение «нет тегов» не выдаётся.
 assert.equal(brain.structureWarnings('**Verse**\nстроки\n**Chorus**\nстроки').length, 0,
   'markdown tag-lines satisfy the scaffold check');
@@ -214,15 +227,20 @@ assert.deepEqual([...new Set(order)], ['Intro', 'Verse', 'Pre-Chorus', 'Chorus',
   'scaffold order intro -> verse -> pre-chorus -> chorus -> bridge -> outro, Latin only');
 assert.equal(musicBrain.buildLyricsSkeleton('любой текст', { kind: 'instrumental' }), '[Instrumental]');
 
-// (е) ручная лирика не заменяется: только латинизация тегов + предупреждение.
+// (е) ручная лирика: текст автора — дословно, поверх — брекеты динамики мозга
+// (Brain Upgrade Spec §4: «sent as authored» = слова не меняются, теги секций
+// обогащаются эффектами; в карточке хранится и исходная лирика).
 const manual = '[Verse]\nГород спит\n[Chorus]\nА я не сплю';
 const manualAsm = await assemble({ idea: 'dream pop, 90 BPM, female vocals', manualLyrics: manual, advanced: true });
-assert.equal(manualAsm.params.lyrics, manual, 'manual lyrics are sent as authored');
 assert.equal(manualAsm.postPrompt, 'dream pop, 90 BPM, female vocals', 'ASCII advanced prompt is not rewritten');
+assert.match(manualAsm.params.lyrics, /Город спит/, 'текст ручной лирики не изменяется');
+assert.doesNotMatch(manualAsm.params.lyrics.replace(/\[[^\]\n]*\]/g, ''), /[:]/, 'эффекты только в тегах секций, не в тексте');
+assert.match(manualAsm.params.lyrics, /\[Chorus: /, 'последний припев получил lift-брекет разметки');
+assert.equal(brain.structureWarnings(manualAsm.params.lyrics).length, 0, 'размеченная лирика — валидный каркас (обогащённый тег = секция)');
 assert.equal(manualAsm.inputPrompt, 'dream pop, 90 BPM, female vocals', 'original idea is kept in the card/session');
 assert.equal(brain.structureWarnings(manual).length, 0, 'manual scaffold is valid, no nag');
 const tagged = await assemble({ idea: 'dream pop', manualLyrics: '[Куплет 1]\nМой текст', advanced: true });
-assert.equal(tagged.params.lyrics, '[Verse 1]\nМой текст', 'only the tags are latinized');
+assert.equal(tagged.params.lyrics, '[Verse 1]\nМой текст', 'only the tags are latinized (одна секция — разметке нечего обогащать)');
 assert.equal(brain.structureWarnings('Просто текст без тегов').length, 1, 'missing tags warned, not enforced');
 assert.ok(brain.structureWarnings('[Chorus]\nx\n[Verse]\ny').some(w => /раньше первого куплета/.test(w)));
 

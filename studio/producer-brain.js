@@ -150,6 +150,10 @@
     'аутро': 'Outro', 'концовка': 'Outro', 'завершение': 'Outro', 'outro': 'Outro',
     'инструментал': 'Instrumental', 'instrumental': 'Instrumental'
   };
+  // Брекеты эффектов (audits/lyrics-effect-brackets.md): '[Chorus: layered
+  // harmonies]' — секция + эффекты в одном теге. База — до двоеточия;
+  // эффекты не трогаем: это динамика секций, второй канал описания.
+  const tagBase = label => String(label || '').split(':')[0].trim();
 
   // Тег-строка (живой кейс GLM-ответов): строка, которая целиком является именем
   // части в markdown-обёртке — '**Outro**', '**Verse 2**', '__Припев__', '##Verse',
@@ -163,21 +167,24 @@
       const bare = stripMarkdown(line).replace(/^\s*#{1,6}\s*/, '').trim();
       const m = bare.match(/^\[?(.+?)(?:\s+(\d{1,2}))?\]?$/);
       if (!m) return line;
-      const base = TAG_MAP[m[1].trim().toLowerCase()];
+      const base = TAG_MAP[tagBase(m[1]).toLowerCase()];
+      // Обогащённый тег ('[Припев: эхо]') — секцию канонизируем, эффекты бережём.
       if (!base) return line;
-      return '[' + base + (m[2] ? ' ' + m[2] : '') + ']';
+      const effects = m[1].includes(':') ? m[1].slice(m[1].indexOf(':')) : '';
+      return '[' + base + (m[2] ? ' ' + m[2] : '') + effects + ']';
     }).join('\n');
   }
 
   // Переписывает ТОЛЬКО теги частей: [Куплет 2] → [Verse 2], [verse] → [Verse],
   // '**Outro**' (строка-тег в markdown) → [Outro]. Текст песни (внутри секций) не трогается.
   function latinizeTags(lyrics) {
-    return normalizeSectionTags(String(lyrics || '')).replace(/\[([^\[\]\n]{1,40})\]/g, (full, label) => {
+    return normalizeSectionTags(String(lyrics || '')).replace(/\[([^\[\]\n]{1,80})\]/g, (full, label) => {
       const raw = label.trim();
       const m = raw.match(/^(.+?)(?:\s+(\d{1,2}))?$/);
-      const base = TAG_MAP[m[1].trim().toLowerCase()] || null;
+      const base = TAG_MAP[tagBase(m[1]).toLowerCase()] || null;
       if (!base) return full; // незнакомый тег не трогаем
-      return '[' + base + (m[2] ? ' ' + m[2] : '') + ']';
+      const effects = raw.includes(':') ? raw.slice(raw.indexOf(':')) : '';
+      return '[' + base + (m[2] ? ' ' + m[2] : '') + effects + ']';
     });
   }
 
@@ -185,10 +192,11 @@
   // Возвращает предупреждения; пустой массив = каркас соблюдён.
   function structureWarnings(lyrics) {
     // Markdown-теги ('**Verse**') — та же структура: предупреждение не выдаётся.
+    // Обогащённые теги ('[Chorus: effects]') — тоже секция: база до двоеточия.
     const s = normalizeSectionTags(String(lyrics || ''));
     const tags = [];
-    s.replace(/\[([^\[\]\n]{1,40})\]/g, (full, label) => {
-      const m = label.trim().match(/^(.+?)(?:\s+\d{1,2})?$/);
+    s.replace(/\[([^\[\]\n]{1,80})\]/g, (full, label) => {
+      const m = tagBase(label).trim().match(/^(.+?)(?:\s+\d{1,2})?$/);
       const canon = TAG_MAP[m[1].trim().toLowerCase()];
       if (canon && CANON_TAGS.includes(canon)) tags.push(canon);
       return full;

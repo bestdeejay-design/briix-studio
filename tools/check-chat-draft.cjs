@@ -84,4 +84,16 @@ assert.match(scope.BriixProducer.messages({ idea: 'песня про осень'
 assert.equal(scope.BriixProducer.detectExplicitLanguage('песня про осень'), null);
 assert.equal(scope.BriixProducer.detectExplicitLanguage('песня про осень на русском'), 'ru');
 
+// 6) утечка имени/псевдонима в ЛИРИКЕ (Brain Upgrade Spec §5.1: бан имён
+//    распространяется и на лирику; живой кейс — «Hands up» = «Руки Вверх»).
+//    Художественный текст не переписываем — честное предупреждение.
+const g = guardMusicDraft(
+  { title: 'Осень', prompt: 'eurodance, bright synth brass', lyrics: '[Verse]\nHands up, лето кончилось\n[Chorus]\nруки вверх к небесам', style: 'edm' },
+  'песня в стиле Руки Вверх про осень');
+assert.ok(g.warnings.some(w => /звучит в тексте песни/.test(w)), 'утечка имени/псевдонима в лирике замечена');
+assert.match(g.draft.lyrics, /Hands up/, 'текст не переписывается — только предупреждение');
+// Чистая лирика без имён — предупреждений нет (ложных срабатываний не плодим).
+const h = guardMusicDraft({ title: 'Осень', prompt: 'eurodance', lyrics: '[Verse]\nпросто строка', style: 'edm' }, 'песня про осень');
+assert.equal(h.warnings.length, 0, 'чистая лирика — без предупреждений');
+
 console.log('check-chat-draft: OK');

@@ -1686,11 +1686,17 @@
       vb.textContent = input.voiceBadge; // #46: происхождение голоса (семь осей)
       meta.append(vb);
     }
+    if (input.arrangementBadge) {
+      const ab = document.createElement('div'); ab.className = 'brain-badge';
+      ab.textContent = input.arrangementBadge; // Brain Upgrade Spec §4: разметка аранжировки
+      meta.append(ab);
+    }
     metaLine('Источник лирики', input.lyricsSource || (input.instrumental ? 'инструментал' : null));
     details.append(summary, meta);
     details.append(draftReadRow('Промпт в модель', input.promptSent || input.prompt || ''));
     if (input.promptSent && input.prompt) details.append(draftReadRow('Исходная идея', input.prompt));
-    details.append(draftReadRow('Текст песни', input.lyrics || (input.instrumental ? 'Инструментал' : '')));
+    details.append(draftReadRow('Текст песни', input.lyricsSent || input.lyrics || (input.instrumental ? 'Инструментал' : '')));
+    if (input.lyricsSent && input.lyrics) details.append(draftReadRow('Исходная лирика', input.lyrics));
     container.append(details);
   }
 
@@ -2070,21 +2076,41 @@
     return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
+  // Псевдонимы живых кейсов (Brain Upgrade Spec §5.1): «Hands up» в тексте —
+  // это утечка имени «Руки Вверх»; бан имён действует и для лирики/титулов.
+  const ARTIST_ALIASES = { 'руки вверх': ['hands up', 'ruki vverh'] };
+  // Имена (вместе с псевдонимами), звучащие в тексте: caption, лирика, title.
+  function artistNameHits(names, text) {
+    const t = String(text || '');
+    const found = [];
+    for (const n of names || []) {
+      const patterns = [n].concat(ARTIST_ALIASES[String(n).toLowerCase()] || []);
+      if (patterns.some(p => p && new RegExp(escapeRegExp(p), 'i').test(t))) found.push(n);
+    }
+    return found;
+  }
+
   // Защитная постобработка черновика: style — через normalizeStyle (неизвестное
   // семейство отбрасывается), prompt — styleLeaks/имена → предупреждение в карточке,
-  // title — не равен имени артиста (совпало → пересборка из семейства/темы).
+  // title — не равен имени артиста (совпало → пересборка из семейства/темы),
+  // lyrics — имя/псевдоним не должен звучать в тексте (Brain Upgrade Spec §5.1:
+  // бан имён распространяется и на лирику; художественный текст не переписываем — предупреждаем).
   function guardMusicDraft(draft, idea) {
     const warnings = [];
     if (!draft || typeof draft !== 'object') return { draft, warnings };
     draft.style = BriixProducer.normalizeStyle(draft.style);
     const names = extractArtistRefs(idea);
-    const hits = text => names.filter(n => new RegExp(escapeRegExp(n), 'i').test(String(text || '')));
+    const hits = text => artistNameHits(names, text);
     if (BriixProducer.styleLeaks(draft.prompt) > 0) {
       warnings.push('В описании звучания есть отсылка «в духе исполнителя» — замените её на семейство стиля.');
     }
     const promptNames = hits(draft.prompt);
     if (promptNames.length) {
       warnings.push('Имя исполнителя (' + promptNames.join(', ') + ') попало в описание звучания — замените его семейством стиля.');
+    }
+    const lyricNames = hits(draft.lyrics);
+    if (lyricNames.length) {
+      warnings.push('Имя исполнителя (' + lyricNames.join(', ') + ') звучит в тексте песни — имя не должно попадать в лирику, замените отсылку характеристикой.');
     }
     if (hits(draft.title).length || BriixProducer.styleLeaks(draft.title) > 0) {
       warnings.push('Название совпало с именем исполнителя — заменено автоматически.');
@@ -2415,15 +2441,22 @@
     return n;
   }
 
+  // Русская плюрализация числительных: 1 признак / 2 признака / 5 признаков.
+  function ruPlural(n, one, few, many) {
+    const v = Math.abs(Number(n) || 0) % 100, d = v % 10;
+    if (v > 10 && v < 20) return many;
+    if (d > 1 && d < 5) return few;
+    if (d === 1) return one;
+    return many;
+  }
+
   // #46: честный бейдж происхождения голоса (vocal-profile-vocabulary.md,
   // правило 5): характеристики автора → «задан характеристиками», семья →
   // «голос из стиля», иначе нейтральный профиль. Формулировки — из справки.
   function voiceBadgeText(profile) {
     if (!profile) return null;
     if (profile.source === 'user' || profile.source === 'mixed') {
-      const n = profile.userCount || 0;
-      const word = n % 10 === 1 && n % 100 !== 11 ? 'признак' : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? 'признака' : 'признаков');
-      return 'Голос задан характеристиками: ' + n + ' ' + word + ' (свой выбор)';
+      return 'Голос задан характеристиками: ' + profile.userCount + ' ' + ruPlural(profile.userCount, 'признак', 'признака', 'признаков') + ' (свой выбор)';
     }
     if (profile.source === 'style') return 'Голос из стиля: ' + profile.family;
     return 'Голос: нейтральный профиль';
@@ -2666,7 +2699,41 @@
       const isSectionTag = s => /^\[[^\]\n]{1,32}\]$/.test(s);
       const titleSource = (lyrics || style || '').split('\n').map(s => s.trim()).find(s => s.length > 2 && !isSectionTag(s)) || '';
       const trackTitle = BriixProducer.sanitize(draftTitle || titleSource).slice(0, BriixProducer.MAX_TITLE) || ('BRIIX track ' + new Date().toISOString().slice(0, 10));
-      const params = { model: MUSIC_MODELS[snapshot.quality], title: trackTitle, artist: currentUser() };
+      // Brain Upgrade Spec §5.1: бан имён — не только caption, но и лирика и title.
+      // Лирику не переписываем (художественный текст — авторский): предупреждаем
+      // честной карточкой; из названия имя вычищаем автоматически.
+      const ideaArtistRefs = extractArtistRefs(rawIdea);
+      const lyricLeaks = !snapshot.instrumental && lyrics ? artistNameHits(ideaArtistRefs, lyrics) : [];
+      if (lyricLeaks.length) {
+        card('notice', 'Имя исполнителя в тексте песни', 'Имя (' + lyricLeaks.join(', ') + ') звучит в лирике — модель может принять его за отсылку к исполнителю. Проверьте текст: имена не должны попадать в лирику.', session);
+      }
+      let finalTitle = trackTitle;
+      const titleLeaks = artistNameHits(ideaArtistRefs, trackTitle);
+      if (titleLeaks.length) {
+        let t = trackTitle;
+        for (const n of ideaArtistRefs) {
+          for (const p of [n].concat(ARTIST_ALIASES[n.toLowerCase()] || [])) t = t.replace(new RegExp(escapeRegExp(p), 'gi'), ' ');
+        }
+        t = t.replace(/[\s!.,;:«»""()+\-–—]+/g, ' ').trim();
+        if (t) finalTitle = t.slice(0, BriixProducer.MAX_TITLE);
+        card('notice', 'Название очищено от имени исполнителя', 'Имя (' + titleLeaks.join(', ') + ') не должно попадать в название трека — вычищено автоматически.', session);
+      }
+      // Brain Upgrade Spec §4 (lyrics-effect-brackets.md): брекеты динамики —
+      // второй канал описания. Авторская разметка проходит без потерь; без неё
+      // мозг размечает секции сам (EN, ≤6, анти-монотонность: lift последнего
+      // припева, riser, куплет 2 ≠ куплет 1, брекет пространства). В модель
+      // уезжает размеченная лирика; авторский текст хранится в карточке целиком.
+      let lyricsForModel = lyrics, arrangementBadge = null;
+      if (!snapshot.instrumental && lyrics && globalThis.BRIIX_MUSIC_BRAIN && typeof BRIIX_MUSIC_BRAIN.markLyricsDynamics === 'function') {
+        const marking = BRIIX_MUSIC_BRAIN.markLyricsDynamics(lyrics);
+        if (marking.marked) {
+          lyricsForModel = marking.lyrics;
+          arrangementBadge = 'Аранжировка размечена: ' + marking.marked + ' ' + ruPlural(marking.marked, 'секция', 'секции', 'секций');
+        } else if (marking.authored) {
+          arrangementBadge = 'Аранжировка автора: ' + marking.authored + ' ' + ruPlural(marking.authored, 'секция', 'секции', 'секций') + ' с эффектами';
+        }
+      }
+      const params = { model: MUSIC_MODELS[snapshot.quality], title: finalTitle, artist: currentUser() };
       if (snapshot.instrumental) params.instrumental = true;
       else {
         // T-03: bff ждёт params.language (ru|en) — без поля русский вокал уходит в
@@ -2675,12 +2742,12 @@
         // не валидирует — не шлём, он живёт только тегом мозга.
         if (songLanguage === 'ru' || songLanguage === 'en') params.language = songLanguage;
       }
-      if (lyrics) params.lyrics = lyrics;
+      if (lyrics) params.lyrics = lyricsForModel;
       // В карточку/сессию — исходная идея без изменений (правило #109),
       // promptSent — ровно то, что ушло в модель; повтор подставляет исходную идею.
       const requestBase = rawIdea || lyrics;
-      const input = { prompt: requestBase, promptSent: finalPrompt !== requestBase ? finalPrompt : undefined, lyrics, model: MUSIC_MODELS[snapshot.quality], instrumental: snapshot.instrumental, parentJobId: snapshot.parentJobId,
-        title: trackTitle, artist: currentUser(), brainLayers: brainLayers || undefined, voiceBadge: voiceBadge || undefined,
+      const input = { prompt: requestBase, promptSent: finalPrompt !== requestBase ? finalPrompt : undefined, lyrics, lyricsSent: lyricsForModel !== lyrics ? lyricsForModel : undefined, model: MUSIC_MODELS[snapshot.quality], instrumental: snapshot.instrumental, parentJobId: snapshot.parentJobId,
+        title: finalTitle, artist: currentUser(), brainLayers: brainLayers || undefined, voiceBadge: voiceBadge || undefined, arrangementBadge: arrangementBadge || undefined,
         lyricsSource: draftSource || (snapshot.advanced ? 'написал пользователь' : (vocal && !lyrics ? 'автолирика (автор песен)' : 'написал пользователь')) };
       const id = await submitJob({ type: 'music', prompt: finalPrompt, params });
       handle.jobId = id; // ✕ после отправки отменяет джобу и на сервере (T-05)

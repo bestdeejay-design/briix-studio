@@ -347,57 +347,72 @@
    * Источник — §2 справки (проверенные кейсы координатора: евроданс, металл,
    * европоп, баллада, девичий поп, рэп, ретро-диско) + остальные семьи в той
    * же лексике. Профили чистые — без взаимоисключающих токенов (правило 3);
-   * mood — семейный дефолт настроения вместо generic-«atmospheric» (§5). */
+   * mood — семейный дефолт настроения вместо generic-«atmospheric» (§5).
+   *
+   * ПРАВИЛО 0 ВЛАДЕЛЬЦА (vocal-profile-vocabulary.md, 22.11): тонкие мужские
+   * голоса запрещены — в мужских профилях НИКОГДА нет thin/light/breathy/
+   * high tenor/falsetto, только chest/full/warm/wide chesty; при сомнении —
+   * ниже и тяжелее. На женские профили не распространяется.
+   *
+   * guard — запреты противоположного регистра (Brain Upgrade Spec §3.3):
+   * одного описания «низкий бас» мало, модель тянет припевы в фальцет;
+   * проверенная на стене формулировка — «staying in the basement throughout,
+   * no falsetto and no high-pitched screaming ever». Запрет снимается, если
+   * автор ЯВНО попросил запрещённое (правило 2 — приоритет запроса). */
+  const GUARD_LOW_MALE = 'staying in the basement throughout, no falsetto and no high-pitched screaming ever';
+  const GUARD_MALE = 'chest register throughout, no falsetto';
+  const GUARD_FEMALE = 'no male growl, staying in her register';
+  const GUARD_CHOIR = 'no growl, choral register throughout';
   const VOCAL_PROFILES = {
     'psychedelic soul': { who: ['male vocals'], register: ['warm baritone'], timbre: ['warm timbre'],
-      power: ['laid-back delivery'], processing: ['dry upfront vocal'], mood: 'psychedelic' },
+      power: ['laid-back delivery'], processing: ['dry upfront vocal'], guard: [GUARD_MALE], mood: 'psychedelic' },
     'soul': { who: ['female vocals'], register: ['alto'], timbre: ['warm timbre'],
-      power: ['powerful belting'], technique: ['wide vibrato'], processing: ['close-mic dry vocal'], mood: 'emotional' },
-    'funk': { who: ['male vocals'], timbre: ['bright timbre'], power: ['laid-back delivery'],
-      technique: ['staccato punchy phrasing'], character: ['playful'], processing: ['dry upfront vocal'], mood: 'euphoric' },
+      power: ['powerful belting'], technique: ['wide vibrato'], processing: ['close-mic dry vocal'], guard: [GUARD_FEMALE], mood: 'emotional' },
+    'funk': { who: ['male vocals'], timbre: ['warm timbre'], power: ['laid-back delivery'],
+      technique: ['staccato punchy phrasing'], character: ['playful'], processing: ['dry upfront vocal'], guard: [GUARD_MALE], mood: 'euphoric' },
     'dream pop': { who: ['young female vocals'], timbre: ['breathy tone'], power: ['fragile intimate delivery'],
-      processing: ['wide reverb vocal'], mood: 'dreamy' },
+      processing: ['wide reverb vocal'], guard: [GUARD_FEMALE], mood: 'dreamy' },
     'pop': { who: ['young female vocals'], register: ['soprano'], timbre: ['bright timbre'],
-      power: ['confident delivery'], technique: ['melodic pop phrasing'], processing: ['radio-polished'], mood: 'euphoric' },
+      power: ['confident delivery'], technique: ['melodic pop phrasing'], processing: ['radio-polished'], guard: [GUARD_FEMALE], mood: 'euphoric' },
     'rock': { who: ['male vocals'], register: ['gritty baritone'], timbre: ['thick midrange timbre'],
       power: ['raspy aggressive delivery'], technique: ['sung verses shouted into a full-throated chorus'],
-      processing: ['punchy upfront vocal'], mood: 'aggressive' },
+      processing: ['punchy upfront vocal'], guard: [GUARD_LOW_MALE], mood: 'aggressive' },
     'techno': { who: ['female vocals'], timbre: ['thin vocals'], power: ['detached delivery'],
-      processing: ['dry upfront vocal'], mood: 'hypnotic' },
-    'tech house': { who: ['male vocals'], timbre: ['thin vocals'], power: ['spoken-sung'],
-      processing: ['dry upfront vocal'], mood: 'hypnotic' },
+      processing: ['dry upfront vocal'], guard: [GUARD_FEMALE], mood: 'hypnotic' },
+    'tech house': { who: ['male vocals'], timbre: ['chest voice'], power: ['spoken-sung'],
+      processing: ['dry upfront vocal'], guard: [GUARD_LOW_MALE], mood: 'hypnotic' },
     'house': { who: ['soulful female vocals'], timbre: ['bright timbre'], power: ['confident delivery'],
-      technique: ['melodic pop phrasing'], processing: ['wide reverb vocal'], mood: 'euphoric' },
-    'trap': { who: ['young male vocals'], timbre: ['nasal timbre'], power: ['laid-back delivery'], technique: ['staccato punchy phrasing'],
-      processing: ['autotune-light polish'], character: ['confident'], mood: 'dark' },
+      technique: ['melodic pop phrasing'], processing: ['wide reverb vocal'], guard: [GUARD_FEMALE], mood: 'euphoric' },
+    'trap': { who: ['young male vocals'], timbre: ['warm timbre'], power: ['laid-back delivery'], technique: ['staccato punchy phrasing'],
+      processing: ['autotune-light polish'], character: ['confident'], guard: [GUARD_LOW_MALE], mood: 'dark' },
     'rap': { who: ['male vocals'], timbre: ['chest voice'], power: ['confident spoken-word flow'], technique: ['rhythmic staccato phrasing'],
-      character: ['casual swagger'], processing: ['dry upfront vocal'], mood: 'urban' },
+      character: ['casual swagger'], processing: ['dry upfront vocal'], guard: [GUARD_LOW_MALE], mood: 'urban' },
     'hip-hop': { who: ['male vocals'], timbre: ['warm timbre'], power: ['laid-back spoken-word flow'],
-      technique: ['staccato punchy phrasing'], processing: ['dry upfront vocal'], mood: 'urban' },
+      technique: ['staccato punchy phrasing'], processing: ['dry upfront vocal'], guard: [GUARD_LOW_MALE], mood: 'urban' },
     'lo-fi': { who: ['female vocals'], timbre: ['muffled tone'], power: ['intimate delivery'],
-      processing: ['dry upfront vocal'], mood: 'nostalgic' },
+      processing: ['dry upfront vocal'], guard: [GUARD_FEMALE], mood: 'nostalgic' },
     'ambient': { who: ['female vocals'], timbre: ['breathy tone'], power: ['laid-back delivery'],
-      processing: ['wide reverb vocal'], mood: 'meditative' },
+      processing: ['wide reverb vocal'], guard: [GUARD_FEMALE], mood: 'meditative' },
     'cinematic': { who: ['choir'], timbre: ['warm timbre'], power: ['stately delivery'],
-      processing: ['wide reverb vocal'], mood: 'cinematic' },
+      processing: ['wide reverb vocal'], guard: [GUARD_CHOIR], mood: 'cinematic' },
     'orchestral': { who: ['choir'], timbre: ['warm timbre'], power: ['stately delivery'],
-      processing: ['wide reverb vocal'], mood: 'anthemic' },
+      processing: ['wide reverb vocal'], guard: [GUARD_CHOIR], mood: 'anthemic' },
     'jazz': { who: ['female vocals'], register: ['alto'], timbre: ['warm timbre'],
-      power: ['laid-back delivery'], technique: ['wide vibrato'], processing: ['close-mic dry vocal'], mood: 'nostalgic' },
+      power: ['laid-back delivery'], technique: ['wide vibrato'], processing: ['close-mic dry vocal'], guard: [GUARD_FEMALE], mood: 'nostalgic' },
     'ballad': { who: ['mature male vocals'], timbre: ['warm timbre'], power: ['intimate soft delivery'],
-      technique: ['melodic pop phrasing'], processing: ['close-mic dry vocal'], mood: 'emotional' },
-    'edm': { who: ['young male vocals'], register: ['boyish tenor'], timbre: ['bright timbre'],
+      technique: ['melodic pop phrasing'], processing: ['close-mic dry vocal'], guard: [GUARD_MALE], mood: 'emotional' },
+    'edm': { who: ['young male vocals'], register: ['full chesty tenor'], timbre: ['warm timbre'],
       power: ['playful cheerful delivery'], technique: ['melodic pop phrasing'], processing: ['dry upfront vocal'],
-      mood: 'euphoric' },
-    'synthwave': { who: ['male vocals'], register: ['mid-register lead'], timbre: ['bright timbre'],
-      power: ['confident delivery'], technique: ['falsetto accents'],
-      character: ['confident'], processing: ['layered harmonies', 'wide reverb vocal'], mood: 'nostalgic' },
+      guard: [GUARD_MALE], mood: 'euphoric' },
+    'synthwave': { who: ['male vocals'], register: ['mid-register lead'], timbre: ['warm timbre'],
+      power: ['confident delivery'], technique: ['melodic pop phrasing'],
+      character: ['confident'], processing: ['layered harmonies', 'wide reverb vocal'], guard: [GUARD_MALE], mood: 'nostalgic' },
     'trip-hop': { who: ['female vocals'], timbre: ['breathy tone'], power: ['laid-back delivery'],
-      processing: ['wide reverb vocal'], mood: 'haunting' },
+      processing: ['wide reverb vocal'], guard: [GUARD_FEMALE], mood: 'haunting' },
     'r&b': { who: ['female vocals'], timbre: ['velvet tone'], power: ['soft intimate delivery'],
-      technique: ['melodic pop phrasing'], processing: ['layered harmonies'], mood: 'sensual' },
+      technique: ['melodic pop phrasing'], processing: ['layered harmonies'], guard: [GUARD_FEMALE], mood: 'sensual' },
     'folk': { who: ['male vocals'], timbre: ['warm timbre'], power: ['plain intimate delivery'],
-      processing: ['close-mic dry vocal'], mood: 'warm' }
+      processing: ['close-mic dry vocal'], guard: [GUARD_MALE], mood: 'warm' }
   };
   // Взаимоисключающие пары (правило 3 справки: raspy + smooth, growl + breathy).
   // При конфликте семейный токен уступает авторскому — приоритет запроса (правило 2).
@@ -1094,6 +1109,17 @@
     for (const axis of VOCAL_AXIS_ORDER) {
       if (axes[axis].source === 'style') axes[axis].tokens = dropContradictory(axes[axis].tokens, userAll);
     }
+    // — запреты регистра (Brain Upgrade Spec §3.3): одного «низкого баса» мало,
+    // модель тянет припевы в фальцет — семейный guard едет отдельным блоком
+    // после голосового профиля. Запрет снимается, если автор ЯВНО попросил
+    // запрещённое слово (фальцет/рык/высокий крик) — приоритет запроса (правило 2).
+    const guardTokens = familyProfile && familyProfile.guard
+      ? familyProfile.guard.filter(g => {
+        const banned = [...g.matchAll(/no ([a-z-]+(?:\s[a-z-]+)?)/gi)]
+          .flatMap(m => m[1].split(/\s+/)).filter(w => w.length >= 5);
+        return !banned.some(w => userAll.some(u => u.toLowerCase().includes(w)));
+      })
+      : [];
     // — сборка блока в порядке осей 1–7; антифальцетный страж — в конец.
     let profileTokens = [];
     for (const axis of VOCAL_AXIS_ORDER) profileTokens = profileTokens.concat(axes[axis].tokens);
@@ -1114,6 +1140,7 @@
       identityTag: isSong && !askedIdentity ? identityTag : null,
       identityFrom: isSong && !askedIdentity ? identityFrom : 'задумка',
       axes,
+      guard: guardTokens,
       profile: { source: badgeSource, userCount: userAll.length, family: familyKey },
       from: { gender: gender.map(g => g.from), delivery: delivery.map(d => d.from), texture: texture.map(t => t.from) }
     };
@@ -1264,6 +1291,10 @@
       return guard && !core.includes(guard) ? core.concat(guard) : core;
     };
     add('vocal.profile', budget <= 300 ? compactVoice(voice.tags || []) : (voice.tags || []), 1);
+    // Запреты регистра (Brain Upgrade Spec §3.3): отдельный блок сразу за
+    // голосовым профилем; приоритет 2 — под жёстким бюджетом уходит после
+    // хвоста, но раньше глубины: защита регистра важнее пары планов.
+    add('vocal.guard', budget <= 300 ? [] : (voice.guard || []), 2);
     if (options.kind === 'song') add('voice.language', [LANG_TAGS[options.language] || LANG_TAGS.en], 1);
     add('anchor.genre', anchor.genre, 1);
     if (layers.instrumental) add('instrumental', ['instrumental'], 1);
@@ -1401,6 +1432,7 @@
         : 'нейтральный профиль (семья не распознана)';
       push('профиль голоса: ' + origin, 'голос', 'voice.profile');
     }
+    (layers.voice.guard || []).forEach(t => push(t, 'защита регистра', 'vocal.guard'));
     if (options.kind === 'song') push(LANG_TAGS[options.language] || LANG_TAGS.en, 'язык вокала', 'voice');
     if (layers.rhythm.bpm) push(layers.rhythm.bpm, 'темп', 'rhythm');
     push(layers.rhythm.phrase, 'ритм-слой', 'rhythm');
@@ -1516,7 +1548,60 @@
     return n >= 30 && n <= 300 ? n : null;
   }
 
-  const VERSION = '2026-11-22-vocal-1';
+  /* Брекеты динамики (audits/lyrics-effect-brackets.md, Brain Upgrade Spec §4):
+   * второй канал описания — динамика ПО СЕКЦИЯМ живёт в лирике, не в caption.
+   * Лирика с обогащёнными брекетами ([Chorus: ...]) проходит БЕЗ ПОТЕРЬ;
+   * без них мозг размечает секции по чек-листу анти-монотонности §3: lift
+   * последнего припева, riser перед главным припевом, куплет 2 ≠ куплет 1
+   * (контраст тишины), брекет пространства. Все брекеты EN, ≤ 6 на трек,
+   * без дословных повторов; caption не дублируют (только изменения во
+   * времени). Выбор варианта — по хешу лирики: разные треки получают разные
+   * эффекты, один и тот же текст — одну и ту же разметку (детерминизм). */
+  const SECTION_LINE_RE = /^\[([A-Za-z][^\]\n]{0,60})\]$/;
+  function markLyricsDynamics(lyrics) {
+    const text = String(lyrics || '');
+    const none = { lyrics: text, marked: 0, authored: 0 };
+    if (!text.trim()) return none;
+    // Автор уже размечал эффекты? ([Chorus: layered harmonies] — двоеточие
+    // внутри тега.) Тогда лирика идёт в модель как есть — мозг не дописывает.
+    const authored = text.match(/\[[^\]\n]+:[^\]\n]+\]/g) || [];
+    if (authored.length) return { lyrics: text, marked: 0, authored: authored.length };
+    const lines = text.split(/\r?\n/);
+    const tagOf = line => { const m = (line || '').trim().match(SECTION_LINE_RE); return m ? m[1] : null; };
+    const base = label => label.split(':')[0].trim();
+    const key = label => base(label).toLowerCase().replace(/\s+\d+$/, '');
+    const sections = {};
+    lines.forEach((l, i) => { const t = tagOf(l); if (t) (sections[key(t)] = sections[key(t)] || []).push(i); });
+    // Нет секций — структуру не выдумываем (правило «ничего не выдумывать»).
+    if (!Object.keys(sections).length) return none;
+    const pick = (pool, salt) => pool[hashText(text + '|' + salt) % pool.length];
+    const enrich = (i, effect) => {
+      const t = tagOf(lines[i]); if (!t) return false;
+      lines[i] = '[' + base(t) + ': ' + effect + ']';
+      return true;
+    };
+    let marked = 0;
+    const lifts = ['bigger harmonies, double tempo drums', 'key change up, wider harmonies', 'full-band lift, gang vocals'];
+    const risers = ['filtered drums slowly rising', 'slow build, riser swell'];
+    const contrasts = ['drums drop out, sparse bass', 'strings enter, bass only', 'breakdown to a whisper'];
+    const spaces = ['cathedral reverb tail', 'wide stereo echo, distant answer', 'tape saturation, warm hiss'];
+    // 1) последний припев — lift (§2.7: финальный припев почти всегда с брекетом)
+    const choruses = sections['chorus'] || sections['hook'] || [];
+    if (choruses.length && enrich(choruses[choruses.length - 1], pick(lifts, 'lift'))) marked++;
+    // 2) riser/build перед главным припевом (§3 чек-лист)
+    const pre = sections['pre-chorus'] || [];
+    if (pre.length && enrich(pre[pre.length - 1], pick(risers, 'riser'))) marked++;
+    // 3) куплет 2 ≠ куплет 1 — контраст тишины (§3 чек-лист)
+    const verses = sections['verse'] || [];
+    if (verses.length >= 2 && enrich(verses[1], pick(contrasts, 'verse2'))) marked++;
+    // 4) брекет пространства — бридж, при его отсутствии — аутро (§3 чек-лист)
+    const spaceAt = (sections['bridge'] || [])[0] != null ? sections['bridge'][0] : (sections['outro'] || [])[0];
+    if (spaceAt != null && enrich(spaceAt, pick(spaces, 'space'))) marked++;
+    // Норма плотности §2.2 (≤6 на трек) выполнена: максимум 4 брекета.
+    return { lyrics: lines.join('\n'), marked, authored: 0 };
+  }
+
+  const VERSION = '2026-11-22-vocal-2';
 
   globalThis.BRIIX_MUSIC_BRAIN = {
     version: VERSION,
@@ -1528,6 +1613,7 @@
     selfCheck,
     buildLyricsSkeleton,
     detectBpm,
+    markLyricsDynamics,
     // словари и слои открыты для проверок и отладки
     rules: {
       MAX_TAGS, MAX_CAPTION, MAX_CAPTION_WORDS, POSITIVE, LANG_TAGS,

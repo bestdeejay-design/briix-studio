@@ -505,7 +505,11 @@ function bffServer(port) {
   // касается только путей, где промт собирает мозг (см. шаг 19 ниже).
   assert.equal(musicPost.prompt, 'dream pop, 90 BPM, female vocals',
     'advanced ASCII prompt is never rewritten by the brain');
-  assert.match(musicPost.params.lyrics, /\[Chorus\]/);
+  // Brain Upgrade Spec §4: лирика без авторской разметки получает брекеты
+  // динамики — '[Chorus]' уезжает как '[Chorus: lift-эффект]', текст не меняется.
+  assert.match(musicPost.params.lyrics, /\[Chorus(?::[^\]\n]*)?\]/, 'припев на месте (возможно, с lift-брекетом)');
+  assert.match(musicPost.params.lyrics, /\[Chorus: /, 'последний припев размечен lift-брекетом');
+  assert.match(musicPost.params.lyrics, /Город спит/, 'текст лирики не изменён разметкой');
   assert.equal(musicPost.params.model, 'ace-step-flash');
   assert.equal(musicPost.params.duration, undefined, 'duration must NOT be sent (infra#93: length follows lyrics)');
   assert.equal(musicPost.params.duration_seconds, undefined, 'legacy key must not be sent');

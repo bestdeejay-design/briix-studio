@@ -359,11 +359,26 @@ for (const f of Object.keys(brain.rules.STYLE_ATMOSPHERE)) {
   assert.ok((p.who || []).length, `«${f}»: ось «кто поёт»`);
   assert.ok((p.timbre || []).length, `«${f}»: ось тембра`);
   assert.ok((p.power || []).length, `«${f}»: ось подачи`);
+  assert.ok((p.guard || []).length, `«${f}»: запреты регистра (Brain Upgrade Spec §3.3)`);
   assert.ok(typeof p.mood === 'string' && p.mood, `«${f}»: семейный дефолт настроения`);
 }
-// Профили чистые: ни одна семья не носит взаимоисключающие токены (правило 3).
+// ПРАВИЛО 0 ВЛАДЕЛЬЦА: в мужских профилях нет thin/light/breathy/high tenor/
+// falsetto — только chest/full/warm/wide chesty (vocal-profile-vocabulary.md).
 for (const [f, p] of Object.entries(vprof)) {
-  const all = Object.keys(p).filter(k => k !== 'mood').flatMap(k => p[k]);
+  const isMale = (p.who || []).some(w => /male|man|boy(?!ish female)/i.test(w)) && !(p.who || []).some(w => /female|girl|choir/i.test(w));
+  if (!isMale) continue;
+  const tokens = Object.keys(p).filter(k => k !== 'mood' && k !== 'guard').flatMap(k => p[k]);
+  for (const t of tokens) {
+    // «autotune-light polish» — лёгкий АВТОТЮН, не лёгкий голос: границы слова
+    // не допускают составных с дефисом, ловим только вес голоса.
+    assert.doesNotMatch(t, /(?<![\w-])(?:thin|light|breathy)(?![\w-])|high(?:-|\s)tenor|falsetto/i,
+      `«${f}»: правило 0 — тонкие мужские голоса запрещены (${t})`);
+  }
+}
+// Профили чистые: ни одна семья не носит взаимоисключающие токены (правило 3).
+// guard — запреты, а не признаки: из проверки совместимости исключены.
+for (const [f, p] of Object.entries(vprof)) {
+  const all = Object.keys(p).filter(k => k !== 'mood' && k !== 'guard').flatMap(k => p[k]);
   for (const [rough, soft] of brain.rules.VOCAL_CONTRA_PAIRS) {
     for (const t of all) {
       const others = all.filter(o => o !== t).join(' ');
@@ -418,7 +433,46 @@ assert.ok(abA.selfCheck.ok && abB.selfCheck.ok, 'оба A/B caption проход
 // Слои осей видны наружу для отладки и карточки.
 assert.ok(abA.layers.voice.axes.timbre && Array.isArray(abA.layers.voice.axes.timbre.tokens), 'оси экспортированы в слоях');
 
+// ------- (17) запреты регистра + брекеты динамики (Brain Upgrade Spec §3–4) --
+// §3.3: одного описания «низкий бас» мало — модель тянет припевы в фальцет,
+// поэтому семейный guard едет отдельным блоком за голосовым профилем.
+assert.match(rockCap.caption, /staying in the basement throughout, no falsetto and no high-pitched screaming ever/,
+  'рок: запрет фальцета/высокого крика в caption');
+assert.ok(rockCap.caption.indexOf('punchy upfront vocal') < rockCap.caption.indexOf('staying in the basement'),
+  'guard стоит сразу за голосовым профилем');
+assert.ok(rockCap.caption.length <= MAX_CAPTION, 'guard не выталкивает caption за 640');
+assert.ok(rockCap.notes.some(n => n.layer === 'vocal.guard'), 'guard виден в notes (не молчаливое решение)');
+// Явный фальцет автора снимает запрет (правило 2 — приоритет запроса).
+const falseRock = brain.buildCaption('rock, male falsetto vocals', { kind: 'song' });
+assert.match(falseRock.caption, /falsetto/, 'явный фальцет автора на месте');
+assert.doesNotMatch(falseRock.caption, /no falsetto/, 'запрет фальцета снят явной просьбой автора');
+// Женский запрет — зеркальный: без мужского рыка.
+const rnb = brain.buildCaption('r&b, 90 BPM', { kind: 'song' });
+assert.match(rnb.caption, /no male growl, staying in her register/, 'r&b: женский guard регистра');
+// §4 брекеты динамики: лирика без разметки получает анти-монотонную разметку.
+const plainLyrics = '[Intro]\nла-ла\n[Verse 1]\nстрока один\n[Pre-Chorus]\nподъём\n[Chorus]\nприпев\n[Verse 2]\nстрока два\n[Chorus]\nприпев\n[Bridge]\nбридж\n[Chorus]\nфинал\n[Outro]\nконец';
+const marked = brain.markLyricsDynamics(plainLyrics);
+assert.ok(marked.marked >= 3 && marked.marked <= 6, `размечено ${marked.marked} секций (норма плотности ≤6)`);
+assert.match(marked.lyrics, /\[Pre-Chorus: (?:filtered drums slowly rising|slow build, riser swell)\]/, 'riser перед припевом');
+assert.match(marked.lyrics, /\[Verse 2: (?:drums drop out|strings enter|breakdown)[^\]]*\]/, 'куплет 2 ≠ куплет 1 (контраст тишины)');
+const lastChorus = marked.lyrics.split('\n').filter(l => /^\[Chorus/.test(l)).pop();
+assert.match(lastChorus, /^\[Chorus: /, 'последний припев получил lift-брекет');
+assert.match(marked.lyrics, /\[Bridge: (?:cathedral reverb tail|wide stereo echo|tape saturation)[^\]]*\]/, 'брекет пространства');
+// Текст песни не изменяется: размечаются только теги секций.
+assert.ok(marked.lyrics.includes('строка один') && marked.lyrics.includes('финал'), 'текст лирики не тронут');
+// Детерминизм: одна лирика — одна разметка (условие альбома/A-B пары).
+assert.equal(brain.markLyricsDynamics(plainLyrics).lyrics, marked.lyrics, 'разметка детерминирована');
+// Авторская разметка проходит без потерь — мозг не дописывает свою.
+const ownBrackets = '[Chorus: layered harmonies]\nтекст\n[Verse: drums only]\nещё';
+const own = brain.markLyricsDynamics(ownBrackets);
+assert.equal(own.lyrics, ownBrackets, 'авторские брекеты не перезаписываются');
+assert.equal(own.authored, 2, 'авторские брекеты посчитаны');
+assert.equal(own.marked, 0, 'поверх авторской разметки мозг не дописывает');
+// Без секций структуру не выдумываем.
+const noSections = brain.markLyricsDynamics('просто текст без тегов');
+assert.equal(noSections.marked, 0, 'без секций разметки нет');
+
 // ------------------------------------------------------------------ вывод --
-console.log('PASS music-brain v3: слои, ритм-всегда, вокал с характером и фиксированной идентичностью, продакшн, бюджет, негативы, self-check, полный трек (роли/микс/форма/защита), глубина и стилевая атмосфера, разделение caption/лирики и потолок токенов, голос по семи осям (#46: семейные профили, перекрытие осей, запрет противоречий, нейтраль, бейдж)');
+console.log('PASS music-brain v3: слои, ритм-всегда, вокал с характером и фиксированной идентичностью, продакшн, бюджет, негативы, self-check, полный трек (роли/микс/форма/защита), глубина и стилевая атмосфера, разделение caption/лирики и потолок токенов, голос по семи осям (#46: семейные профили, перекрытие осей, запрет противоречий, нейтраль, бейдж), запреты регистра и брекеты динамики (Brain Upgrade Spec)');
 console.log('20 брифов (buildTags / buildCaption, символы):');
 for (const r of rows) console.log(`  ${r.id} ${r.source.padEnd(9)} ${String(r.len).padStart(3)} / ${String(r.captionLen).padStart(3)}  ${r.tags}`);
