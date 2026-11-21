@@ -1180,6 +1180,7 @@
     if (musicDraft.trim() && !(await BRIIX_TOASTS.confirmDialog({ title: 'Заменить черновик?', body: 'Текущий музыкальный черновик будет заменён данными этого трека. Прежний текст можно вернуть кнопкой ↩ после «Улучшить», но лучше скопировать его сейчас.', confirmLabel: 'Заменить', danger: true }))) return;
     setView('chat'); setMode('music'); advanced = true;
     els.musicPrompt.value = source.prompt || ''; els.lyrics.value = source.lyrics || '';
+    if (activeSession?.draft?.brainPending) delete activeSession.draft.brainPending; // #40: повтор вставляет исходную идею автора
     instrumental = !!source.instrumental;
     quality = Object.keys(MUSIC_MODELS).find(key => MUSIC_MODELS[key] === source.model) || quality;
     // P2-4 аудита #35: parentJobId живёт до следующего явного запуска генерации
@@ -1605,6 +1606,7 @@
     const summary = document.createElement('summary'); summary.textContent = 'Что уехало в модель';
     const text = document.createElement('div');
     let trackInfo = 'Промпт в модель: ' + (input.promptSent || input.prompt || '—');
+    if (input.brainLayers) trackInfo += '\n\nПромт собран мозгом: ' + input.brainLayers + ' слоёв.'; // #40: честная плашка
     if (input.promptSent && input.prompt) trackInfo += '\n\nИсходная идея: ' + input.prompt;
     if (input.title) trackInfo += '\n\nНазвание: ' + input.title;
     if (input.artist) trackInfo += '\nИсполнитель: ' + input.artist;
@@ -2117,6 +2119,10 @@
       if (!session.draft || typeof session.draft !== 'object') session.draft = {};
       if (entry.draft.style) session.draft.styleFamily = entry.draft.style;
       else delete session.draft.styleFamily;
+      // #40 («промт только через мозг», 20.11): строка пришла от наставника —
+      // при генерации она идёт ВХОДОМ в слоевой buildCaption, а не готовым промтом.
+      // Ручная правка поля снимет метку (авторский текст не переписываем, #109).
+      session.draft.brainPending = true;
       if (lyricsField) els.lyrics.value = lyricsField.value;
       saveDraft(session);
     };
@@ -2155,6 +2161,7 @@
       (entry.backups ||= []).push(entry.beforeRevert);
       if (!(await persistSessions())) { state.textContent = 'Не удалось сохранить текущие поля.'; return; }
       els.musicPrompt.value = entry.beforeApply.style; els.lyrics.value = entry.beforeApply.lyrics;
+      delete session.draft.brainPending; // #40: откат возвращает авторские поля — метка мозга снимается
       advanced = entry.beforeApply.advanced; entry.applied = false; renderChrome(); saveDraft(session); await persistSessions();
       state.textContent = 'Поля восстановлены. Черновик остался в этой карточке.';
     }));
@@ -2247,6 +2254,22 @@
     const low = base.toLowerCase();
     const add = tags.split(',').map(t => t.trim()).filter(t => t && !low.includes(t.toLowerCase()));
     return add.length ? base + ', ' + add.join(', ') : base;
+  }
+
+  // #40: честная плашка — сколько слоёв мозга реально в сборке. Считается по
+  // layers из buildCaption (сам мозг не меняется): жанр/эпоха, вокал, ритм,
+  // пространство, глубина, хвост динамики/настроения.
+  function brainLayerCount(layers) {
+    if (!layers || typeof layers !== 'object') return 0;
+    const some = v => Array.isArray(v) ? v.length > 0 : Boolean(v);
+    let n = 0;
+    if (layers.anchor && (some(layers.anchor.genre) || some(layers.anchor.era))) n++;
+    if (layers.voice && (some(layers.voice.tags) || layers.voice.identityTag)) n++;
+    if (layers.rhythm && (layers.rhythm.bpm || layers.rhythm.phrase || some(layers.rhythm.bass))) n++;
+    if (layers.space && (some(layers.space.instruments) || some(layers.space.atmosphere) || some(layers.space.production) || some(layers.space.place))) n++;
+    if (layers.depth && (some(layers.depth.tags) || layers.depth.style)) n++;
+    if (layers.tail && (some(layers.tail.dynamics) || some(layers.tail.mood) || some(layers.tail.concept))) n++;
+    return n;
   }
 
   // Перевод не-ASCII идеи в английский связный промпт через producer-чат.
@@ -2414,9 +2437,21 @@
       const brainBudget = extra => Math.max(240, CAPTION_BUDGET - (extra ? extra.length + 2 : 0));
       let brain = brainFor(CAPTION_BUDGET);
       let finalPrompt;
+      let brainApplied = false;
       if (snapshot.advanced && style && BriixProducer.isAsciiOnly(style)) {
-        // Пользователь/продюсер уже собрал английский промпт: не переписываем его.
-        finalPrompt = style;
+        // #40 (решение владельца 20.11 «промт только через мозг"): ASCII-строка
+        // из чат-сценария — черновик наставника/продюсера/✨. Она ВХОД для слоёв
+        // buildCaption (жанр → инструменты → вокал → BPM → настроение → эпоха →
+        // продакшн), а не готовый промт. Авторский текст, набранный руками в
+        // «Тонко настроить», не переписываем (#109): метка brainPending ставится
+        // только приёмом черновика/✨ и снимается любой ручной правкой поля.
+        if (session.draft?.brainPending) {
+          brain = brainFor(brainBudget(style));
+          finalPrompt = mergePromptTags(style, brain.tags);
+          brainApplied = true;
+        } else {
+          finalPrompt = style; // авторский ASCII-промт не переписываем (правило #109)
+        }
       } else if (style && !BriixProducer.isAsciiOnly(style)) {
         // Не-ASCII идея (например русская) → связный английский перевод через
         // producer-чат; brain-теги приоритетнее сырого перевода и остаются,
@@ -2426,16 +2461,21 @@
         catch (error) { if (error.name === 'AbortError' || error.code === 'cancelled') throw error; }
         if (fluent) brain = brainFor(brainBudget(fluent));
         finalPrompt = fluent ? mergePromptTags(fluent, brain.tags) : (brain.tags || style);
+        brainApplied = true;
       } else if (style) {
         // Быстрый путь с уже английской идеей: brain-теги обязательны —
         // добавляем те, которых в идее ещё нет.
         brain = brainFor(brainBudget(style));
         finalPrompt = mergePromptTags(style, brain.tags);
+        brainApplied = true;
       } else {
         // Только лирика: Brain отдельно собирает описание звучания; исходные
         // строки остаются только в params.lyrics и не дублируются в prompt.
         finalPrompt = brain.tags || '';
+        brainApplied = Boolean(brain.tags);
       }
+      // #40: честная плашка в карточке — сколько слоёв мозга реально в сборке.
+      const brainLayers = brainApplied ? brainLayerCount(brain.layers) : 0;
       if (snapshot.advanced && !snapshot.instrumental && lyrics) {
         const structure = BriixProducer.structureWarnings(lyrics); // ручная лирика: предупредить, не навязывать
         if (structure.length) card('notice', 'Структура лирики', structure.join(' '), session);
@@ -2466,7 +2506,7 @@
       // promptSent — ровно то, что ушло в модель; повтор подставляет исходную идею.
       const requestBase = rawIdea || lyrics;
       const input = { prompt: requestBase, promptSent: finalPrompt !== requestBase ? finalPrompt : undefined, lyrics, model: MUSIC_MODELS[snapshot.quality], instrumental: snapshot.instrumental, parentJobId: snapshot.parentJobId,
-        title: trackTitle, artist: currentUser(),
+        title: trackTitle, artist: currentUser(), brainLayers: brainLayers || undefined,
         lyricsSource: draftSource || (snapshot.advanced ? 'написал пользователь' : (vocal && !lyrics ? 'автолирика (автор песен)' : 'написал пользователь')) };
       const id = await submitJob({ type: 'music', prompt: finalPrompt, params });
       handle.jobId = id; // ✕ после отправки отменяет джобу и на сервере (T-05)
@@ -2776,6 +2816,7 @@
       if (!session.draft || typeof session.draft !== 'object') session.draft = {};
       if (entry.style) session.draft.styleFamily = entry.style;
       else delete session.draft.styleFamily;
+      session.draft.brainPending = true; // #40: продюсерский черновик — тоже строка мозга
       if (lyrics) els.lyrics.value = lyrics.value;
       advanced = true; renderChrome(); saveDraft(session); await persistSessions();
       revert.hidden = false; state.textContent = 'Поля заполнены — проверьте их в композере.';
@@ -2792,6 +2833,7 @@
         state.textContent = 'Поля изменились во время сохранения. Попробуйте снова.'; return;
       }
       els.prompt.value = entry.beforeApply.quick; els.musicPrompt.value = entry.beforeApply.style; els.lyrics.value = entry.beforeApply.lyrics;
+      delete session.draft.brainPending; // #40: откат возвращает авторские поля — метка мозга снимается
       advanced = entry.beforeApply.advanced; entry.applied = false; renderChrome(); saveDraft(session); await persistSessions();
       state.textContent = 'Поля восстановлены. Подготовленный черновик остался в этой карточке.';
     }));
@@ -2810,6 +2852,7 @@
       els.musicPrompt.value = style.value;
       if (!session.draft || typeof session.draft !== 'object') session.draft = {};
       if (entry.style) session.draft.styleFamily = entry.style; else delete session.draft.styleFamily;
+      session.draft.brainPending = true; // #40: продюсерский черновик — тоже строка мозга
       if (lyrics) els.lyrics.value = lyrics.value;
       advanced = true; renderChrome(); saveDraft(session);
       await persistSessions();
@@ -2838,6 +2881,11 @@
       }
       sessionUndo(session, field, original);
       el.value = improved.trim();
+      // #40: ✨-улучшенный промпт — тоже черновик мозга (не авторская строка).
+      if (field === 'musicPrompt') {
+        if (!session.draft || typeof session.draft !== 'object') session.draft = {};
+        session.draft.brainPending = true;
+      }
       (field === 'lyrics' ? els.undoLyrics : els.undoPrompt).hidden = false;
     } catch (error) { errorCard(error, session); } finally { improvingDelete(session.id, field); button.classList.remove('busy'); setBusy(false); }
   }
@@ -2847,6 +2895,8 @@
     if (backup == null) return;
     (field === 'lyrics' ? els.lyrics : els.musicPrompt).value = backup;
     delete activeSession.undo[field];
+    // #40: ↩ возвращает авторский текст — метка «строка мозга» снимается.
+    if (field === 'musicPrompt' && activeSession?.draft?.brainPending) delete activeSession.draft.brainPending;
     (field === 'lyrics' ? els.undoLyrics : els.undoPrompt).hidden = true;
     updateEnabled();
   }
@@ -3804,6 +3854,9 @@
     // P1 аудита #35: ручная правка описания отменяет подсказку резолвера —
     // семейство стиля живёт на сессии и чистится там же.
     if (activeSession?.draft?.styleFamily) { delete activeSession.draft.styleFamily; paintStyleFamilyBadge(); }
+    // #40: ручная правка снимает метку «строка мозга» — авторский ASCII-промт
+    // уходит в модель как есть (правило #109), без слоёв buildCaption.
+    if (activeSession?.draft?.brainPending) delete activeSession.draft.brainPending;
     updateEnabled();
   });
 

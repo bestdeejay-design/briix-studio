@@ -42,7 +42,7 @@ function mergePromptTags(base, tags) {
 }
 (async () => {
 
-async function assemble({ idea = '', manualLyrics = '', instrumental = false, advanced = false, translation = null }) {
+async function assemble({ idea = '', manualLyrics = '', instrumental = false, advanced = false, translation = null, brainPending = false }) {
   const style = brain.sanitize(idea);
   let lyrics = advanced ? brain.latinizeTags(brain.sanitize(manualLyrics)) : '';
   const explicit = brain.detectExplicitLanguage(idea);
@@ -58,20 +58,45 @@ async function assemble({ idea = '', manualLyrics = '', instrumental = false, ad
   const budgetFor = extra => Math.max(240, CAPTION_BUDGET - (extra ? extra.length + 2 : 0));
   let tags = build(CAPTION_BUDGET);
   let finalPrompt;
-  if (advanced && style && brain.isAsciiOnly(style)) finalPrompt = style;
+  let brainApplied = false;
+  if (advanced && style && brain.isAsciiOnly(style)) {
+    // #40 («промт только через мозг», 20.11): ASCII-строка из чат-сценария —
+    // черновик наставника/продюсера/✨, она ВХОД для слоёв мозга, не замена.
+    // Авторская строка (brainPending=false) не переписывается (#109).
+    if (brainPending) {
+      tags = build(budgetFor(style));
+      finalPrompt = mergePromptTags(style, tags.tags);
+      brainApplied = true;
+    } else finalPrompt = style;
+  }
   else if (style && !brain.isAsciiOnly(style)) {
     if (translation) tags = build(budgetFor(translation));
     finalPrompt = translation ? mergePromptTags(translation, tags.tags) : (tags.tags || style);
+    brainApplied = true;
   } else if (style) {
     tags = build(budgetFor(style));
     finalPrompt = mergePromptTags(style, tags.tags);
+    brainApplied = true;
   } else finalPrompt = lyrics;
   const params = { model: 'ace-step-flash' };
   if (instrumental) params.instrumental = true;
   if (lyrics) params.lyrics = lyrics;
   // В POST уходит сборка (prompt), в карточку/сессию — исходная идея (input.prompt).
   const requestBase = idea || lyrics;
-  return { postPrompt: finalPrompt, inputPrompt: requestBase, params, brainTags: tags.tags };
+  const layerCount = layers => {
+    if (!layers || typeof layers !== 'object') return 0;
+    const some = v => Array.isArray(v) ? v.length > 0 : Boolean(v);
+    let n = 0;
+    if (layers.anchor && (some(layers.anchor.genre) || some(layers.anchor.era))) n++;
+    if (layers.voice && (some(layers.voice.tags) || layers.voice.identityTag)) n++;
+    if (layers.rhythm && (layers.rhythm.bpm || layers.rhythm.phrase || some(layers.rhythm.bass))) n++;
+    if (layers.space && (some(layers.space.instruments) || some(layers.space.atmosphere) || some(layers.space.production) || some(layers.space.place))) n++;
+    if (layers.depth && (some(layers.depth.tags) || layers.depth.style)) n++;
+    if (layers.tail && (some(layers.tail.dynamics) || some(layers.tail.mood) || some(layers.tail.concept))) n++;
+    return n;
+  };
+  return { postPrompt: finalPrompt, inputPrompt: requestBase, params, brainTags: tags.tags,
+    brainLayers: brainApplied ? layerCount(tags.layers) : 0 };
 }
 
 // (д) sanitize на живом факте владельца: markdown и кавычки ушли, текст цел.
@@ -95,6 +120,16 @@ assert.ok(ru.postPrompt.length <= 640, 'brain caption prompt <= 640 chars');
 assert.doesNotMatch(ru.postPrompt, /\[(?:verse|chorus|intro|bridge|outro)\]/i, 'prompt без секционных тегов');
 const advancedAsm = await assemble({ idea: 'dream pop, 90 BPM, female vocals', manualLyrics: '[verse]\nпервая строка песни\n[chorus]\nвторая строка', advanced: true });
 assert.equal(advancedAsm.postPrompt, 'dream pop, 90 BPM, female vocals', 'авторский промт не переписан');
+assert.equal(advancedAsm.brainLayers, 0, 'авторская строка — без плашки слоёв');
+// (н) #40: ASCII-строка наставника из чат-сценария — вход для слоёв мозга,
+// не замена: сборка содержит строку + недостающие слои, ≤ 640, плашка N слоёв.
+const mentorAsm = await assemble({ idea: 'dream pop, 90 BPM, warm female vocals', advanced: true, brainPending: true });
+assert.ok(mentorAsm.postPrompt.startsWith('dream pop, 90 BPM, warm female vocals'), 'строка наставника — вход (не переписана, стоит первой)');
+assert.ok(mentorAsm.postPrompt.length > 'dream pop, 90 BPM, warm female vocals'.length, '#40: мозг добавил слои к строке наставника');
+assert.ok(mentorAsm.postPrompt.length <= 640, 'сборка наставника ≤ 640');
+assert.ok(mentorAsm.brainLayers >= 3, 'честная плашка: не меньше трёх слоёв мозга');
+assert.match(mentorAsm.postPrompt, /dream pop/i, 'жанр автора сохранён');
+assert.match(mentorAsm.postPrompt, /90 BPM/i, 'явный BPM автора приоритетен');
 assert.ok(!advancedAsm.postPrompt.includes('первая строка'), 'лирика не попадает в prompt');
 assert.match(advancedAsm.params.lyrics, /первая строка песни/, 'лирика уходит отдельным params.lyrics');
 assert.doesNotMatch(advancedAsm.postPrompt, /\[/, 'в prompt нет скобочных меток');
