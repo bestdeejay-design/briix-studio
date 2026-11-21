@@ -1,8 +1,8 @@
 {
-  "build": "3996fecf0e",
+  "build": "33d4c9baea",
   "assets": {
-    "studio.css": "d0862c81a9",
-    "studio.js": "bb0864e4b7",
+    "studio.css": "d31fa04aca",
+    "studio.js": "4152960e2f",
     "wait-ui.js": "8c1753e686",
     "catalog.js": "a9dd9e6116",
     "ops.js": "760bf48ea0",
