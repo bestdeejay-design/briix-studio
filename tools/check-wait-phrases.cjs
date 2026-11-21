@@ -282,9 +282,13 @@ function bffServer(port) {
   const stageSwitch = await p.evaluate(async () => {
     const el = document.querySelector('#wait-probe');
     el.dataset.waitStage = 'album-cover';
-    await new Promise(r => setTimeout(r, 300));
+    // F-35-урок: пул меняется на тике ротации (4–6 с), фиксированная пауза 300 мс
+    // рассыпалась на медленном раннере — ждём семантику (фраза из нового пула),
+    // потолок чуть больше интервала ротации.
     const D = window.BRIIX_WAIT_PHRASES.music;
-    return { text: el.textContent, allowed: [...D['album-cover'], ...D.any].includes(el.textContent) };
+    const allowed = () => [...D['album-cover'], ...D.any].includes(el.textContent);
+    for (let i = 0; i < 30 && !allowed(); i++) await new Promise(r => setTimeout(r, 300));
+    return { text: el.textContent, allowed: allowed() };
   });
   assert.equal(stageSwitch.allowed, true);
   ok('stage change re-pools the line immediately', stageSwitch);
