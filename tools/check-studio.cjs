@@ -328,6 +328,11 @@ function bffServer(port) {
     return p;
   }
 
+  // #35 компакт: редкие контролы живут за панелями — открываем перед кликом.
+  const openMore = async page => { if (!(await page.locator('#morePanel').isVisible())) await page.locator('#moreBtn').click(); };
+  const openBurger = async page => { if (!(await page.locator('#profileMenu').isVisible())) await page.locator('#profileBtn').click(); };
+
+
   // 1. Загрузка без ошибок, 2 фокуса (музыка — дефолт), чип наставников, состояния send.
   let p = await page();
   await p.waitForTimeout(300);
@@ -358,14 +363,14 @@ function bffServer(port) {
   assert.match(await p.locator('#assistantMenu').innerText(), /Арт-директор/);
   assert.match(await p.locator('#assistantMenu').innerText(), /Визуальный дизайнер/);
   await p.keyboard.press('Escape');
-  assert.equal(await p.locator('#modelChip').isVisible(), false, 'model chip hidden outside music');
-  // Музыка: чипы видимы.
+  // #35 компакт: музыкальные контролы — за «⋯»-панелью; в фото её нет вовсе.
+  assert.equal(await p.locator('#moreBtn').isVisible(), false, 'more panel is hidden outside music');
   await p.locator('.mode[data-mode="music"]').click();
-  await p.locator('#assistantChip').click();
+  await openMore(p);
+  assert.equal(await p.locator('#modelChip').isVisible(), true, 'model chip is available in the more panel (music)');
+  assert.equal(await p.locator('#vocalSeg').isVisible(), true, 'track-mode segmented control is available in the more panel (music)');
+  assert.equal(await p.locator('#tuneToggle').isVisible(), true, 'fine-tune toggle is available in the more panel (music)');
   await p.keyboard.press('Escape');
-  assert.equal(await p.locator('#modelChip').isVisible(), true, 'model chip visible in music');
-  assert.equal(await p.locator('#vocalSeg').isVisible(), true, 'track-mode segmented control visible in music');
-  assert.equal(await p.locator('#tuneToggle').isVisible(), true, 'fine-tune toggle visible in music');
   assert.equal(await p.locator('#advanced').isVisible(), false, 'advanced fields hidden by default (Simple)');
   // Поле активно — send разблокируется.
   await p.locator('#prompt').fill('dream pop track');
@@ -419,7 +424,7 @@ function bffServer(port) {
 
   // 5. «Тонко настроить»: два поля, улучшение лирики (few-shot, non-stream, отмена).
   await p.locator('#prompt').fill('');
-  await p.locator('#tuneToggle').click();
+  await openMore(p); await p.locator('#tuneToggle').click();
   assert.equal(await p.locator('#advanced').isVisible(), true, 'advanced panel opens');
   assert.equal(await p.locator('#prompt').isVisible(), false, 'single field hides in advanced mode');
   assert.match(await p.locator('#lyrics').getAttribute('placeholder'), /Текст песни/);
@@ -498,9 +503,9 @@ function bffServer(port) {
   // T-53: название — первая содержательная строка, а не структурный тег [Verse].
   assert.equal(musicPost.params.title, 'Город спит', 'title comes from a lyric line, not a [Verse] tag');
   // Pro через чип модели + снова инструментал (режим «Инструментал» выбран явно).
-  await p.locator('.seg-btn[data-vocal="1"]').click();
+  await openMore(p); await p.locator('.seg-btn[data-vocal="1"]').click();
   assert.equal(await p.locator('.seg-btn[data-vocal="1"]').getAttribute('aria-pressed'), 'true', 'instrumental mode explicitly selected');
-  await p.locator('#modelChip').click();
+  await openMore(p); await p.locator('#modelChip').click();
   await p.locator('#modelMenu button', { hasText: 'Pro' }).click();
   assert.equal(await p.locator('#modelName').innerText(), 'Pro');
   await p.locator('#musicPrompt').fill('dream pop, 90 BPM, female vocals');
@@ -512,7 +517,7 @@ function bffServer(port) {
   const instSeen = await p.evaluate(() => window.__stageSeen);
   assert.ok(instSeen.includes('model-warmup') && instSeen.includes('generating'), 'instrumental stages model-warmup -> generating are shown (T-02)');
   // Вокал с английской лирикой: language=en по умолчанию (T-03).
-  await p.locator('.seg-btn[data-vocal="0"]').click();
+  await openMore(p); await p.locator('.seg-btn[data-vocal="0"]').click();
   await p.locator('#lyrics').fill('[Verse]\nCity sleeps\n[Chorus]\nSo do I');
   await p.locator('#musicPrompt').fill('dream pop, 90 BPM');
   await p.locator('#send').click();
@@ -540,7 +545,7 @@ function bffServer(port) {
   await p.locator('.mode[data-mode="music"]').click();
   // #35: после фото возвращаемся в music — в advanced (черновик секции 7) поле
   // один (#prompt скрыт); выключаем тонкую настройку, чтобы вернуть Simple-диалог.
-  if (await p.locator('#advanced').isVisible()) await p.locator('#tuneToggle').click();
+  if (await p.locator('#advanced').isVisible()) { await openMore(p); await p.locator('#tuneToggle').click(); }
   const blockedText = 'запрещённый текст';
   await p.locator('#prompt').fill(blockedText);
   await p.locator('#send').click();
@@ -628,9 +633,9 @@ function bffServer(port) {
 
   // 12. Новый чат сохраняет старый; его можно открыть через историю.
   await p.locator('.mode[data-mode="music"]').click();
-  await p.locator('#newChat').click();
+  await openBurger(p); await p.locator('#newChat').click();
   await p.waitForFunction(() => document.querySelectorAll('#feed .session-feed:not([hidden]) .card').length === 0);
-  await p.locator('#sessionsOpen').click();
+  await openBurger(p); await p.locator('#sessionsOpen').click();
   assert.equal(await p.locator('#sessionsList .session-item').count(), 2);
   await p.locator('#sessionsList .session-item').filter({ hasText: 'стоп-маяк' }).click();
   await p.waitForSelector('#feed .session-feed:not([hidden]) .card');
@@ -706,11 +711,11 @@ function bffServer(port) {
   p = await page();
   // Вокальный джоб без лирики: автолирика обязана сработать на свежей странице (регресс null-controller).
   await p.locator('.mode[data-mode="music"]').click();
-  await p.locator('.seg-btn[data-vocal="0"]').click(); // явно выбрать «Песня» → вокальный трек
+  await openMore(p); await p.locator('.seg-btn[data-vocal="0"]').click(); // явно выбрать «Песня» → вокальный трек
   assert.equal(await p.locator('.seg-btn[data-vocal="0"]').getAttribute('aria-pressed'), 'true');
   await p.locator('#prompt').fill('душевная песня про город');
   // Решение владельца 15.11: send в Simple-режиме = диалог; явная генерация — кнопка «Сгенерировать трек».
-  await p.locator('#genTrack').click();
+  await openMore(p); await p.locator('#genTrack').click();
   await p.waitForSelector('.card.assistant audio', { timeout: 25000 });
   const autoPost = state.jobPosts.at(-1);
   assert.equal(autoPost.params.instrumental, undefined, 'vocal job');
@@ -733,7 +738,7 @@ function bffServer(port) {
   assert.ok(translatePosts.length >= 1, 'non-ASCII idea went through the producer-chat translation step');
   assert.match(translatePosts[0].messages[0].content, /Output ONLY the English prompt/i);
   // Второй джоб в advanced с ручной лирикой (для текста в библиотеке).
-  await p.locator('#tuneToggle').click();
+  await openMore(p); await p.locator('#tuneToggle').click();
   const libLyrics = '[Verse]\nГород спит\n[Chorus]\nА я не сплю';
   await p.locator('#lyrics').fill(libLyrics);
   await p.locator('#musicPrompt').fill('dream pop, 90 BPM');
@@ -854,18 +859,19 @@ function bffServer(port) {
   const overflow = await p.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   assert.ok(overflow <= 0, 'no horizontal scroll at 390px, overflow=' + overflow);
   const geo = await p.evaluate(() => {
-    const wrap = (document.querySelector('.tabs') || document.querySelector('.composer-wrap')).getBoundingClientRect();
+    // #35 компакт: вкладки переехали в шапку — к низу прижат композер
+    const wrap = document.querySelector('.composer-wrap').getBoundingClientRect();
     const sizes = [...document.querySelectorAll('button, textarea, input')]
       .filter(el => el.offsetParent !== null && !el.closest('[hidden]'))
       .map(el => Math.min(el.getBoundingClientRect().width, el.getBoundingClientRect().height));
     return { bottomGap: window.innerHeight - Math.round(wrap.bottom), minTarget: Math.min(...sizes.filter(s => s > 0)) };
   });
-  assert.ok(geo.bottomGap >= 0 && geo.bottomGap <= 16, 'composer + tabs pinned to viewport bottom, gap=' + geo.bottomGap);
+  assert.ok(geo.bottomGap >= 0 && geo.bottomGap <= 16, 'composer pinned to viewport bottom (tabs moved to header), gap=' + geo.bottomGap);
   assert.ok(geo.minTarget >= 44, 'smallest touch target >= 44px, got ' + geo.minTarget);
   await p.screenshot({ path: path.join(require('node:os').tmpdir(), 'studio-390.png'), fullPage: false });
   // Музыка на мобайле: тулбар не ломается.
   await p.locator('.mode[data-mode="music"]').click();
-  await p.locator('#tuneToggle').click();
+  await openMore(p); await p.locator('#tuneToggle').click();
   const overflow2 = await p.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   assert.ok(overflow2 <= 0, 'no h-scroll in music advanced at 390px, overflow=' + overflow2);
   await p.screenshot({ path: path.join(require('node:os').tmpdir(), 'studio-390-music.png'), fullPage: false });
@@ -876,7 +882,7 @@ function bffServer(port) {
   const kbMeta = await p.evaluate(() => document.querySelector('meta[name="viewport"]').content);
   assert.match(kbMeta, /interactive-widget=resizableViewport/, 'F-35: viewport содержит interactive-widget=resizableViewport');
   // #35: режима «Чат» больше нет — для чистого замера уходим из advanced в Simple.
-  if (await p.locator('#advanced').isVisible()) await p.locator('#tuneToggle').click();
+  if (await p.locator('#advanced').isVisible()) { await openMore(p); await p.locator('#tuneToggle').click(); }
   const lift = await p.evaluate(() => {
     const send = document.getElementById('send');
     const composer = document.getElementById('composer');
@@ -970,8 +976,13 @@ function bffServer(port) {
   p = await page({ viewport: { width: 320, height: 568 } });
   await p.locator('.mode[data-mode="music"]').click();
   await p.locator('#prompt').fill('ночной джаз для двоих');
+  // #35 компакт: на 320px редкие контролы открываются в «⋯»-панели — проверяем
+  // её содержимое: полные лейблы без обрезки, пояснение продюсера, панель в кадре.
+  await openMore(p);
   const narrow = await p.evaluate(() => {
-    const chips = [...document.querySelectorAll('.tool.chip')].filter(e => e.offsetParent !== null && !e.closest('[hidden]'))
+    const panel = document.getElementById('morePanel');
+    const visible = el => !!el && el.offsetParent !== null;
+    const chips = [...document.querySelectorAll('.tool.chip')].filter(e => visible(e) && !e.closest('[hidden]'))
       .map(e => ({ t: (e.innerText || e.textContent).trim(), cut: e.scrollWidth > e.clientWidth + 1 }));
     const hint = document.getElementById('producerHint');
     const btn = document.getElementById('prepareMusic');
@@ -979,18 +990,20 @@ function bffServer(port) {
     const send = document.getElementById('send').getBoundingClientRect();
     return {
       chips,
-      genShort: chips.some(c => c.t === 'Трек'),
+      genFull: chips.some(c => c.t === 'Сгенерировать трек'),
       genAria: gen.getAttribute('aria-label'),
       prepareAria: btn.getAttribute('aria-label'),
-      producerHintVisible: !!hint && hint.offsetParent !== null,
+      producerHintVisible: visible(hint),
       producerDescribedBy: btn.getAttribute('aria-describedby'),
       sendVisible: send.bottom <= window.innerHeight && send.top >= 0,
+      panelFits: panel.getBoundingClientRect().right <= window.innerWidth + 1,
       overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth
     };
   });
   assert.ok(narrow.overflow <= 0, 'F-37: без горскролла на 320px');
   assert.deepEqual(narrow.chips.filter(c => c.cut), [], 'F-37: ни один чип не обрезан: ' + JSON.stringify(narrow.chips));
-  assert.ok(narrow.genShort, 'F-37: на 320px кнопка генерации — короткий лейбл «Трек»');
+  assert.ok(narrow.genFull, 'F-37: на 320px кнопка генерации — полный лейбл (панель не жмёт)');
+  assert.ok(narrow.panelFits, 'F-37: «⋯»-панель не выходит за экран на 320px');
   assert.equal(narrow.genAria, 'Сгенерировать трек', 'F-37: полный смысл — в aria-label');
   assert.equal(narrow.prepareAria, 'Подготовить песню', 'F-37: aria-label продюсера не зависит от ширины');
   assert.ok(narrow.sendVisible, 'F-37: кнопка отправки в кадре на 320px');
@@ -1033,11 +1046,11 @@ function bffServer(port) {
   p = await page();
   await p.locator('.mode[data-mode="music"]').click();
   await p.locator('#prompt').fill('Песня о море');
-  await p.locator('#genTrack').click();
+  await openMore(p); await p.locator('#genTrack').click();
   await p.waitForSelector('.card.stage .stage-stop');
-  await p.locator('#modelChip').click();
+  await openMore(p); await p.locator('#modelChip').click();
   await p.locator('#modelMenu button', { hasText: 'Pro' }).click();
-  await p.locator('.seg-btn[data-vocal="1"]').click();
+  await openMore(p); await p.locator('.seg-btn[data-vocal="1"]').click();
   await p.waitForSelector('.card.assistant audio', { timeout: 30000 });
   const frozen = state.jobPosts.at(-1);
   assert.equal(frozen.params.model, 'ace-step-flash');
@@ -1122,7 +1135,7 @@ function bffServer(port) {
   await p.locator('#prompt').fill('стрим в первой сессии');
   await p.locator('#send').click();
   await p.waitForSelector('.card.assistant .stage-stop');
-  await p.locator('#sessionsOpen').click();
+  await openBurger(p); await p.locator('#sessionsOpen').click();
   await p.locator('#sessionsNew').click();
   await p.waitForSelector('#sessionsOverlay', { state: 'hidden' });
   await p.locator('#prompt').fill('вопрос из новой сессии');
@@ -1266,7 +1279,7 @@ function bffServer(port) {
   // Узкий и низкий экран: оба измерения видимых кнопок и отсутствие горизонтального переполнения.
   p = await page({ viewport: { width: 320, height: 568 } });
   await p.locator('.mode[data-mode="music"]').click();
-  await p.locator('#tuneToggle').click();
+  await openMore(p); await p.locator('#tuneToggle').click();
   const small = await p.evaluate(() => ({
     overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
     send: document.getElementById('send').getBoundingClientRect().toJSON(),
@@ -1298,11 +1311,11 @@ function bffServer(port) {
     }, { port: BFF_PORT, token: TOKEN, oldFeed, oldHistory });
     await legacy.goto(URL_);
     await legacy.getByText('Старый ответ').waitFor();
-    await legacy.locator('#newChat').click();
+    await openBurger(legacy); await legacy.locator('#newChat').click();
     await legacy.waitForFunction(() => document.querySelectorAll('#feed .session-feed:not([hidden]) .card').length === 0);
     await legacy.locator('#prompt').fill('Новая идея'); await legacy.locator('#send').click();
     await legacy.waitForSelector('#feed .session-feed:not([hidden]) .make-track');
-    await legacy.locator('#sessionsOpen').click();
+    await openBurger(legacy); await legacy.locator('#sessionsOpen').click();
     await legacy.locator('#sessionsList .session-item').filter({ hasText: 'Старый запрос' }).click();
     await legacy.getByText('Старый ответ').waitFor({ state: 'visible' });
     await legacy.locator('#prompt').fill('После миграции'); await legacy.locator('#send').click();
@@ -1321,12 +1334,12 @@ function bffServer(port) {
   await p.locator('#send').click();
   await p.waitForSelector('.make-track');
   await p.locator('.mode[data-mode="music"]').click();
-  await p.locator('.seg-btn[data-vocal="1"]').click();
+  await openMore(p); await p.locator('.seg-btn[data-vocal="1"]').click();
   const fullPrompt = 'Музыкальная идея ' + 'ритм '.repeat(70);
   await p.locator('#prompt').fill(fullPrompt);
-  await p.locator('#genTrack').click();
+  await openMore(p); await p.locator('#genTrack').click();
   await p.locator('.mode[data-mode="music"]').click();
-  await p.locator('#newChat').click();
+  await openBurger(p); await p.locator('#newChat').click();
   await p.waitForFunction(() => document.querySelectorAll('#feed .session-feed:not([hidden]) .card').length === 0);
   await p.locator('#prompt').fill('Вторая сессия');
   await p.locator('#send').click();
@@ -1353,7 +1366,7 @@ function bffServer(port) {
     return profile.sessions.flatMap(s => s.feed).find(item => item.kind === 'music');
   });
   assert.equal(savedTrack.input.prompt, fullPrompt.trim(), 'full sent prompt is saved without truncation');
-  await p.locator('#sessionsOpen').click();
+  await openBurger(p); await p.locator('#sessionsOpen').click();
   await p.locator('#sessionsList .session-item').filter({ hasText: 'Вторая сессия' }).click();
   await p.waitForSelector('#sessionsOverlay[hidden]', { state: 'attached' });
   await p.waitForSelector('#feed .session-feed:not([hidden]) .card.user');
@@ -1368,9 +1381,9 @@ function bffServer(port) {
   state.chatImproveText = 'long musical idea, rhythmic, atmospheric';
   p = await page();
   await p.locator('.mode[data-mode="music"]').click();
-  await p.locator('.seg-btn[data-vocal="1"]').click();
+  await openMore(p); await p.locator('.seg-btn[data-vocal="1"]').click();
   const repeatPrompt = ('длинная музыкальная идея '.repeat(15)).trim();
-  await p.locator('#prompt').fill(repeatPrompt); await p.locator('#genTrack').click();
+  await p.locator('#prompt').fill(repeatPrompt); await openMore(p); await p.locator('#genTrack').click();
   await p.waitForSelector('#feed audio', { timeout: 25000 });
   assert.equal(state.jobPosts.length, 1);
   // «Повторить с правками» теперь в едином меню «⋯» карточки трека.
@@ -1447,21 +1460,21 @@ function bffServer(port) {
   await p.locator('#send').click();
   await p.waitForSelector('#feed .card.assistant');
   await p.locator('.mode[data-mode="music"]').click();
-  await p.locator('#tuneToggle').click(); // advanced: поля стиль/лирика
+  await openMore(p); await p.locator('#tuneToggle').click(); // advanced: поля стиль/лирика
   await p.locator('#musicPrompt').fill('исходный стиль сессии A');
   await p.locator('#improvePrompt').click();
   await p.waitForFunction(() => document.querySelector('#musicPrompt')?.value === 'улучшенный вариант для сессии A', {}, { timeout: 15000 });
   assert.equal(await p.locator('#undoPrompt').isVisible(), true, 'в сессии A доступен возврат');
   // Новая сессия: своих бэкапов нет, кнопка возврата скрыта, поля не тронуты.
-  await p.locator('#sessionsOpen').click();
+  await openBurger(p); await p.locator('#sessionsOpen').click();
   await p.locator('#sessionsNew').click();
   await p.waitForSelector('#sessionsOverlay', { state: 'hidden' });
   await p.locator('.mode[data-mode="music"]').click();
-  await p.locator('#tuneToggle').click();
+  await openMore(p); await p.locator('#tuneToggle').click();
   await p.locator('#musicPrompt').fill('свой стиль сессии B');
   assert.equal(await p.locator('#undoPrompt').isHidden(), true, 'в сессии B нет чужой кнопки возврата (T-22)');
   // Возврат в A: undo всё ещё знает исходный текст сессии A.
-  await p.locator('#sessionsOpen').click();
+  await openBurger(p); await p.locator('#sessionsOpen').click();
   await p.locator('#sessionsList .session-item').filter({ hasText: 'вопрос для наполнения ленты' }).first().click();
   await p.waitForSelector('#sessionsOverlay', { state: 'hidden' });
   await p.locator('#undoPrompt').click();
@@ -1597,7 +1610,7 @@ function bffServer(port) {
   await p.locator('.mode[data-mode="music"]').click();
   const idea = 'Песня о собаке на французском, 72 BPM, без гитары';
   await p.locator('#prompt').fill(idea);
-  await p.locator('#prepareMusic').click();
+  await openMore(p); await p.locator('#prepareMusic').click();
   await p.locator('.producer-draft').first().waitFor();
   assert.equal(state.jobPosts.length, 0, 'preparing does not start audio generation');
   assert.equal(await p.locator('#prompt').inputValue(), idea, 'original input is not overwritten');
@@ -1631,10 +1644,10 @@ function bffServer(port) {
 
   // Existing authored lyrics are sent as context but never replaced by the LLM.
   resetBff(); state.chatImproveText = JSON.stringify({ title: 'Моё', prompt: 'jazz piano', lyrics: 'другая лирика' });
-  p = await page(); await p.locator('.mode[data-mode="music"]').click(); await p.locator('#tuneToggle').click();
+  p = await page(); await p.locator('.mode[data-mode="music"]').click(); await openMore(p); await p.locator('#tuneToggle').click();
   await p.locator('#musicPrompt').fill('джаз по моей лирике');
   await p.locator('#lyrics').fill('Моя собственная строка');
-  await p.locator('#prepareMusic').click(); await p.locator('.producer-draft').waitFor();
+  await openMore(p); await p.locator('#prepareMusic').click(); await p.locator('.producer-draft').waitFor();
   assert.equal(await p.locator('[data-producer-field="lyrics"]').inputValue(), 'Моя собственная строка');
   assert.match(state.chatPosts[0].messages[1].content, /Моя собственная строка/);
   await p.locator('#lyrics').fill('Новая правка в ожидании');
@@ -1653,22 +1666,22 @@ function bffServer(port) {
 
   // Instrumental, incorrect JSON and moderation leave the source untouched.
   resetBff(); state.chatImproveText = JSON.stringify({ title: 'Рассвет', prompt: 'ambient synth', lyrics: '' });
-  p = await page(); await p.locator('.mode[data-mode="music"]').click(); await p.locator('.seg-btn[data-vocal="1"]').click();
-  await p.locator('#prompt').fill('инструментал без вокала'); await p.locator('#prepareMusic').click();
+  p = await page(); await p.locator('.mode[data-mode="music"]').click(); await openMore(p); await p.locator('.seg-btn[data-vocal="1"]').click();
+  await p.locator('#prompt').fill('инструментал без вокала'); await openMore(p); await p.locator('#prepareMusic').click();
   await p.locator('.producer-draft').waitFor();
   assert.equal(await p.locator('[data-producer-field="lyrics"]').count(), 0);
   await p.getByRole('button', { name: 'Принять в поля' }).click();
   await p.waitForFunction(() => document.querySelector('#musicPrompt').value === 'ambient synth');
-  await p.locator('#genTrack').click(); await p.waitForSelector('#feed audio', { timeout: 25000 });
+  await openMore(p); await p.locator('#genTrack').click(); await p.waitForSelector('#feed audio', { timeout: 25000 });
   assert.equal(state.jobPosts[0].params.instrumental, true);
   assert.equal(state.jobPosts[0].params.duration, undefined);
   ok('instrumental review and explicit generation, no duration parameter');
   resetBff(); state.chatImproveText = '{broken';
   p = await page(); await p.locator('.mode[data-mode="music"]').click(); await p.locator('#prompt').fill('Сохранить идею');
-  await p.locator('#prepareMusic').click(); await p.getByText('Ответ для ручного восстановления').waitFor();
+  await openMore(p); await p.locator('#prepareMusic').click(); await p.getByText('Ответ для ручного восстановления').waitFor();
   assert.equal(await p.locator('#prompt').inputValue(), 'Сохранить идею');
   assert.equal(await p.locator('.producer-draft').count(), 0);
-  state.chatBlocked = true; await p.locator('#prepareMusic').click();
+  state.chatBlocked = true; await openMore(p); await p.locator('#prepareMusic').click();
   await p.locator('.card.error', { hasText: 'Модерация' }).waitFor();
   assert.equal(await p.locator('#prompt').inputValue(), 'Сохранить идею');
   ok('malformed response and moderation preserve original');
@@ -1677,12 +1690,12 @@ function bffServer(port) {
   resetBff(); state.improveDelay = 1200;
   state.chatImproveText = JSON.stringify({ title: 'Песня', prompt: 'jazz', lyrics: 'слова' });
   p = await page(); await p.locator('.mode[data-mode="music"]').click(); await p.locator('#prompt').fill('Отменяемая идея');
-  await p.locator('#prepareMusic').click();
+  await openMore(p); await p.locator('#prepareMusic').click();
   await p.getByRole('button', { name: 'Отменить подготовку песни' }).click();
   await p.getByText('Подготовка отменена').waitFor();
   assert.equal(await p.locator('#prompt').inputValue(), 'Отменяемая идея');
   await p.waitForTimeout(1400); assert.equal(await p.locator('.producer-draft').count(), 0);
-  await p.locator('#prepareMusic').click();
+  await openMore(p); await p.locator('#prepareMusic').click();
   await p.locator('.mode[data-mode="music"]').click(); await p.locator('#prompt').fill('Параллельный вопрос'); await p.locator('#send').click();
   await p.locator('.card.assistant', { hasText: 'Стрим пришёл' }).waitFor();
   await p.locator('.producer-draft').waitFor();
@@ -1699,11 +1712,11 @@ function bffServer(port) {
   p = await page(); await p.locator('#prompt').fill('Первая сессия продюсера'); await p.locator('#send').click();
   await p.locator('.card.assistant', { hasText: 'Стрим пришёл' }).waitFor();
   await p.locator('.mode[data-mode="music"]').click(); await p.locator('#prompt').fill('Идея первой сессии');
-  await p.locator('#prepareMusic').click(); await p.locator('.mode[data-mode="music"]').click(); await p.locator('#newChat').click();
+  await openMore(p); await p.locator('#prepareMusic').click(); await p.locator('.mode[data-mode="music"]').click(); await openBurger(p); await p.locator('#newChat').click();
   await p.waitForFunction(() => document.querySelector('.mode[data-mode="music"]').getAttribute('aria-pressed') === 'true');
   await p.waitForTimeout(3400);
   assert.equal(await p.locator('.session-feed:not([hidden]) .producer-draft').count(), 0);
-  await p.locator('#sessionsOpen').click();
+  await openBurger(p); await p.locator('#sessionsOpen').click();
   await p.locator('#sessionsList .session-item').filter({ hasText: 'Первая сессия продюсера' }).click();
   await p.locator('.session-feed:not([hidden]) .producer-draft').waitFor();
   await p.locator('.mode[data-mode="music"]').click();
@@ -1716,7 +1729,7 @@ function bffServer(port) {
     contentType: 'application/json', body: JSON.stringify({ error: { code: 'queue_full', message: 'Очередь заполнена' } })
   }));
   await p.locator('.mode[data-mode="music"]').click(); await p.locator('#prompt').fill('Идея при лимите');
-  await p.locator('#prepareMusic').click(); await p.locator('.card.error').waitFor();
+  await openMore(p); await p.locator('#prepareMusic').click(); await p.locator('.card.error').waitFor();
   assert.equal(await p.locator('#prompt').inputValue(), 'Идея при лимите');
   assert.equal(state.jobPosts.length, 0);
   ok('producer 429 preserves the input and never starts a job');
@@ -1752,7 +1765,7 @@ function bffServer(port) {
   await showBtn.click();
   await p.waitForFunction(() => !document.getElementById('advanced').hidden);
   assert.ok((await p.locator('#musicPrompt.field-flash').count()) >= 1, 'поля подсвечены после перехода (F-12)');
-  await p.locator('#tuneToggle').click(); // обратно в Simple — второй ход диалога
+  await openMore(p); await p.locator('#tuneToggle').click(); // обратно в Simple — второй ход диалога
   await p.waitForFunction(() => !document.getElementById('prompt').hidden);
   // Self-refine: второй ход сохраняет историю диалога.
   await p.locator('#prompt').fill('поправь припев');
@@ -1792,16 +1805,16 @@ function bffServer(port) {
   await p.waitForSelector('.music-draft', { timeout: 10000 });
   // Отдельная кнопка «Сгенерировать трек» в композере: явная генерация без диалога.
   await p.locator('#prompt').fill('спокойный эмбиент для чтения');
-  await p.locator('#genTrack').click();
+  await openMore(p); await p.locator('#genTrack').click();
   await p.waitForFunction(() => document.querySelectorAll('#feed audio').length >= 1, {}, { timeout: 30000 });
   assert.equal(state.jobPosts.length, 2, 'composer Generate button creates a job without a dialog turn');
   assert.ok(/^[\x20-\x7E]*$/.test(state.jobPosts[1].prompt), 'quick-path assembly still yields an English prompt');
   // #40: авторский ASCII-промт, набранный руками в «Тонко настроить», не
   // переписывается (правило #109): ручная правка поля сняла метку мозга,
   // строка уходит в модель как есть — без слоёв и без плашки.
-  await p.locator('#tuneToggle').click();
+  await openMore(p); await p.locator('#tuneToggle').click();
   await p.locator('#musicPrompt').fill('author ascii line without brain tags');
-  await p.locator('#genTrack').click();
+  await openMore(p); await p.locator('#genTrack').click();
   await p.waitForFunction(() => document.querySelectorAll('#feed audio').length >= 2, {}, { timeout: 30000 });
   assert.equal(state.jobPosts.length, 3, 'author advanced generation creates the third job');
   assert.equal(state.jobPosts[2].prompt, 'author ascii line without brain tags', '#109: авторская ASCII-строка уходит как есть');
@@ -1938,9 +1951,9 @@ function bffServer(port) {
   assert.equal(catalog.proStatus, 'unavailable');
   // Ориентир в карточке ожидания: инструментал без автолирики — сразу джоба.
   await p.locator('.mode[data-mode="music"]').click();
-  await p.locator('.seg-btn[data-vocal="1"]').click();
+  await openMore(p); await p.locator('.seg-btn[data-vocal="1"]').click();
   await p.locator('#prompt').fill('весёлый лоу-фай этюд');
-  await p.locator('#genTrack').click();
+  await openMore(p); await p.locator('#genTrack').click();
   // Мок делает джобу готовой через ~5 с — снимаем ориентир в тот же момент,
   // когда карточка ожидания появилась (без отдельного re-query).
   const etaState = await p.waitForFunction(() => {
@@ -1951,7 +1964,7 @@ function bffServer(port) {
   assert.equal(etaState.late, false, 'тон задержки включается только после ×1,5 — не раньше');
   // Дожидаемся конца генерации (мок быстро отдаёт ready), затем — меню моделей.
   await p.waitForSelector('.card.stage', { state: 'detached', timeout: 20000 });
-  await p.locator('#modelChip').click();
+  await openMore(p); await p.locator('#modelChip').click();
   const menuText = (await p.locator('#modelMenu button').allInnerTexts()).join('\n');
   assert.match(menuText, /Flash\s*ace-step-flash · ~2 минуты/, 'меню Flash показывает ориентир: ' + JSON.stringify(menuText));
   assert.match(menuText, /Pro\s*ace-step-pro · ~10 минут · недоступна/, 'меню Pro честно показывает ориентир и недоступность');
@@ -1963,12 +1976,12 @@ function bffServer(port) {
   // F-42: две неудачные попытки без ключа — одна карточка «Ключ», не две (A2).
   await p.evaluate(() => localStorage.removeItem('briix-media-live-token'));
   await p.locator('.mode[data-mode="music"]').click();
-  await p.locator('.seg-btn[data-vocal="1"]').click();
+  await openMore(p); await p.locator('.seg-btn[data-vocal="1"]').click();
   await p.locator('#prompt').fill('без ключа один');
-  await p.locator('#genTrack').click();
+  await openMore(p); await p.locator('#genTrack').click();
   await p.waitForSelector('.card.notice');
   await p.locator('#prompt').fill('без ключа два');
-  await p.locator('#genTrack').click();
+  await openMore(p); await p.locator('#genTrack').click();
   await p.waitForTimeout(400);
   assert.equal(await p.locator('.card.notice').count(), 1, 'F-42: одинаковые notice не стакаются — одна карточка на причину');
   // F-38: копирование отвечает тостом, а не строкой статуса.
@@ -1976,7 +1989,7 @@ function bffServer(port) {
   await p.locator('#keySave').click();
   // Материал для библиотеки и плеера: один инструментальный трек (мок ~5 с).
   await p.locator('#prompt').fill('спокойный инструментальный этюд для проверки');
-  await p.locator('#genTrack').click();
+  await openMore(p); await p.locator('#genTrack').click();
   await p.locator('#feed audio', { timeout: 30000 }).waitFor();
   await p.locator('.tab[data-tab="library"]').click();
   await p.waitForSelector('.lib-item');
@@ -2154,15 +2167,19 @@ function bffServer(port) {
   assert.match(await p.locator('#newBelow').innerText(), /новое|новых/, 'F-39: пилюля считает новое');
   await p.locator('#newBelow').click();
   await p.waitForFunction(() => document.getElementById('newBelow')?.hidden === true, {}, { timeout: 10000 });
-  // клик должен привести к новому: либо лента у низа, либо карточка «Фото готово» в кадре
-  const landed = await p.evaluate(() => {
+  // Ленивая карточка дорисовалась после докрутки (F-39 reStick) — новый низ в кадре.
+  await p.waitForSelector('#feed img.media-in', { timeout: 10000 });
+  // Клик должен привести к новому: лента у низа или карточка «Фото готово» в кадре.
+  // Ленивое медиа дорисовывается ПОСЛЕ скролла и дотягивается докруткой
+  // (F-39 reStick) — состояние оседает несколько кадров, поэтому ждём до 4с,
+  // а не снимаем мгновенный срез (гонка роста ленты).
+  const landed = await p.waitForFunction(() => {
     const f = document.getElementById('feed');
     const photo = [...f.querySelectorAll('.card.assistant')].find(c => c.textContent.includes('Фото готово'));
     return f.scrollHeight - f.scrollTop - f.clientHeight < 140
       || (photo && photo.getBoundingClientRect().bottom <= f.getBoundingClientRect().bottom + 4);
-  });
+  }, {}, { timeout: 4000 }).then(() => true, () => false);
   assert.equal(landed, true, 'F-39: клик привёл к новому (фото в кадре)');
-  await p.waitForSelector('#feed img.media-in', { timeout: 10000 }); // переход раскрыл карточку — img догрузился
   ok('new-content pill appears for readers above the feed bottom (F-39)');
   await p.close();
 
@@ -2237,7 +2254,7 @@ function bffServer(port) {
   p = await page();
   await p.locator('.mode[data-mode="music"]').click();
   await p.locator('#prompt').fill('спокойный инструментальный этюд для проверки видимости');
-  await p.locator('#genTrack').click();
+  await openMore(p); await p.locator('#genTrack').click();
   await waitForState(() => state.pollAttempts >= 1, { what: 'first poll' });
   await p.evaluate(() => {
     Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
@@ -2368,7 +2385,7 @@ function bffServer(port) {
   assert.ok(boot.some(s => s.title === 'Живой чат'), 'валидная сессия цела');
   assert.ok(boot.some(s => s.id === 'broken-1' && s.title === 'Битая' && s.feedIsArray), 'битая запись починена с сохранением id');
   // Лента живой сессии доступна: открываем список сессий и переходим в «Живой чат».
-  await p.locator('#sessionsOpen').click();
+  await openBurger(p); await p.locator('#sessionsOpen').click();
   await p.waitForSelector('#sessionsOverlay:not([hidden])');
   const items = await p.locator('.session-item').allInnerTexts();
   assert.ok(items.some(t => t.includes('Живой чат')), 'список сессий показывает валидную сессию: ' + JSON.stringify(items));

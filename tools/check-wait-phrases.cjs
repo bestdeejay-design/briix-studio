@@ -310,10 +310,13 @@ function bffServer(port) {
 
   // 8. Живой хук: инструментальная джоба против mock-bff — строка под прогрессом,
   //    серверная стадия generating и подпись «генерация» (T-02), ✕ отменяет джобу (T-05).
+  const openMoreWait = async page => { if (!(await page.locator('#morePanel').isVisible())) await page.locator('#moreBtn').click(); };
   p = await page();
   await p.locator('.mode[data-mode="music"]').click();
+  await openMoreWait(p); // #35 компакт: сегмент режима трека — в «⋯»-панели
   await p.locator('.seg-btn[data-vocal="1"]').click(); // инструментал: без автолирики, сразу POST /jobs
   await p.locator('#prompt').fill('спокойный инструментальный этюд для вечернего города');
+  await openMoreWait(p);
   await p.locator('#genTrack').click();
   await p.waitForSelector('.card.stage [data-wait]', { timeout: 15000 });
   const hook = await p.evaluate(() => {
