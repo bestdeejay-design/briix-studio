@@ -2025,10 +2025,11 @@
   const MUSIC_DRAFT_CLOSE = '[/briix-draft]';
   const musicDraftInstruction = '\n\nКаждый твой ответ заканчивается блоком черновика строго в таком формате:\n'
     + MUSIC_DRAFT_OPEN + '\n{"title":"название песни","prompt":"описание звучания","lyrics":"текст песни","style":"семейство стиля или пустая строка"}\n' + MUSIC_DRAFT_CLOSE + '\n'
-    + 'Поле prompt пиши ТОЛЬКО по-английски одной строкой (жанр, темп, вокал, инструменты, продакшн; не выдумывай темп, если он не задан). '
+    + 'Поле prompt пиши ТОЛЬКО по-английски одной строкой до 400 символов (жанр, темп, вокал, инструменты, продакшн; не выдумывай темп, если он не задан). '
     + 'Поле lyrics — текст песни с латинскими тегами частей [Verse], [Chorus], [Bridge] (для инструментала — пустая строка). '
     + 'Язык лирики — строго: ПО УМОЛЧАНИЮ (язык в идее не указан) лирика всегда НА АНГЛИЙСКОМ. Русская лирика — ТОЛЬКО если пользователь явно попросил «на русском». Сама идея на русском НЕ означает русскую лирику. '
-    + 'Имена исполнителей в title, prompt и lyrics не пиши: если пользователь ссылается на артиста («в стиле X», «как Y»), выдели стиль и укажи его семейство в поле style (pop, rock, edm, house, rap, hip-hop, funk, soul, jazz, ballad, techno, trap, ambient, cinematic, folk и близкие); стиль не определяется — пустая строка. '
+    + 'Имена исполнителей в title, prompt и lyrics не пиши: если пользователь ссылается на артиста («в стиле X», «как Y»), выдели стиль и укажи его семейство в поле style из полного списка: '
+    + BriixProducer.STYLE_FAMILIES.join(', ') + '. Стиль не определяется — пустая строка. '
     + 'Внутри JSON-строк экранируй переносы строк как \\n. Не используй markdown и не дублируй содержимое черновика в тексте ответа.';
 
   function musicSessionContext(snapshot) {
@@ -2100,6 +2101,20 @@
   }
   // <<< chat-draft-guard
 
+  // Кап строки звучания (#45): модель может вернуть промт длиннее потолка
+  // ACE-Step (640) — режем по последней запятой, не рвя слово. Используется и
+  // на входе (parseMusicDraft), и на выходе сборки (createMusic): длинная
+  // строка наставника + слои мозга не должны уезжать за 640, модель молча
+  // обрезает хвост.
+  function capStyleLine(text, budget) {
+    const v = String(text || '');
+    const max = budget || BRIIX_MUSIC_BRAIN.rules.MAX_CAPTION;
+    if (v.length <= max) return v;
+    let cut = v.slice(0, max + 1).lastIndexOf(',');
+    if (cut <= 0) cut = max;
+    return v.slice(0, cut).trim();
+  }
+
   function parseMusicDraft(full, isInstrumental, idea) {
     let text = full, draft = null;
     const open = full.indexOf(MUSIC_DRAFT_OPEN), close = full.lastIndexOf(MUSIC_DRAFT_CLOSE);
@@ -2108,7 +2123,7 @@
       try {
         const value = JSON.parse(full.slice(open + MUSIC_DRAFT_OPEN.length, close).trim());
         if (value && !Array.isArray(value) && typeof value.prompt === 'string') {
-          draft = { title: String(value.title || ''), style: BriixProducer.normalizeStyle(value.style), prompt: BriixProducer.sanitize(value.prompt),
+          draft = { title: String(value.title || ''), style: BriixProducer.normalizeStyle(value.style), prompt: capStyleLine(BriixProducer.sanitize(value.prompt)),
             lyrics: BriixProducer.latinizeTags(BriixProducer.sanitize(value.lyrics || '')) };
         }
       } catch { draft = null; }
@@ -2548,9 +2563,18 @@
       // P1 аудита #35: семейство стиля читается из состояния сессии — генерация в
       // сессии B больше не наследует стиль сессии A молча.
       const styleFamily = session.draft?.styleFamily || undefined;
+      // Язык лирики — одно решение на всю сборку (#45, точность черновиков):
+      // явное указание в идее → явное в лирике → кириллическая лирика → дефолт en.
+      // Тег мозга (English/Russian lyrics) и params.language обязаны совпадать —
+      // раньше русская лирика черновика получала тег English lyrics при
+      // params.language=ru, и модель слышала два разных указания.
+      const explicitLang = BriixProducer.detectExplicitLanguage(rawIdea) || BriixProducer.detectExplicitLanguage(lyrics || '');
+      const songLanguage = snapshot.instrumental ? null
+        : (explicitLang === 'ru' || explicitLang === 'en' || explicitLang === 'fr' ? explicitLang
+          : (lyrics && /[\u0400-\u04FF]/.test(lyrics) ? 'ru' : 'en'));
       const brainFor = budget => BRIIX_MUSIC_BRAIN.buildCaption(style || lyrics || '', {
         kind: snapshot.instrumental ? 'instrumental' : 'song',
-        language: BriixProducer.detectExplicitLanguage(rawIdea) || (snapshot.instrumental ? null : 'en'),
+        language: songLanguage,
         bpm: BRIIX_MUSIC_BRAIN.detectBpm(style || lyrics || ''),
         style: styleFamily,
         maxTags: budget
@@ -2597,6 +2621,11 @@
         finalPrompt = brain.tags || '';
         brainApplied = Boolean(brain.tags);
       }
+      // Потолок сборки (#45): длинная строка наставника + слои мозга не уезжают
+      // за 640 — раньше пол бюджета brainBudget (240) давал до 640+240 символов
+      // и модель молча обрезала хвост. Авторская строка стоит первой — режем
+      // хвост по запятой, не трогая её начало; авторский путь без мозга не режем.
+      if (brainApplied) finalPrompt = capStyleLine(finalPrompt, CAPTION_BUDGET);
       // #40: честная плашка в карточке — сколько слоёв мозга реально в сборке.
       const brainLayers = brainApplied ? brainLayerCount(brain.layers) : 0;
       if (snapshot.advanced && !snapshot.instrumental && lyrics) {
@@ -2617,12 +2646,10 @@
       if (snapshot.instrumental) params.instrumental = true;
       else {
         // T-03: bff ждёт params.language (ru|en) — без поля русский вокал уходит в
-        // модель английским. Явная просьба («на русском») или кириллическая лирика
-        // (осознанный выбор автора) = ru; французский bff не валидирует — не шлём.
-        const explicit = BriixProducer.detectExplicitLanguage(rawIdea) || BriixProducer.detectExplicitLanguage(lyrics || '');
-        if (explicit === 'ru' || explicit === 'en') params.language = explicit;
-        else if (!explicit && lyrics && /[\u0400-\u04FF]/.test(lyrics)) params.language = 'ru';
-        else if (!explicit) params.language = 'en';
+        // модель английским. Решение едино с тегом мозга (songLanguage выше):
+        // явное указание → кириллическая лирика → дефолт en. Французский bff
+        // не валидирует — не шлём, он живёт только тегом мозга.
+        if (songLanguage === 'ru' || songLanguage === 'en') params.language = songLanguage;
       }
       if (lyrics) params.lyrics = lyrics;
       // В карточку/сессию — исходная идея без изменений (правило #109),

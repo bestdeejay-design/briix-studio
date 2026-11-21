@@ -144,6 +144,14 @@ function bffServer(port) {
           if (state.chatMidstreamError) return sseMidstreamError(res);
           if (state.chatCrlf) return sseCrlf(res, 'Стрим через жёсткий прокси: ' + last.slice(-30));
           if (state.chatSlow) return sse(res, state.chatSlowText || 'медленное слово '.repeat(80), state.chatSlowTick || 120);
+          // Автор песен (автолирика, studio.js autoLyrics): по контракту #109
+          // дефолт — английский (язык в идее не указан). Прежний мок возвращал
+          // русскую болтовню «Стрим пришёл…» — ассерт фиксировал противоречие
+          // (тег English lyrics + params.language=ru). Мок обязан быть верен
+          // контракту, как и реальная модель.
+          if (/Ты — автор песен/.test(body.messages[0]?.content || '')) {
+            return sse(res, '[Intro]\n[Verse]\nCity lights are calling low tonight\n[Chorus]\nWe walk the night alone');
+          }
           // Разговорный музыкальный режим (#35: единый диалог): музыкальная роль
           // отвечает разговорно и всегда с draft-блоком в маркер-формате клиента.
           // Роль детектим по объявлению «Ты «…»» / «Ты музыкальный продюсер»
