@@ -1664,6 +1664,15 @@
     return set;
   }
 
+  /* Семейство стиля из свободного текста (идея/caption) — общий резолв для
+   * разметки брекетов (#47) и атмосферного направления автолирики (#48):
+   * явная подсказка style сильнее, иначе — жанровые слова текста. */
+  function styleOf(text, options = {}) {
+    return resolveStyle(
+      scan(String(text || ''), GENRE_WORDS, 2).map(g => g.tag),
+      options).key;
+  }
+
   function markLyricsDynamics(lyrics, options) {
     const opts = options || {};
     const text = String(lyrics || '');
@@ -1687,9 +1696,7 @@
     // Нет секций — структуру не выдумываем (правило «ничего не выдумывать»).
     if (!tagLines.length) return none;
     // Стилевой профиль: явное семейство (черновик сессии) → жанровые слова caption.
-    const family = resolveStyle(
-      scan(String(opts.caption || '') + ' ' + String(opts.style || ''), GENRE_WORDS, 2).map(g => g.tag),
-      { style: opts.style }).key;
+    const family = styleOf(String(opts.caption || '') + ' ' + String(opts.style || ''), { style: opts.style });
     const profile = family && BRACKET_GROUPS[family] ? BRACKETS_BY_GROUP[BRACKET_GROUPS[family]] : BRACKETS_GENERIC;
     const captionBigrams = bracketBigrams(opts.caption);
     const usedFx = new Set();   // §3: ни один брекет не повторяет другой дословно
@@ -1736,7 +1743,7 @@
     return { lyrics: lines.join('\n'), marked, authored: 0, style: family || null };
   }
 
-  const VERSION = '2026-11-23-brackets-2';
+  const VERSION = '2026-11-23-lyrics-1';
 
   globalThis.BRIIX_MUSIC_BRAIN = {
     version: VERSION,
@@ -1748,6 +1755,7 @@
     selfCheck,
     buildLyricsSkeleton,
     detectBpm,
+    styleOf,
     markLyricsDynamics,
     // словари и слои открыты для проверок и отладки
     rules: {

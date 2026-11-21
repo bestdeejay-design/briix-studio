@@ -534,7 +534,26 @@ assert.ok(shortMarked.marked >= 2 && shortMarked.marked <= 4, `короткий 
 const onlyInst = brain.markLyricsDynamics('[Instrumental]');
 assert.equal(onlyInst.marked, 0, 'одиночный [Instrumental] не получает соло-брекет');
 
+// ------- (19) #48 styleOf: общий резолв семейства для лирики ----------------
+// Атмосферное направление автолирики берёт семейство тем же резолвом, что и
+// брекеты #47: явная подсказка сильнее, иначе — жанровые слова текста
+// (EN и RU-стемы). На неизвестном тексте — null (ничего не выдумываем).
+assert.equal(brain.styleOf('dark synthwave, 100 BPM, deep analog bass'), 'synthwave',
+  'жанровые слова EN резолвятся');
+assert.equal(brain.styleOf('тёмный ретровейв с аналоговым басом'), 'synthwave',
+  'RU-стемы резолвятся (двуязычный мозг #45)');
+assert.equal(brain.styleOf('душевная песня про город'), null,
+  'без жанровых слов — null, атмосфера не выдумывается');
+assert.equal(brain.styleOf('песня', { style: 'jazz' }), 'jazz',
+  'явная подсказка style сильнее текста');
+assert.equal(brain.styleOf(''), null, 'пустой текст — null');
+// Паритет с markLyricsDynamics: разметка и атмосфера видят одно семейство.
+const sameFamily = brain.markLyricsDynamics('[Intro]\nx\n[Verse 1]\ny\n[Chorus]\nz\n[Outro]\nw',
+  { caption: 'dark synthwave, 100 BPM' });
+assert.equal(sameFamily.style, brain.styleOf('dark synthwave, 100 BPM'),
+  'markLyricsDynamics и styleOf резолвят одинаково (единый источник)');
+
 // ------------------------------------------------------------------ вывод --
-console.log('PASS music-brain v3: слои, ритм-всегда, вокал с характером и фиксированной идентичностью, продакшн, бюджет, негативы, self-check, полный трек (роли/микс/форма/защита), глубина и стилевая атмосфера, разделение caption/лирики и потолок токенов, голос по семи осям (#46: семейные профили, перекрытие осей, запрет противоречий, нейтраль, бейдж), запреты регистра и брекеты динамики (Brain Upgrade Spec), #47 стилевые профили брекетов (8 групп + фолбэк, 7 слотов, анти-дубль с caption, соло-слот, норма плотности)');
+console.log('PASS music-brain v3: слои, ритм-всегда, вокал с характером и фиксированной идентичностью, продакшн, бюджет, негативы, self-check, полный трек (роли/микс/форма/защита), глубина и стилевая атмосфера, разделение caption/лирики и потолок токенов, голос по семи осям (#46: семейные профили, перекрытие осей, запрет противоречий, нейтраль, бейдж), запреты регистра и брекеты динамики (Brain Upgrade Spec), #47 стилевые профили брекетов (8 групп + фолбэк, 7 слотов, анти-дубль с caption, соло-слот, норма плотности), #48 styleOf (общий резолв семейства)');
 console.log('20 брифов (buildTags / buildCaption, символы):');
 for (const r of rows) console.log(`  ${r.id} ${r.source.padEnd(9)} ${String(r.len).padStart(3)} / ${String(r.captionLen).padStart(3)}  ${r.tags}`);

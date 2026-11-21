@@ -29,6 +29,9 @@ const brain = scope.BriixProducer;
 const scope2 = {};
 vm.runInNewContext(fs.readFileSync(path.join(ROOT, 'studio/music-brain.js'), 'utf8'), scope2);
 const musicBrain = scope2.BRIIX_MUSIC_BRAIN;
+const scope3 = {};
+vm.runInNewContext(fs.readFileSync(path.join(ROOT, 'studio/lyrics-brain.js'), 'utf8'), scope3);
+const lyricsBrain = scope3.BRIIX_LYRICS_BRAIN;
 
 // ---- Конвейер сборки — зеркало studio.js createMusic (модуль в IIFE, поэтому
 // здесь та же логика в чистых функциях; правки конвейера в студии обязаны
@@ -107,6 +110,15 @@ async function assemble({ idea = '', manualLyrics = '', instrumental = false, ad
     if (marking.marked) lyricsForModel = marking.lyrics;
   }
   if (lyrics) params.lyrics = lyricsForModel;
+  // #48 «проработка лирики»: мягкие проверки мелодичности/консистентности —
+  // зеркало createMusic (карточка «Мелодичность лирики»): десинк-гарда RU+fast
+  // (находка «Тысячи окон»), дословность припева, парность куплетов. BPM —
+  // из идеи, тем же детектом, что и caption; лирика не меняется.
+  let singWarnings = [];
+  if (!instrumental && lyrics && typeof lyricsBrain.singability === 'function') {
+    const ideaBpm = musicBrain.detectBpm(style || lyrics || '');
+    singWarnings = lyricsBrain.singability(lyrics, { bpm: ideaBpm }).warnings;
+  }
   // В POST уходит сборка (prompt), в карточку/сессию — исходная идея (input.prompt).
   const requestBase = idea || lyrics;
   const layerCount = layers => {
@@ -122,7 +134,7 @@ async function assemble({ idea = '', manualLyrics = '', instrumental = false, ad
     return n;
   };
   return { postPrompt: finalPrompt, inputPrompt: requestBase, params, brainTags: tags.tags,
-    brainLayers: brainApplied ? layerCount(tags.layers) : 0 };
+    brainLayers: brainApplied ? layerCount(tags.layers) : 0, singWarnings };
 }
 
 // (д) sanitize на живом факте владельца: markdown и кавычки ушли, текст цел.
@@ -264,6 +276,40 @@ assert.ok(synthFx.every(b => {
   const w = b.toLowerCase().match(/[a-z]+/g) || [];
   return !w.some((x, i) => synthCapBigrams.has(x + ' ' + w[i + 1]));
 }), 'брекеты не дублируют слои caption биграммой (§2.4)');
+
+// (у) #48 проработка лирики: мягкие проверки мелодичности через полный
+// конвейер сборки. Десинк-гарда — продуктовое следствие находки «Тысячи окон»
+// (RU + fast = предсказуемый десинк; не выдавать молча); BPM читается из идеи
+// тем же детектом, что и caption. Ручная лирика не меняется — только честная
+// карточка предупреждений (в зеркале — singWarnings).
+const ruFastLyrics = '[Verse 1]\nГород спит и фонари гаснут\n[Chorus]\nА я не сплю\n[Verse 2]\nГород спит и фонари гаснут\n[Chorus]\nА я не сплю';
+const fastAsm = await assemble({ idea: 'джангл, 170 BPM, быстрая сетка', manualLyrics: ruFastLyrics, advanced: true });
+assert.ok(fastAsm.singWarnings.some(w => /170 BPM/.test(w) && /разъедется|десинк/.test(w)),
+  'RU + 170 BPM в идее — предупреждение десинка проходит через сборку');
+const slowAsm = await assemble({ idea: 'баллада, 90 BPM', manualLyrics: ruFastLyrics, advanced: true });
+assert.ok(!slowAsm.singWarnings.some(w => /BPM/.test(w)), 'RU + 90 BPM — десинк-гарда молчит');
+const enFastAsm = await assemble({ idea: 'jungle, 170 BPM', manualLyrics: '[Verse 1]\nCity lights are calling low tonight\n[Chorus]\nStay with me\n[Verse 2]\nCity lights are calling low tonight\n[Chorus]\nStay with me', advanced: true });
+assert.ok(!enFastAsm.singWarnings.some(w => /BPM/.test(w)), 'EN + 170 BPM — десинк-гарда не срабатывает (находка про русский текст)');
+assert.equal(enFastAsm.singWarnings.length, 0, 'ровная EN-лирика — вообще без предупреждений');
+// Повторяемость припевов и парность куплетов — те же механики через сборку.
+const driftAsm = await assemble({ idea: 'dream pop, 100 BPM', manualLyrics: '[Verse 1]\nстрока один\n[Chorus]\nПрипев с ветром\n[Verse 2]\nстрока два короткая совсем\n[Chorus]\nПрипев с дождём', advanced: true });
+assert.ok(driftAsm.singWarnings.some(w => /Припевы различаются/), 'разные припевы — предупреждение хука');
+assert.ok(driftAsm.singWarnings.some(w => /Куплет 2, строка 1/), 'грубая дельта слогов парных строк куплетов — предупреждение');
+assert.ok(driftAsm.params.lyrics.includes('строка один'), 'предупреждения ничего не правят в лирике');
+// Интеграция studio.js: карточка мелодичности, обогащённый промт автолирики
+// (мелодические механики + атмосферное направление), подключение лирик-мозга.
+const studioLyricsSrc = fs.readFileSync(path.join(ROOT, 'studio/studio.js'), 'utf8');
+assert.match(studioLyricsSrc, /BRIIX_LYRICS_BRAIN\.singability\(lyrics, \{ bpm: ideaBpm \}\)/, 'createMusic вызывает singability');
+assert.match(studioLyricsSrc, /'Мелодичность лирики'/, 'честная карточка мелодичности в UI');
+assert.match(studioLyricsSrc, /припев повторяй дословно, слово в слово/, 'автолирика: дословный припев-хук (механика мелодичности)');
+assert.match(studioLyricsSrc, /парные куплеты — одинаковое число строк/, 'автолирика: парность куплетов');
+assert.match(studioLyricsSrc, /Атмосфера трека: '/, 'автолирика: атмосферное направление (эстетика текста)');
+assert.match(studioLyricsSrc, /autoLyrics\(style \|\| lyrics \|\| 'песня', handle\.controller\.signal, \{ styleFamily: lyricStyleFamily \}\)/,
+  'автолирике передаётся семейство для атмосферы');
+const indexHtml = fs.readFileSync(path.join(ROOT, 'studio/index.html'), 'utf8');
+assert.match(indexHtml, /lyrics-brain\.js\?v=/, 'лирик-мозг подключён на страницу студии');
+assert.ok(indexHtml.indexOf('<script defer src="lyrics-brain.js') < indexHtml.indexOf('<script defer src="studio.js'),
+  'лирик-мозг грузится до studio.js (как остальные мозги; preload studio.js выше по файлу — не считается)');
 
 // (ж) instrumental — без лирики, с флагом и brain-тегом instrumental.
 const inst = await assemble({ idea: 'Глубокий техно-бит без вокала', instrumental: true });
