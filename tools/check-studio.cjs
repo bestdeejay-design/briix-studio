@@ -1761,14 +1761,21 @@ function bffServer(port) {
   assert.equal(state.jobPosts.length, 0, 'refinement turn still does not generate');
   const refinePost = state.chatPosts.at(-1);
   assert.ok(refinePost.messages.some(m => m.role === 'user' && m.content === 'хочу песню про осень'), 'dialog history is sent to the mentor');
-  // Явная генерация из draft-блока: promptReady-путь, промпт наставника уходит как есть.
+  // Явная генерация из draft-блока (#40, «промт только через мозг», 20.11):
+  // строка наставника — ВХОД для слоёв buildCaption, в модель уходит сборка
+  // (строка + недостающие слои, ≤ 640), а не сырая строка как раньше.
   await p.locator('.music-draft').last().getByRole('button', { name: 'Сгенерировать трек' }).click();
   await p.waitForSelector('#feed audio', { timeout: 30000 });
   assert.equal(state.jobPosts.length, 1, 'draft Generate creates exactly one job');
-  assert.equal(state.jobPosts[0].prompt, 'dream pop, 90 BPM, warm female vocals', 'promptReady path: the mentor prompt is not rewritten');
+  assert.match(state.jobPosts[0].prompt, /^dream pop, 90 BPM, warm female vocals/, '#40: строка наставника — вход, сохранена первой');
+  assert.notEqual(state.jobPosts[0].prompt, 'dream pop, 90 BPM, warm female vocals', '#40: слоевой buildCaption собирает черновик чата, а не одна строка');
+  assert.ok(state.jobPosts[0].prompt.length <= 640, '#40: сборка ≤ 640');
   assert.match(state.jobPosts[0].params.lyrics, /Новая строка/);
   assert.equal(state.jobPosts[0].params.title, 'Черновик наставника', 'params.title carries the draft title');
   assert.equal(state.jobPosts[0].params.artist, 'tester', 'params.artist is the user nick');
+  // #40: честная плашка в карточке — «Промт собран мозгом: N слоёв».
+  const modelInfoText = await p.evaluate(() => [...document.querySelectorAll('.track-details > div')].map(el => el.textContent).join('\n'));
+  assert.match(modelInfoText, /Промт собран мозгом: \d+ слоёв/, '#40: честная плашка слоёв в карточке трека');
   assert.equal(state.chatPosts.filter(x => x.stream === false && x.max_tokens === 300).length, 0, 'promptReady path skips silent translation');
   // Диалог и черновики персистятся в session-store (#35 W1-2: единый поток на сессии).
   const savedDialog = await p.evaluate(async () => {
@@ -1789,7 +1796,18 @@ function bffServer(port) {
   await p.waitForFunction(() => document.querySelectorAll('#feed audio').length >= 1, {}, { timeout: 30000 });
   assert.equal(state.jobPosts.length, 2, 'composer Generate button creates a job without a dialog turn');
   assert.ok(/^[\x20-\x7E]*$/.test(state.jobPosts[1].prompt), 'quick-path assembly still yields an English prompt');
-  ok('music chat: send converses without jobs, mentor system used, draft accept/generate, dialog persisted, explicit composer Generate');
+  // #40: авторский ASCII-промт, набранный руками в «Тонко настроить», не
+  // переписывается (правило #109): ручная правка поля сняла метку мозга,
+  // строка уходит в модель как есть — без слоёв и без плашки.
+  await p.locator('#tuneToggle').click();
+  await p.locator('#musicPrompt').fill('author ascii line without brain tags');
+  await p.locator('#genTrack').click();
+  await p.waitForFunction(() => document.querySelectorAll('#feed audio').length >= 2, {}, { timeout: 30000 });
+  assert.equal(state.jobPosts.length, 3, 'author advanced generation creates the third job');
+  assert.equal(state.jobPosts[2].prompt, 'author ascii line without brain tags', '#109: авторская ASCII-строка уходит как есть');
+  const authorInfoText = await p.evaluate(() => { const blocks = [...document.querySelectorAll('.track-details > div')]; return blocks.length ? blocks[blocks.length - 1].textContent : ''; });
+  assert.doesNotMatch(authorInfoText, /Промт собран мозгом/, '#40: у авторской строки нет плашки слоёв');
+  ok('music chat: send converses without jobs, mentor system used, draft accept/generate (#40 brain assembly + badge), author ASCII path untouched, dialog persisted, explicit composer Generate');
 
   // ---- Анатомия карточки трека (общая для ленты и Библиотеки) --------------------
   resetBff();
