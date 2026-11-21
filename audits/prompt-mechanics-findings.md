@@ -49,6 +49,10 @@
   дальше он ушел в пение и очень сильно стал выше чем следовало»
 - v2 Everlove: «обе мимо»
 - Правило вкуса: тонкие мужские голоса не выносит (см. vocal-profile-vocabulary.md §0)
+- Midnight Machine v2 (сигнатуры ~850c): вердикт владельца: «хороша на куплетах,
+  на припевах уходит куда-то гулять» — подтверждает дрейф регистра/формы ИМЕННО на
+  переходе куплет→припев (клю́чевой участок). v3b (замки «throughout the entire song»
+  + «chorus = low commanding dark chant») — прямой тест фикс-рецепта; вердикт ⏳.
 - Космос v2 (низкий бас+хрип, RU лирика, caption 700c: «extremely deep male bass vocals,
   sub-bass chest rumble, low gravelly growl with smoked whiskey rasp… staying in the lowest
   register throughout with no falsetto and no high notes ever», стиль→стонер-рок первым в
