@@ -505,7 +505,11 @@ function bffServer(port) {
   // касается только путей, где промт собирает мозг (см. шаг 19 ниже).
   assert.equal(musicPost.prompt, 'dream pop, 90 BPM, female vocals',
     'advanced ASCII prompt is never rewritten by the brain');
-  assert.match(musicPost.params.lyrics, /\[Chorus\]/);
+  // Brain Upgrade Spec §4: лирика без авторской разметки получает брекеты
+  // динамики — '[Chorus]' уезжает как '[Chorus: lift-эффект]', текст не меняется.
+  assert.match(musicPost.params.lyrics, /\[Chorus(?::[^\]\n]*)?\]/, 'припев на месте (возможно, с lift-брекетом)');
+  assert.match(musicPost.params.lyrics, /\[Chorus: /, 'последний припев размечен lift-брекетом');
+  assert.match(musicPost.params.lyrics, /Город спит/, 'текст лирики не изменён разметкой');
   assert.equal(musicPost.params.model, 'ace-step-flash');
   assert.equal(musicPost.params.duration, undefined, 'duration must NOT be sent (infra#93: length follows lyrics)');
   assert.equal(musicPost.params.duration_seconds, undefined, 'legacy key must not be sent');
@@ -1817,6 +1821,9 @@ function bffServer(port) {
   // #40: честная плашка в карточке — «Промт собран мозгом: N слоёв» (#41: в .brain-badge мета-блока).
   const modelInfoText = await p.evaluate(() => [...document.querySelectorAll('.track-details')].map(el => el.textContent).join('\n'));
   assert.match(modelInfoText, /Промт собран мозгом: \d+ слоёв/, '#40: честная плашка слоёв в карточке трека');
+  // #46: бейдж происхождения голоса — «female vocals» из строки наставника
+  // перекрыл ось «кто поёт» семейного профиля dream pop → смешанный источник.
+  assert.match(modelInfoText, /Голос задан характеристиками: 1 признак \(свой выбор\)/, '#46: бейдж происхождения голоса в карточке трека');
   assert.equal(state.chatPosts.filter(x => x.stream === false && x.max_tokens === 300).length, 0, 'promptReady path skips silent translation');
   // Диалог и черновики персистятся в session-store (#35 W1-2: единый поток на сессии).
   const savedDialog = await p.evaluate(async () => {

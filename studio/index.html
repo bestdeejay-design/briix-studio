@@ -34,7 +34,7 @@ if (location.hostname === 'briix.ru' || location.hostname === 'www.briix.ru') {
  *     занят (идут операции / есть несохраненный текст) — перезагрузка только
  *     по его нажатию «Обновить», молча работа не сносим.
  * window.__BRIIX_BOOT_TIMEOUT / __BRIIX_RECHECK_MS — хуки сюиты check-cache-selfheal. */
-window.__BRIIX_BUILD__ = '3e640a08fd';
+window.__BRIIX_BUILD__ = '766d50c57e';
 (function () {
   var SS_KEY = 'briix-bust', MAX_BUSTS = 2, WINDOW_MS = 60000;
   var BOOT_TIMEOUT = window.__BRIIX_BOOT_TIMEOUT || 9000;
@@ -150,7 +150,7 @@ window.__BRIIX_BUILD__ = '3e640a08fd';
 </script>
 <link rel="stylesheet" href="studio.css?v=9bba3bd30c">
 <!-- T-35: главный скрипт стартует заранее; URL совпадает с тегом ниже (иначе двойная загрузка) -->
-<link rel="preload" as="script" href="studio.js?v=1ece2e8b77">
+<link rel="preload" as="script" href="studio.js?v=ce3b7475ba">
 </head>
 <body>
 
@@ -389,8 +389,8 @@ window.__BRIIX_BUILD__ = '3e640a08fd';
 <script defer src="session-store.js?v=4b8f7ba466"></script>
 <script defer src="waveform.js?v=0ee97fc2a9"></script>
 <script defer src="player.js?v=778d4b4c76"></script>
-<script defer src="producer-brain.js?v=9b3f7d0a72"></script>
-<script defer src="music-brain.js?v=2c16194748"></script>
-<script defer src="studio.js?v=1ece2e8b77"></script>
+<script defer src="producer-brain.js?v=eb846b4e15"></script>
+<script defer src="music-brain.js?v=942f6316a6"></script>
+<script defer src="studio.js?v=ce3b7475ba"></script>
 </body>
 </html>

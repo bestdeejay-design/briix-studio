@@ -1,8 +1,8 @@
 {
-  "build": "3e640a08fd",
+  "build": "766d50c57e",
   "assets": {
     "studio.css": "9bba3bd30c",
-    "studio.js": "1ece2e8b77",
+    "studio.js": "ce3b7475ba",
     "wait-ui.js": "8c1753e686",
     "catalog.js": "a9dd9e6116",
     "ops.js": "760bf48ea0",
@@ -10,8 +10,8 @@
     "session-store.js": "4b8f7ba466",
     "waveform.js": "0ee97fc2a9",
     "player.js": "778d4b4c76",
-    "producer-brain.js": "9b3f7d0a72",
-    "music-brain.js": "2c16194748",
+    "producer-brain.js": "eb846b4e15",
+    "music-brain.js": "942f6316a6",
     "wait-phrases.js": "d6abab3594"
   }
 }
