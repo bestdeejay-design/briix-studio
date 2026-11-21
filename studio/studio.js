@@ -2472,18 +2472,34 @@
     return BriixProducer.validTranslation(raw);
   }
 
-  async function autoLyrics(topic, outerSignal) {
+  async function autoLyrics(topic, outerSignal, opts = {}) {
     // vocal-модели требуют текст: если лирика пустая — автор песен пишет её сам.
     // Языковое правило владельца (#109): дефолт — английский; русский/иной —
     // только при явном указании. Теги частей — всегда латиницей, каркас адаптивный.
+    // #48 «проработка лирики»: в промт автору песен добавлены МЕХАНИКИ
+    // мелодичности/консистентности (дословный припев-хук, парные куплеты
+    // ровной слоговой длины, пропеваемые строки — audits/lyrics/RESEARCH_PACK.md)
+    // и атмосферное направление (семейство стиля + mood вокального профиля,
+    // vocal-profile-vocabulary.md) — эстетика текста усиливает атмосферу трека.
+    // Это вектор генерации, а не копирование чьих-либо лирик.
     const language = BriixProducer.detectExplicitLanguage(topic);
     const langLine = language === 'ru' ? ' Пиши текст песни на русском.'
       : language === 'fr' ? ' Écris les paroles en français.'
       : ' Язык явно не указан — пиши текст песни по-английски.';
+    const atmosphere = opts.styleFamily && globalThis.BRIIX_MUSIC_BRAIN
+      && BRIIX_MUSIC_BRAIN.rules.VOCAL_PROFILES[opts.styleFamily]
+      ? { family: opts.styleFamily, mood: BRIIX_MUSIC_BRAIN.rules.VOCAL_PROFILES[opts.styleFamily].mood }
+      : null;
+    const moodLine = atmosphere
+      ? ' Атмосфера трека: ' + atmosphere.mood + ' (' + atmosphere.family + ') — образы, лексика и настроение текста в этой эстетике.'
+      : '';
     const messages = [
       { role: 'system', content: 'Ты — автор песен. Напиши текст песни по теме пользователя.' + langLine +
         ' Обязательный каркас частей: интро, куплеты, пред-припев, припев, бридж, аутро — адаптивно по смыслу (8–24 строки).' +
         ' Метки секций — всегда латиницей: [Intro], [Verse], [Pre-Chorus], [Chorus], [Bridge], [Outro] (номера — [Verse 1], [Verse 2]).' +
+        ' Мелодичность: припев повторяй дословно, слово в слово (все [Chorus] идентичны — так мелодия припева держится ровно);' +
+        ' парные куплеты — одинаковое число строк и близкая длина парных строк по слогам (мелодия куплета повторяется);' +
+        ' строки пропеваемые, без перегруза слогами; рифма естественная, без натуги.' + moodLine +
         ' Без пояснений и вступлений — только текст песни с тегами.' },
       { role: 'user', content: 'Тема песни: ' + topic }
     ];
@@ -2588,10 +2604,15 @@
     });
     watchStage.observe(stageBody, { subtree: true, attributes: true, attributeFilter: ['data-wait-stage'] });
     setBusy(true, vocal && !lyrics ? 'Пишем текст песни…' : 'Отправляем задачу…');
+    // #48: семейство для атмосферного направления автолирики — черновик сессии
+    // или жанровые слова идеи (styleOf — тот же резолв, что у брекетов #47).
+    const lyricStyleFamily = session.draft?.styleFamily
+      || (globalThis.BRIIX_MUSIC_BRAIN && typeof BRIIX_MUSIC_BRAIN.styleOf === 'function'
+        ? BRIIX_MUSIC_BRAIN.styleOf(style || lyrics || 'песня') : null);
     try {
       if (vocal && !lyrics) {
         try {
-          lyrics = await autoLyrics(style || lyrics || 'песня', handle.controller.signal);
+          lyrics = await autoLyrics(style || lyrics || 'песня', handle.controller.signal, { styleFamily: lyricStyleFamily });
           if (session === activeSession && snapshot.advanced && mode === 'music' && !els.lyrics.value.trim()) els.lyrics.value = lyrics;
         } catch (error) {
           wait.stop(); watchStage.disconnect();
@@ -2688,6 +2709,16 @@
       if (snapshot.advanced && !snapshot.instrumental && lyrics) {
         const structure = BriixProducer.structureWarnings(lyrics); // ручная лирика: предупредить, не навязывать
         if (structure.length) card('notice', 'Структура лирики', structure.join(' '), session);
+      }
+      // #48 «проработка лирики»: мягкие проверки мелодичности и консистентности
+      // (audits/lyrics/RESEARCH_PACK.md — слоги помогают сравнивать парные фразы
+      // при повторе мелодии, но это не вердикт о певучести; находка «Тысячи окон» —
+      // RU + быстрый темп не выдаём молча). Для любой лирики — ручной и
+      // автолирики; ничего не блокирует и не переписывает.
+      if (!snapshot.instrumental && lyrics && globalThis.BRIIX_LYRICS_BRAIN && typeof BRIIX_LYRICS_BRAIN.singability === 'function') {
+        const ideaBpm = BRIIX_MUSIC_BRAIN.detectBpm(style || lyrics || '');
+        const sing = BRIIX_LYRICS_BRAIN.singability(lyrics, { bpm: ideaBpm });
+        if (sing.warnings.length) card('notice', 'Мелодичность лирики', sing.warnings.join(' '), session);
       }
       // Песня — продукт: у неё есть имя и исполнитель. Название — из черновика
       // наставника или первой осмысленной строки лирики, fallback по дате.
