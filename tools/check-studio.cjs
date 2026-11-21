@@ -1806,8 +1806,8 @@ function bffServer(port) {
   assert.match(state.jobPosts[0].params.lyrics, /Новая строка/);
   assert.equal(state.jobPosts[0].params.title, 'Черновик наставника', 'params.title carries the draft title');
   assert.equal(state.jobPosts[0].params.artist, 'tester', 'params.artist is the user nick');
-  // #40: честная плашка в карточке — «Промт собран мозгом: N слоёв».
-  const modelInfoText = await p.evaluate(() => [...document.querySelectorAll('.track-details > div')].map(el => el.textContent).join('\n'));
+  // #40: честная плашка в карточке — «Промт собран мозгом: N слоёв» (#41: в .brain-badge мета-блока).
+  const modelInfoText = await p.evaluate(() => [...document.querySelectorAll('.track-details')].map(el => el.textContent).join('\n'));
   assert.match(modelInfoText, /Промт собран мозгом: \d+ слоёв/, '#40: честная плашка слоёв в карточке трека');
   assert.equal(state.chatPosts.filter(x => x.stream === false && x.max_tokens === 300).length, 0, 'promptReady path skips silent translation');
   // Диалог и черновики персистятся в session-store (#35 W1-2: единый поток на сессии).
@@ -1843,7 +1843,7 @@ function bffServer(port) {
   await p.waitForFunction(() => document.querySelectorAll('#feed audio').length >= 2, {}, { timeout: 30000 });
   assert.equal(state.jobPosts.length, 3, 'author advanced generation creates the third job');
   assert.equal(state.jobPosts[2].prompt, 'author ascii line without brain tags', '#109: авторская ASCII-строка уходит как есть');
-  const authorInfoText = await p.evaluate(() => { const blocks = [...document.querySelectorAll('.track-details > div')]; return blocks.length ? blocks[blocks.length - 1].textContent : ''; });
+  const authorInfoText = await p.evaluate(() => { const blocks = [...document.querySelectorAll('.track-details')]; return blocks.length ? blocks[blocks.length - 1].textContent : ''; });
   assert.doesNotMatch(authorInfoText, /Промт собран мозгом/, '#40: у авторской строки нет плашки слоёв');
   ok('music chat: send converses without jobs, mentor system used, draft accept/generate (#40 brain assembly + badge), author ASCII path untouched, dialog persisted, explicit composer Generate');
 
@@ -1923,13 +1923,19 @@ function bffServer(port) {
   assert.ok(!menuTexts.some(t => /MP3/i.test(t)), 'MP3 item is hidden until the backend ships it (SPEC #35 W1-4)');
   await p.keyboard.press('Escape');
   // Transparency: что уехало в модель + название/исполнитель + источник лирики.
-  await p.locator('#feed .track-details summary').click();
-  const transparency = await p.locator('#feed .track-details').innerText();
+  await p.locator('#feed .track-details > summary').click();
+  const transparency = await p.locator('#feed .track-details').innerText(); // открытые draft-read строки включаются в innerText
   assert.match(transparency, /Что уехало в модель/);
   assert.match(transparency, /assembled english prompt/);
   assert.match(transparency, /Название: Тест: Трек\/№1\?/);
   assert.match(transparency, /Исполнитель: tester/);
   assert.match(transparency, /Источник лирики: наставник: Лирик/);
+  // #41: строки чтения — те же draft-read, что в черновиках: разворачиваются,
+  // копируются целиком; редактируемых полей в карточке нет.
+  await p.locator('#feed .track-details .draft-read summary').first().click();
+  assert.match(await p.locator('#feed .track-details .draft-read .draft-read-full').first().innerText(), /assembled english prompt/, 'клик по строке разворачивает полный текст');
+  assert.ok(await p.locator('#feed .track-details .draft-read .draft-copy').first().isVisible(), 'у строки есть кнопка копирования целиком');
+  assert.equal(await p.locator('#feed .track-details input, #feed .track-details textarea').count(), 0, '#41: в карточке трека нет редактируемых полей');
   // Имя файла скачивания: sanitize с сохранением кириллицы, спецсимволы вырезаны.
   const dlCardPromise = p.waitForEvent('download');
   await p.locator('#feed .menu-btn').click();

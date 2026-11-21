@@ -631,7 +631,9 @@ button:disabled { cursor: not-allowed; opacity: .4; }
 .track-details { margin-top: 8px; color: var(--muted); font-size: 13px; }
 .track-title { margin-top: 8px; font-weight: 600; overflow-wrap: anywhere; } /* F-18: название трека — заголовок карточки */
 .track-details summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; }
-.track-details div { white-space: pre-wrap; overflow-wrap: anywhere; padding: 8px; background: var(--surface-2); border-radius: 8px; }
+.track-meta { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 8px; }
+.track-meta div { white-space: pre-wrap; overflow-wrap: anywhere; padding: 8px; background: var(--surface-2); border-radius: 8px; }
+.track-meta .brain-badge { color: var(--accent); } /* #40/#41: плашка слоёв мозга */
 .cover-retry { min-width: 44px; min-height: 44px; color: var(--ink); }
 
 /* Обложка = PLAY (Spotify/SoundCloud-паттерн): клик по большой обложке
@@ -763,6 +765,7 @@ button:disabled { cursor: not-allowed; opacity: .4; }
   content: '▸'; color: var(--muted); margin-left: auto; flex: 0 0 auto; font-size: 12px;
 }
 .draft-read[open] summary::after { content: '▾'; }
+.draft-read[open] .draft-read-preview { display: none; } /* #41: открытая строка показывает полный текст — превью не дублирует его */
 .draft-read-label { color: var(--muted); flex: 0 0 auto; }
 .draft-read-preview { color: var(--ink); min-width: 0; flex: 1 1 auto; }
 .draft-read-hint { color: var(--muted); font-size: 12px; flex: 0 0 auto; }
