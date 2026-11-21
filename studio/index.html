@@ -34,7 +34,7 @@ if (location.hostname === 'briix.ru' || location.hostname === 'www.briix.ru') {
  *     занят (идут операции / есть несохраненный текст) — перезагрузка только
  *     по его нажатию «Обновить», молча работа не сносим.
  * window.__BRIIX_BOOT_TIMEOUT / __BRIIX_RECHECK_MS — хуки сюиты check-cache-selfheal. */
-window.__BRIIX_BUILD__ = '542e81de7a';
+window.__BRIIX_BUILD__ = '3996fecf0e';
 (function () {
   var SS_KEY = 'briix-bust', MAX_BUSTS = 2, WINDOW_MS = 60000;
   var BOOT_TIMEOUT = window.__BRIIX_BOOT_TIMEOUT || 9000;
@@ -148,9 +148,9 @@ window.__BRIIX_BUILD__ = '542e81de7a';
   setTimeout(function () { clearInterval(cleanTimer); }, 45000);
 })();
 </script>
-<link rel="stylesheet" href="studio.css?v=95e6785989">
+<link rel="stylesheet" href="studio.css?v=d0862c81a9">
 <!-- T-35: главный скрипт стартует заранее; URL совпадает с тегом ниже (иначе двойная загрузка) -->
-<link rel="preload" as="script" href="studio.js?v=0532c040e8">
+<link rel="preload" as="script" href="studio.js?v=bb0864e4b7">
 </head>
 <body>
 
@@ -197,6 +197,10 @@ window.__BRIIX_BUILD__ = '542e81de7a';
           </button>
           <div id="profileMenu" class="menu menu-down" role="menu" aria-labelledby="profileBtn" hidden>
             <span id="profileNick" class="menu-nick"></span>
+            <!-- #35 волна UX (акцепт 21.11 «убрать поля продюсера из чата»):
+                 продюсер переехал из «⋯»-композера в меню студии. Id/aria сохранены. -->
+            <button type="button" role="menuitem" id="prepareMusic" class="music-only" disabled aria-describedby="producerHint" aria-label="Подготовить песню" title="Продюсер предложит черновик без запуска генерации">✦ Подготовить песню</button>
+            <span id="producerHint" class="menu-sub music-only">Продюсер предложит черновик без запуска генерации</span>
             <button type="button" role="menuitem" id="newChat">Новый чат</button>
             <button type="button" role="menuitem" id="sessionsOpen">История сессий</button>
             <button type="button" role="menuitem" id="profileKeyBtn">Ключ доступа…</button>
@@ -249,6 +253,12 @@ window.__BRIIX_BUILD__ = '542e81de7a';
        Редкое — за «⋯»: модель, режим трека, тонкая настройка, явная генерация,
        продюсер. Вложения-заглушка убраны; «Новый чат»/«История» — в меню шапки. -->
   <section class="composer-wrap">
+    <!-- #35 волна UX: подсказка первого запуска — где что искать. Закрывается крестиком,
+         факт показа хранится в профиле сессий (hintDismissed, схема v2). -->
+    <div id="coachHint" class="coach-hint" role="note" hidden>
+      <span>Редкие настройки — в меню «⋯», профиль и история — в бургере</span>
+      <button id="coachDismiss" class="tool icon-only" type="button" aria-label="Скрыть подсказку">✕</button>
+    </div>
     <div class="composer" id="composer">
 
       <nav class="modes" id="modes" aria-label="Режим студии">
@@ -316,7 +326,7 @@ window.__BRIIX_BUILD__ = '542e81de7a';
         <button id="improvePhoto" class="tool chip photo-only" hidden disabled title="Арт-директор улучшит промпт">✨ Улучшить</button>
         <button id="undoPhoto" class="tool chip photo-only undo-chip" hidden>↩ Вернуть как было</button>
         <div class="menu-anchor music-only" hidden>
-          <button id="moreBtn" class="tool icon-only" aria-haspopup="menu" aria-expanded="false" aria-label="Ещё: модель, режим трека, тонкая настройка, генерация, продюсер" title="Модель, режим трека, тонкая настройка, генерация, продюсер">
+          <button id="moreBtn" class="tool icon-only" aria-haspopup="menu" aria-expanded="false" aria-label="Ещё: модель, режим трека, тонкая настройка, генерация" title="Модель, режим трека, тонкая настройка, генерация">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h8M4 16h8"/><circle cx="17" cy="12" r="1.6"/><path d="M20.5 8.3l.8 1.2M20.5 15.7l.8-1.2"/></svg>
           </button>
           <div id="morePanel" class="menu more-panel" role="group" aria-label="Настройки генерации" hidden>
@@ -341,10 +351,6 @@ window.__BRIIX_BUILD__ = '542e81de7a';
               <button id="tuneToggle" class="tool chip toggle" aria-pressed="false" aria-label="Тонко настроить" title="Тонкая настройка: лирика, стиль/промпт">Тонко настроить</button>
               <button id="genTrack" class="tool chip gen-track" disabled title="Явная генерация трека из текущих полей — без диалога" aria-label="Сгенерировать трек">Сгенерировать трек</button>
             </div>
-            <div class="more-actions">
-              <button id="prepareMusic" class="tool chip producer-button" disabled aria-describedby="producerHint" aria-label="Подготовить песню" title="Продюсер предложит черновик без запуска генерации">✦ Подготовить песню</button>
-            </div>
-            <span id="producerHint" class="more-sub">Продюсер предложит черновик без запуска генерации</span>
           </div>
         </div>
         <span class="spacer"></span>
@@ -380,11 +386,11 @@ window.__BRIIX_BUILD__ = '542e81de7a';
 <script defer src="catalog.js?v=a9dd9e6116"></script>
 <script defer src="ops.js?v=760bf48ea0"></script>
 <script defer src="toasts.js?v=50285e4a33"></script>
-<script defer src="session-store.js?v=123521a1f3"></script>
+<script defer src="session-store.js?v=4b8f7ba466"></script>
 <script defer src="waveform.js?v=0ee97fc2a9"></script>
 <script defer src="player.js?v=778d4b4c76"></script>
 <script defer src="producer-brain.js?v=9b3f7d0a72"></script>
 <script defer src="music-brain.js?v=ff50826eb6"></script>
-<script defer src="studio.js?v=0532c040e8"></script>
+<script defer src="studio.js?v=bb0864e4b7"></script>
 </body>
 </html>

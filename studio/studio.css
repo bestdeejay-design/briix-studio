@@ -252,6 +252,16 @@ button:disabled { cursor: not-allowed; opacity: .4; }
 }
 .more-panel .more-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .more-panel .more-sub { font-size: 11px; color: var(--faint); }
+/* #35 волна UX: пояснение продюсера переехало вместе с кнопкой в меню студии */
+.menu-sub { display: block; padding: 2px 12px 6px; font-size: 11px; color: var(--faint); }
+/* #35 волна UX: подсказка первого запуска над композером (dismiss хранится в профиле) */
+.coach-hint {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  margin: 0 0 8px; padding: 8px 8px 8px 14px;
+  background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: 12px; font-size: 13px; color: var(--muted);
+}
+.coach-hint .tool.icon-only { flex: none; }
 .menu button {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
   min-height: 36px; padding: 6px 12px; border-radius: var(--radius-pill);
