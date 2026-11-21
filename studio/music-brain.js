@@ -81,7 +81,19 @@
     ['фанк', 'funk'], ['фолк', 'folk'], ['баллад', 'ballad'], ['трип-хоп', 'trip-hop'],
     ['синтвейв', 'synthwave'], ['ретровейв', 'synthwave'], ['шансон', 'chanson'],
     ['индастриал', 'industrial'], ['оркестр', 'orchestral'], ['транс', 'trance'],
-    ['электро', 'edm'], ['r&b', 'r&b']
+    ['электро', 'edm'], ['r&b', 'r&b'],
+    // Двуязычные ключи (точность черновиков, #45): строка наставника приходит
+    // из чата по-английски — мозг обязан понимать английские жанры так же,
+    // как русские задумки. Короткие латинские стемы (pop/rap/edm) ищутся на
+    // границе слова (shortStem): «trap» не распадается на trap + rap,
+    // «popular» не даёт жанр pop, «dream pop» не даёт отдельный pop.
+    ['dream pop', 'dream pop'], ['dream-pop', 'dream pop'], ['shoegaze', 'dream pop'],
+    ['soul', 'soul'], ['funk', 'funk'], ['pop', 'pop'], ['rock', 'rock'],
+    ['house', 'house'], ['techno', 'techno'], ['hip-hop', 'hip-hop'], ['hip hop', 'hip-hop'],
+    ['rap', 'rap'], ['lofi', 'lo-fi'], ['cinematic', 'cinematic'], ['orchestral', 'orchestral'],
+    ['jazz', 'jazz'], ['ballad', 'ballad'], ['edm', 'edm'], ['synthwave', 'synthwave'],
+    ['retrowave', 'synthwave'], ['trip-hop', 'trip-hop'], ['trip hop', 'trip-hop'],
+    ['rnb', 'r&b'], ['folk', 'folk'], ['phonk', 'phonk'], ['indie rock', 'rock']
   ];
   const FORM_GENRE = {           // жанр из формы «Музыки» → тег таксономии
     lofi: 'lo-fi', ambient: 'ambient', cinematic: 'cinematic', pop: 'pop',
@@ -99,7 +111,12 @@
     ['ломаный', 'broken'], ['рваный', 'stuttering'], ['прямой', 'straight'],
     ['гипнотич', 'hypnotic'], ['покачива', 'rolling'], ['долбящ', 'driving'],
     ['пружинист', 'bouncy'], ['вкрадчив', 'unhurried'],
-    ['разреженн', 'sparse'], ['разряженн', 'sparse'], ['рублен', 'chopped']
+    ['разреженн', 'sparse'], ['разряженн', 'sparse'], ['рублен', 'chopped'],
+    // английские ключи (двуязычные словари, #45)
+    ['slow', 'slow'], ['fast', 'fast'], ['tight', 'tight'], ['dry', 'dry'], ['soft', 'soft'],
+    ['live', 'live'], ['heavy', 'heavy'], ['broken', 'broken'], ['stuttering', 'stuttering'],
+    ['straight', 'straight'], ['hypnotic', 'hypnotic'], ['rolling', 'rolling'],
+    ['driving', 'driving'], ['bouncy', 'bouncy'], ['sparse', 'sparse'], ['chopped', 'chopped']
   ];
   const RHYTHM_GROOVE = [
     ['четыре четверти', 'four-on-the-floor kick groove'], ['four-on-the-floor', 'four-on-the-floor kick groove'],
@@ -109,7 +126,13 @@
     ['грув', 'drum groove'], ['ударн', 'drum groove'], ['барабан', 'drum groove'],
     ['бит', 'beat'], ['ритм', 'groove'], ['перкуссия', 'percussion groove'],
     ['пульс', 'steady pulse'], ['кик', 'kick-led groove'], ['снейр', 'snare-driven groove'],
-    ['хэт', 'hi-hat pattern'], ['топот', 'stomping groove'], ['кача', 'swing groove']
+    ['хэт', 'hi-hat pattern'], ['топот', 'stomping groove'], ['кача', 'swing groove'],
+    // английские ключи: грув наставника читается без перевода
+    ['four on the floor', 'four-on-the-floor kick groove'],
+    ['breakbeat', 'breakbeat'], ['drum and bass', 'broken breakbeat'], ['dnb', 'broken breakbeat'],
+    ['drums', 'drum groove'], ['drum', 'drum groove'], ['percussion', 'percussion groove'],
+    ['pulse', 'steady pulse'], ['kick', 'kick-led groove'], ['snare', 'snare-driven groove'],
+    ['swing', 'swing groove'], ['beats', 'beat'], ['beat', 'beat'], ['groove', 'drum groove']
   ];
   const RHYTHM_KIT = [
     ['кик + снейр', 'kick + snare'], ['кик и снейр', 'kick + snare'],
@@ -117,7 +140,12 @@
     ['хэт', 'hi-hat'], ['том-том', 'toms'], ['томы', 'toms'], ['литавр', 'toms'], ['бонго', 'bongos'],
     ['конга', 'congas'], ['шейкер', 'shaker'], ['бубен', 'tambourine'],
     ['808', '808 kick'], ['909', '909 drums'], ['TR-909', '909 drums'],
-    ['метёлк', 'brushed drums'], ['щёлк', 'finger snaps'], ['хлопк', 'claps']
+    ['метёлк', 'brushed drums'], ['щёлк', 'finger snaps'], ['хлопк', 'claps'],
+    // английские ключи кита
+    ['hi-hat', 'hi-hat'], ['hihat', 'hi-hat'], ['toms', 'toms'], ['timpani', 'toms'],
+    ['bongos', 'bongos'], ['congas', 'congas'], ['shaker', 'shaker'], ['tambourine', 'tambourine'],
+    ['brushed', 'brushed drums'], ['brushes', 'brushed drums'], ['snaps', 'finger snaps'],
+    ['finger snaps', 'finger snaps'], ['claps', 'claps']
   ];
   // Дефолт ритм-слоя по жанру: ритм в caption есть ВСЕГДА (приёмка #20).
   const RHYTHM_BY_GENRE = {
@@ -139,7 +167,13 @@
     'edm': { char: 'driving', groove: 'four-on-the-floor kick groove', kit: 'kick + claps, 909 hats' },
     'trip-hop': { char: 'slow', groove: 'downtempo groove', kit: 'dusty kick + snare, vinyl hats' },
     'folk': { char: 'organic', groove: 'hand percussion groove', kit: 'shaker + tambourine' },
-    'orchestral': { char: 'slow', groove: 'orchestral pulse', kit: 'timpani + low strings' }
+    'orchestral': { char: 'slow', groove: 'orchestral pulse', kit: 'timpani + low strings' },
+    // недостающие семейства (#45): профили обязаны покрывать все 23 семьи
+    // STYLE_ATMOSPHERE — паритет ловит тест check-music-brain (секция 15)
+    'funk': { char: 'tight', groove: 'syncopated funk groove', kit: 'kick + snare, tight hats' },
+    'dream pop': { char: 'laid-back', groove: 'soft steady groove', kit: 'kick + snare, brushed hats' },
+    'synthwave': { char: 'driving', groove: 'steady synth drum groove', kit: 'kick + snare, gated snare reverb' },
+    'r&b': { char: 'smooth', groove: 'slow smooth groove', kit: 'kick + snare, crisp hats' }
   };
   const RHYTHM_FALLBACK = { char: 'steady', groove: 'drum groove', kit: 'kick + snare' };
 
@@ -151,7 +185,10 @@
     ['саб', 'deep sub-bass'],
     ['808', '808 sub bass'],
     ['низк', 'deep low end'],
-    ['бас', 'bass']
+    ['бас', 'bass'],
+    // английские ключи низа
+    ['sub bass', 'deep sub-bass'], ['sub-bass', 'deep sub-bass'], ['sub', 'deep sub-bass'],
+    ['live bass', 'live bass guitar'], ['bass', 'bass']
   ];
 
   /* L3 VOICE — голос: пол/регистр, подача, фактура.
@@ -165,7 +202,17 @@
     ['низк мужск', 'deep bass voice'], ['глубокий голос', 'deep male voice'],
     ['глубокий мужск', 'deep bass voice'], ['низкий голос', 'deep bass voice'],
     ['тенор', 'male tenor'], ['хор', 'choir'],
-    ['дуэт', 'duet vocals'], ['бэк-вокал', 'backing vocals']
+    ['дуэт', 'duet vocals'], ['бэк-вокал', 'backing vocals'],
+    // английские ключи: «female singer» больше не получает дефолт «male vocals»
+    // (раньше спасала случайность — подстрока «male vocals» внутри «female
+    // vocals»; скажи наставник «female singer», и в модель уезжало противоречие)
+    ['female vocals', 'female vocals'], ['female vocal', 'female vocals'], ['female singer', 'female vocals'],
+    ['female voice', 'female vocals'], ['girl vocals', 'female vocals'],
+    ['male vocals', 'male vocals'], ['male vocal', 'male vocals'], ['male singer', 'male vocals'],
+    ['male voice', 'male vocals'], ['baritone', 'male baritone'], ['tenor', 'male tenor'],
+    ['choir', 'choir'], ['duet', 'duet vocals'], ['backing vocals', 'backing vocals'],
+    ['bass voice', 'deep bass voice'], ['deep voice', 'deep bass voice'], ['low voice', 'deep male voice'],
+    ['deep male voice', 'deep bass voice']
   ];
   const VOCAL_DELIVERY = [
     ['шепот', 'whispered delivery'], ['шёпот', 'whispered delivery'],
@@ -177,7 +224,14 @@
     ['подвыва', 'crooned delivery'], ['в полный голос', 'full-voice delivery'],
     ['тихий голос', 'intimate delivery'], ['интимн', 'intimate delivery'],
     ['исповедальн', 'confessional delivery'], ['отстранён', 'detached delivery'],
-    ['нежн', 'tender delivery']
+    ['нежн', 'tender delivery'],
+    // английские ключи подачи
+    ['whisper', 'whispered delivery'], ['whispered', 'whispered delivery'],
+    ['half-whisper', 'half-whispered delivery'], ['spoken', 'spoken word'],
+    ['chant', 'chanted delivery'], ['scream', 'screamed delivery'], ['shout', 'screamed delivery'],
+    ['croon', 'crooned delivery'], ['intimate', 'intimate delivery'],
+    ['confessional', 'confessional delivery'], ['detached', 'detached delivery'],
+    ['tender', 'tender delivery'], ['full voice', 'full-voice delivery']
   ];
   const VOCAL_TEXTURE = [
     ['хрип', 'hoarse rasp'], ['хрипл', 'hoarse rasp'], ['гравий', 'gravel texture'],
@@ -185,11 +239,17 @@
     ['придыхан', 'breathy tone'], ['дыхан', 'breathy tone'], ['шершав', 'rough texture'],
     ['фальцет', 'falsetto'], ['falsetto', 'falsetto'], ['грудн', 'chest voice'],
     ['чист', 'clean tone'], ['тёпл', 'warm timbre'], ['тепл', 'warm timbre'],
-    ['стеклянн', 'glassy timbre'], ['глух', 'muffled tone']
+    ['стеклянн', 'glassy timbre'], ['глух', 'muffled tone'],
+    // английские ключи фактуры
+    ['hoarse', 'hoarse rasp'], ['rasp', 'hoarse rasp'], ['velvet', 'velvet tone'],
+    ['breathy', 'breathy tone'], ['breath', 'breathy tone'], ['rough', 'rough texture'],
+    ['chest voice', 'chest voice'], ['glassy', 'glassy timbre'], ['muffled', 'muffled tone'],
+    ['warm timbre', 'warm timbre'], ['warm voice', 'warm timbre']
   ];
   // Антифальцетный страж: «глубокий голос» обязан остаться в грудном регистре.
   // Негатив «без фальцета» перефразируется позитивно (model-acestep.md).
-  const LOW_VOICE_HINTS = ['глубок', 'низк', 'бас', 'баритон', 'брутальн', 'грудн', 'мужск'];
+  const LOW_VOICE_HINTS = ['глубок', 'низк', 'бас', 'баритон', 'брутальн', 'грудн', 'мужск',
+    'deep voice', 'bass voice', 'low voice', 'baritone', 'deep male'];
   // Голос — это идентичность, а не переменная. Пока о поле не сказано, в caption
   // уходило голое «vocals», и модель на каждой генерации бросала монетку:
   // мужской/женский без всякой зависимости от трека (владелец услышал это на
@@ -212,7 +272,18 @@
     ['бас', 'bass'], ['808', '808'], ['синтезатор', 'synth'], ['синт', 'synth'],
     ['аккордеон', 'accordion'], ['барабан', 'drums'], ['бит', 'drums'],
     ['педал', 'pads'], ['пэд', 'pads'], ['флейт', 'flute'], ['труб', 'brass'],
-    ['ф-но', 'piano'], ['родес', 'Fender Rhodes']
+    ['ф-но', 'piano'], ['родес', 'Fender Rhodes'],
+    // английские ключи инструментов (organ ≠ organic — граница слова в shortStem)
+    ['acoustic guitar', 'acoustic guitar'], ['electric guitar', 'electric guitar'],
+    ['guitar', 'guitar'], ['guitar solo', 'guitar'], ['guitars', 'guitar'],
+    ['piano', 'piano'], ['pianos', 'piano'], ['grand piano', 'piano'],
+    ['keys', 'keys'], ['keyboard', 'keys'], ['organ', 'organ'], ['hammond', 'organ'],
+    ['saxophone', 'saxophone'], ['sax', 'saxophone'], ['strings', 'strings'],
+    ['violin', 'strings'], ['cello', 'cello'], ['cellos', 'cello'],
+    ['upright bass', 'upright bass'], ['double bass', 'upright bass'], ['bass', 'bass'],
+    ['synth', 'synth'], ['synthesizer', 'synth'], ['accordion', 'accordion'],
+    ['pads', 'pads'], ['pad', 'pads'], ['flute', 'flute'], ['flutes', 'flute'],
+    ['trumpet', 'brass'], ['brass', 'brass'], ['rhodes', 'Fender Rhodes']
   ];
   // Продакшн-цепочка — «как записано». Отдельно от атмосферы: в корпусе это
   // разные роли (analog warmth / tape saturation против rain atmosphere).
@@ -226,14 +297,30 @@
     ['реверб', 'deep reverb space'], ['компресс', 'compressed vocal level'],
     ['эхо-задержк', 'tape echo delay'], ['эхо', 'tape echo'],
     ['реверс-пленк', 'reverse tape textures'], ['реверс-плёнк', 'reverse tape textures'],
-    ['дрожание скорости', 'wow and flutter']
+    ['дрожание скорости', 'wow and flutter'],
+    // английские ключи продакшн-цепочки
+    ['vinyl', 'vinyl crackle'], ['tape', 'tape saturation'], ['analog', 'analog warmth'],
+    ['analogue', 'analog warmth'], ['cassette', 'tape saturation'],
+    ['live room', 'live room sound'], ['live recording', 'live room sound'],
+    ['dry', 'dry close-mic production'], ['tight', 'tight mix'], ['wide', 'wide stereo image'],
+    ['warm', 'analog warmth'], ['warmth', 'analog warmth'],
+    ['am radio', 'AM radio broadcast texture'], ['radio', 'AM radio broadcast texture'],
+    ['reverb', 'deep reverb space'], ['compressed', 'compressed vocal level'],
+    ['echo', 'tape echo'], ['reverse tape', 'reverse tape textures'],
+    ['wow and flutter', 'wow and flutter'], ['sidechain', 'sidechained pads']
   ];
   // Атмосфера — «что слышно вокруг»: отдельный блок, не продакшн-цепочка.
   const ATMOS_WORDS = [
     ['дожд', 'rain atmosphere'], ['ночной город', 'night city'], ['пустын', 'desert air'],
     ['космос', 'space ambience'], ['кафе', 'cafe ambience'], ['склад', 'warehouse air'],
     ['помех', 'radio static'], ['туман', 'foggy room tone'], ['море', 'sea in the low end'],
-    ['ветер', 'wind texture'], ['толп', 'crowd noise'], ['комнатная тишин', 'room silence']
+    ['ветер', 'wind texture'], ['толп', 'crowd noise'], ['комнатная тишин', 'room silence'],
+    // английские ключи атмосферы
+    ['rain', 'rain atmosphere'], ['night city', 'night city'], ['desert', 'desert air'],
+    ['space', 'space ambience'], ['cafe', 'cafe ambience'], ['café', 'cafe ambience'],
+    ['warehouse', 'warehouse air'], ['static', 'radio static'], ['fog', 'foggy room tone'],
+    ['foggy', 'foggy room tone'], ['sea', 'sea in the low end'], ['wind', 'wind texture'],
+    ['crowd', 'crowd noise']
   ];
   // Продакшн-цепочка по жанру — чтобы слой существовал даже без слов о записи.
   const PROD_BY_GENRE = {
@@ -251,7 +338,16 @@
     'rock': ['live room sound', 'punchy midrange'],
     'pop': ['clean modern production', 'wide stereo mix'],
     'ballad': ['intimate close-mic production', 'analog reverb'],
-    'edm': ['clean modern production', 'tight low end']
+    'edm': ['clean modern production', 'tight low end'],
+    // недостающие семейства (#45): паритет с STYLE_ATMOSPHERE ловит тест
+    'rap': ['clean modern production', 'dry vocal up front'],
+    'trip-hop': ['tape saturation', 'dub delay space'],
+    'folk': ['intimate room sound', 'natural dynamics'],
+    'orchestral': ['wide hall mix', 'natural dynamics'],
+    'funk': ['live room sound', 'punchy low end'],
+    'dream pop': ['reverb-drenched mix', 'soft focus production'],
+    'synthwave': ['analog synth production', 'wide stereo mix'],
+    'r&b': ['clean modern production', 'silky top end']
   };
   const PROD_FALLBACK = ['analog warmth'];
   /* L3 DEPTH — «где это звучит и насколько далеко» + стилевая атмосфера.
@@ -268,7 +364,14 @@
     ['комнат', 'room sound'], ['в зале', 'hall ambience'],
     ['воздух', 'air between instruments'], ['атмосфер', 'atmospheric depth'],
     ['погружен', 'immersive depth'], ['моно микс', 'mono centre'],
-    ['карман', 'bass locked in the pocket with the kick']
+    ['карман', 'bass locked in the pocket with the kick'],
+    // английские ключи глубины
+    ['depth', 'front-to-back depth'], ['spacious', 'wide reverberant space'],
+    ['echo', 'tape echo'], ['reverb', 'plate reverb tail'], ['close', 'close perspective'],
+    ['distant', 'distant perspective'], ['room', 'room sound'], ['hall', 'hall ambience'],
+    ['air', 'air between instruments'], ['atmospheric', 'atmospheric depth'],
+    ['immersive', 'immersive depth'], ['mono', 'mono centre'],
+    ['pocket', 'bass locked in the pocket with the kick']
   ];
 
   /* Стилевые пулы. Каждый приём — из жанровой практики (RESEARCH_PACK §1:
@@ -404,7 +507,11 @@
     'lo-fi': 'lo-fi', 'ambient': 'ambient', 'cinematic': 'cinematic',
     'orchestral': 'orchestral', 'jazz': 'jazz', 'ballad': 'ballad',
     'synthwave': 'synthwave', 'trip-hop': 'trip-hop', 'r&b': 'r&b', 'folk': 'folk',
-    'шансон': 'folk', 'industrial': 'techno', 'trance': 'edm', 'chanson': 'folk'
+    'шансон': 'folk', 'industrial': 'techno', 'trance': 'edm', 'chanson': 'folk',
+    // английские алиасы семей (#45): черновик наставника пишет их в draft.style
+    'rnb': 'r&b', 'hip hop': 'hip-hop', 'hiphop': 'hip-hop', 'lofi': 'lo-fi',
+    'dreampop': 'dream pop', 'synth-pop': 'synthwave', 'synthpop': 'synthwave',
+    'retrowave': 'synthwave', 'downtempo': 'trip-hop'
   };
 
   function hashText(text) {
@@ -466,7 +573,12 @@
     ['студи', 'studio room tone'], ['в зале', 'live hall'], ['крыша', 'rooftop'],
     ['кухн', 'kitchen recording'], ['радио', 'pirate radio studio'],
     ['побережь', 'coastal studio'], ['портов', 'harbour studio'],
-    ['порт ', 'harbour studio'], ['порт,', 'harbour studio'], ['в порту', 'harbour studio']
+    ['порт ', 'harbour studio'], ['порт,', 'harbour studio'], ['в порту', 'harbour studio'],
+    // английские ключи места записи
+    ['basement', 'basement studio'], ['warehouse', 'waterfront warehouse studio'],
+    ['studio', 'studio room tone'], ['live hall', 'live hall'], ['rooftop', 'rooftop'],
+    ['roof', 'rooftop'], ['kitchen', 'kitchen recording'], ['radio', 'pirate radio studio'],
+    ['coastal', 'coastal studio'], ['harbor', 'harbour studio'], ['harbour', 'harbour studio']
   ];
 
   /* L4 ARRANGEMENT — форма и энергия во времени (корпус: 32 % топ-100 против
@@ -482,7 +594,13 @@
     ['затуха', 'fading outro'], ['нарастан', 'build into the last chorus'],
     ['дроп', 'drop'], ['брейкдаун', 'breakdown'],
     ['без припев', 'through-composed, no repeated chorus'],
-    ['без повтор', 'through-composed, evolving each section']
+    ['без повтор', 'through-composed, evolving each section'],
+    // английские ключи формы
+    ['cold open', 'cold open on the groove'], ['first verse', 'sparse first verse'],
+    ['second chorus', 'fuller second chorus'], ['fade out', 'fading outro'],
+    ['fading', 'fading outro'], ['build', 'build into the last chorus'],
+    ['no chorus', 'through-composed, no repeated chorus'],
+    ['no repeats', 'through-composed, evolving each section']
   ];
 
   /* L1 SPACE — роли инструментов и микс. В корпусе роли встречаются чаще, чем
@@ -495,14 +613,26 @@
     ['соло', 'solo'], ['рифф', 'riff'], ['аккорд', 'chords'],
     ['подложк', 'as a bed'], ['фоном', 'in the background'],
     ['низко в микс', 'low in the mix'], ['впереди микс', 'in front of the mix'],
-    ['текстур', 'texture layer'], ['стаккато', 'staccato']
+    ['текстур', 'texture layer'], ['стаккато', 'staccato'],
+    // английские ключи ролей
+    ['lead', 'lead role'], ['main melody', 'carrying the main melody'],
+    ['carries the melody', 'carrying the main melody'],
+    ['carrying the main melody', 'carrying the main melody'], ['melodic', 'melodic'],
+    ['bed', 'as a bed'], ['background', 'in the background'], ['texture', 'texture layer']
   ];
-  const MIX_WORDS = [
+  // Русская половина микс-словаря; английские ключи доклеиваются ниже (concat),
+  // чтобы словарь остался одним списком для scan и экспорта в правила.
+  const MIX_WORDS_RU = [
     ['середин', 'present midrange'], ['верхн', 'open top end'],
     ['широк', 'wide stereo image'], ['глубин', 'front-to-back depth'],
     ['панч', 'punchy transients'], ['плотн', 'dense mix'],
     ['воздух', 'airy space around instruments'], ['сух', 'dry room']
   ];
+  const MIX_WORDS = MIX_WORDS_RU.concat([
+    // английские ключи микса — те же теги, что у русских слов
+    ['midrange', 'present midrange'], ['top end', 'open top end'], ['wide', 'wide stereo image'],
+    ['punchy', 'punchy transients'], ['dense', 'dense mix'], ['airy', 'airy space around instruments']
+  ]);
 
   /* Защита от дрейфа — самый сильный признак корпуса (56 % топ-100 против 15 %,
      lift 3,7×), но у ACE-Step нет негативного поля: всё формулируется как
@@ -520,7 +650,16 @@
     ['без реверб', 'dry close-mic production'],
     ['без фальцет', 'full-voice delivery'],
     ['только мужск', 'male vocals only'], ['только женск', 'female vocals only'],
-    ['только живой', 'live instruments only'], ['только аналог', 'analog only']
+    ['только живой', 'live instruments only'], ['только аналог', 'analog only'],
+    // английские ключи защит (безударность — отдельно в NO_DRUMS/POSITIVE)
+    ['no autotune', 'unprocessed natural voice'], ['no auto-tune', 'unprocessed natural voice'],
+    ['no vocoder', 'unprocessed natural voice'], ['no distortion', 'clean tones'],
+    ['no overdrive', 'clean tones'], ['no vibrato', 'straight-tone delivery'],
+    ['analog only', 'analog only'], ['no snare', 'kick and hats only'],
+    ['no claps', 'kick and snare only'], ['no drums', 'beatless drift'],
+    ['no percussion', 'beatless drift'], ['no climax', 'flat dynamics, loop-like'],
+    ['no reverb', 'dry close-mic production'], ['male only', 'male vocals only'],
+    ['female only', 'female vocals only'], ['live instruments only', 'live instruments only']
   ];
 
   // TAIL — динамика, настроение, концепт.
@@ -531,7 +670,11 @@
     ['тишин', 'near-silent suspensions before drums re-enter'],
     ['сброс', 'drop'], ['затуха', 'fading outro'], ['раскачк', 'swelling dynamics'],
     ['постоянн', 'steady energy'], ['ровн', 'steady energy'],
-    ['без кульминац', 'flat dynamics, loop-like'], ['без кульминаци', 'flat dynamics, loop-like']
+    ['без кульминац', 'flat dynamics, loop-like'], ['без кульминаци', 'flat dynamics, loop-like'],
+    // английские ключи динамики
+    ['wave', 'wave dynamics'], ['slow build', 'slow build'], ['build up', 'build'],
+    ['build', 'build'], ['silence', 'near-silent suspensions before drums re-enter'],
+    ['fade', 'fading outro'], ['swell', 'swelling dynamics'], ['steady', 'steady energy']
   ];
   const MOOD_WORDS = [
     ['грустн', 'melancholic'], ['груст', 'melancholic'], ['тоск', 'melancholic'],
@@ -543,12 +686,24 @@
     ['тёпл', 'warm'], ['тепл', 'warm'], ['городск', 'urban'], ['атмосферн', 'atmospheric'],
     ['психоделич', 'psychedelic'], ['психоделическ', 'psychedelic'], ['приподнят', 'euphoric'],
     ['чувственн', 'sensual'], ['сексуальн', 'sensual'], ['сюрреал', 'surreal'],
-    ['медитативн', 'meditative'], ['торжественн', 'anthemic']
+    ['медитативн', 'meditative'], ['торжественн', 'anthemic'],
+    // английские ключи настроения
+    ['melancholic', 'melancholic'], ['melancholy', 'melancholic'], ['sad', 'melancholic'],
+    ['nostalgic', 'nostalgic'], ['dark', 'dark'], ['hypnotic', 'hypnotic'],
+    ['cinematic', 'cinematic'], ['dreamy', 'dreamy'], ['euphoric', 'euphoric'],
+    ['uplifting', 'euphoric'], ['emotional', 'emotional'], ['romantic', 'emotional'],
+    ['cold', 'cold'], ['ethereal', 'ethereal'], ['aggressive', 'aggressive'],
+    ['haunting', 'haunting'], ['warm', 'warm'], ['warmth', 'warm'], ['urban', 'urban'],
+    ['atmospheric', 'atmospheric'], ['psychedelic', 'psychedelic'], ['sensual', 'sensual'],
+    ['surreal', 'surreal'], ['meditative', 'meditative'], ['anthemic', 'anthemic']
   ];
   const ERA_WORDS = [
     ['70-е', '70s'], ['70-х', '70s'], ['70х', '70s'], ['семидесят', '70s'], ['1970', '70s'],
     ['80-е', '80s'], ['80-х', '80s'], ['80х', '80s'], ['восьмидесят', '80s'], ['1980', '80s'],
-    ['90-е', '90s'], ['90-х', '90s'], ['90х', '90s'], ['девяност', '90s'], ['1990', '90s']
+    ['90-е', '90s'], ['90-х', '90s'], ['90х', '90s'], ['девяност', '90s'], ['1990', '90s'],
+    // английские ключи эпохи (70s/80s/90s — граница слова: не внутри «1980s»)
+    ['70s', '70s'], ['80s', '80s'], ['90s', '90s'], ['1970s', '70s'], ['1980s', '80s'], ['1990s', '90s'],
+    ['seventies', '70s'], ['eighties', '80s'], ['nineties', '90s']
   ];
   // Концепт-строка: тема лирики как её назвал автор, без домыслов.
   const CONCEPT_WORDS = [
@@ -558,7 +713,16 @@
     ['память', 'memory'], ['время', 'time'], ['свобод', 'freedom'],
     ['любов', 'love'], ['разлук', 'separation'], ['мечт', 'dreams'],
     ['страх', 'fear'], ['тишина', 'silence'], ['тишине', 'silence'], ['плёнк', 'tape'], ['пленк', 'tape'],
-    ['радио', 'radio'], ['эфир', 'broadcast'], ['свет', 'light'], ['тьма', 'darkness']
+    ['радио', 'radio'], ['эфир', 'broadcast'], ['свет', 'light'], ['тьма', 'darkness'],
+    // английские ключи концепта. Голого «dream» НЕТ и не будет: «dream pop»
+    // затекал в концепты как «lyrics about dreams» — жанр ≠ тема лирики.
+    ['night city', 'night city'], ['night', 'night'], ['city', 'city'], ['sea', 'sea'],
+    ['ocean', 'sea'], ['harbour', 'harbour'], ['harbor', 'harbour'], ['fog', 'fog'],
+    ['rain', 'rain'], ['road', 'road'], ['trains', 'trains'], ['train', 'trains'],
+    ['loneliness', 'loneliness'], ['lonely', 'loneliness'], ['memory', 'memory'],
+    ['time', 'time'], ['freedom', 'freedom'], ['love', 'love'], ['separation', 'separation'],
+    ['dreams', 'dreams'], ['fear', 'fear'], ['silence', 'silence'], ['tape', 'tape'],
+    ['radio', 'radio'], ['broadcast', 'broadcast'], ['light', 'light'], ['darkness', 'darkness']
   ];
   // Негативы задумки → позитивные теги (brain/knowledge/model-acestep.md).
   const POSITIVE = [
@@ -573,7 +737,14 @@
     [/no\s+falsetto/i, 'full-voice delivery'],
     [/no\s+female/i, 'male vocals only'],
     [/no\s+male/i, 'female vocals only'],
-    [/no\s+(lyrics|vocals)/i, 'instrumental']
+    [/no\s+(lyrics|vocals)/i, 'instrumental'],
+    // английские негативы «without …» (живой кейс: черновик наставника)
+    [/without\s+reverb/i, 'dry close-mic production'],
+    [/without\s+climax/i, 'flat dynamics, loop-like'],
+    [/without\s+falsetto/i, 'full-voice delivery'],
+    [/without\s+female/i, 'male vocals only'],
+    [/without\s+male/i, 'female vocals only'],
+    [/without\s+(?:words|vocals|lyrics)/i, 'instrumental']
   ];
   const LANG_TAGS = { ru: 'Russian lyrics', en: 'English lyrics', fr: 'French lyrics' };
   const FORM_MOOD = { calm: 'dreamy', warm: 'warm', bright: 'euphoric', dramatic: 'dark' };
@@ -600,10 +771,24 @@
   // Скан словаря: совпадения возвращаются в порядке ПОЯВЛЕНИЯ В ТЕКСТЕ, а не в
   // порядке словаря. Так режется по max именно то, что автор сказал раньше
   // (его акцент), а не то, что случайно выше лежит в словаре.
-  /* Короткий русский стем (≤3 букв) ищем только на границе слова: иначе «рок»
-     ловится в «широкий», «поп» — в «попытка», «бит» — в «убитый». */
+  /* Короткий русский стем (≤3 букв) ищем только на границе слова слева: иначе
+     «рок» ловится в «широкий», «поп» — в «попытка», «бит» — в «убитый».
+     Короткий ЛАТИНСКИЙ стем (≤5) — на границе с ДВУХ сторон (#45): «pop» не
+     ловится в «popular», «rap» — в «trap», «organ» — в «organic», «beat» —
+     в «beatless». Длинные ключи ищутся подстрокой: «guitar» находит и «guitars». */
   const CYR = /[а-я0-9]/;
+  const LAT = /[a-z0-9]/i;
   function shortStem(text, w, from) {
+    if (!/[а-я]/.test(w) && w.length <= 5) {
+      let idx = text.indexOf(w, from);
+      while (idx >= 0) {
+        const before = idx > 0 ? text[idx - 1] : '';
+        const after = text[idx + w.length] || '';
+        if (!LAT.test(before) && !LAT.test(after)) return idx;
+        idx = text.indexOf(w, idx + 1);
+      }
+      return -1;
+    }
     if (w.length > 3 || !/[а-я]/.test(w)) return text.indexOf(w, from);
     let idx = text.indexOf(w, from);
     while (idx >= 0) {
@@ -620,11 +805,17 @@
       const pos = shortStem(text, norm(word), 0);
       if (pos < 0 || negated(text, word)) continue;
       if (found.some(h => h.tag === tag)) continue;
-      found.push({ from: word, tag, pos });
+      found.push({ from: word, tag, pos, len: norm(word).length });
     }
+    // Хит-в-хите по ПОЗИЦИИ, а не по тегу (#45): «male vocals» целиком лежит
+    // внутри «female vocals» и потому ложен. До сих пор противоречие съедал
+    // дедуп подстрокой тега — но «female singer» без «vocals» получало
+    // дефолтное «male vocals» рядом с женским вокалом. Хит, полностью лежащий
+    // внутри другого хита, отбрасываем до фильтра тегов.
+    const spans = found.filter(h => !found.some(o => o !== h && o.pos <= h.pos && h.pos + h.len <= o.pos + o.len));
     // Тег-в-теге внутри одного словаря: «bass»/«guitar» не должны съедать слоты
     // у «live bass guitar», если автор сказал «бас-гитара».
-    const strict = found.filter(h => !found.some(o => o !== h && o.tag.includes(h.tag)));
+    const strict = spans.filter(h => !spans.some(o => o !== h && o.tag.includes(h.tag)));
     strict.sort((a, b) => a.pos - b.pos);
     return (max ? strict.slice(0, max) : strict).map(({ from, tag }) => ({ from, tag }));
   }
@@ -635,7 +826,9 @@
 
   // «без ударных» — позитивная переформулировка: не колотим drums, а описываем
   // безударный дрейф (негативов в caption не бывает, model-acestep.md).
-  const NO_DRUMS = /без\s+(ударн|барабан|бит|перкусси)/i;
+  // Английские формы — «no drums», «without drums», «beatless», «drumless» —
+  // раньше не ловились, и безударному эмбиенту доклеивался грув (#45).
+  const NO_DRUMS = /без\s+(ударн|барабан|бит|перкусси)|(?:no|without)\s+(?:drums?|percussion|beat|drum\s+kit)|beatless|drumless/i;
 
   function pickRhythm(text, genre, options) {
     if (NO_DRUMS.test(text)) {
@@ -684,7 +877,7 @@
     const delivery = scan(text, VOCAL_DELIVERY, 2);
     const texture = scan(text, VOCAL_TEXTURE, 2);
     // Страж срабатывает только когда речь о голосе: «глубокий ритм» — не голос.
-    const voiceWords = /(голос|вокал|поет|поёт|пени|баритон|шепот|шёпот|речитатив|подпев)/.test(text);
+    const voiceWords = /(голос|вокал|поет|поёт|пени|баритон|шепот|шёпот|речитатив|подпев|voice|vocal|singer|\bsing|whisper|spoken)/.test(text);
     const lowRegister = gender.some(g => ['male baritone', 'deep bass voice', 'male vocals', 'male tenor'].includes(g.tag))
       || (voiceWords && LOW_VOICE_HINTS.some(w => text.includes(norm(w))));
     const falsettoAsked = !negated(text, 'фальцет') || !negated(text, 'falsetto');
@@ -750,7 +943,13 @@
     const genreTags = genreHits.length
       ? genreAll.filter(t => !genreAll.some(o => o !== t && o.includes(t)))
       : [FORM_GENRE[options.genre]].filter(Boolean);
-    const primaryGenre = genreTags[0] || (options.genre ? null : null);
+    // Семейство стиля строит ВСЮ конструкцию, а не только глубину (#45): когда
+    // жанровых слов в задумке нет, но резолвер дал семейство (draft.style из
+    // черновика наставника/продюсера), оно становится якорем жанра — ритм и
+    // продакшн едут по профилю семейства, а не по безликому фолбэку.
+    const styleResolved = resolveStyle(genreTags, options);
+    const anchorTags = genreTags.length ? genreTags : (styleResolved.key ? [styleResolved.key] : []);
+    const primaryGenre = anchorTags[0] || null;
 
     const era = scan(text, ERA_WORDS, 1).map(e => e.tag);
     const mood = scan(text, MOOD_WORDS, 2).map(m => m.tag);
@@ -775,11 +974,10 @@
       .filter(t => t !== 'intro' || !/opening/.test(uniq(scan(text, ARRANGEMENT_WORDS, 4).map(a => a.tag)).join(' ')));
     const guards = uniq(scan(text, GUARD_WORDS, 2).map(g => g.tag));
     // Глубина и стилевая атмосфера: семейство стиля из жанра или из резолвера.
-    const styleResolved = resolveStyle(genreTags, options);
     const depth = pickDepth(text, styleResolved, text);
 
     return {
-      anchor: { genre: uniq(genreTags), era },
+      anchor: { genre: uniq(anchorTags), era },
       voice: isSong ? pickVoice(text, options) : { tags: [], character: [], from: {} },
       rhythm: Object.assign(pickRhythm(text, primaryGenre, options), { bpm, bass }),
       space: pickSpace(text, primaryGenre),
@@ -1089,7 +1287,7 @@
     return n >= 30 && n <= 300 ? n : null;
   }
 
-  const VERSION = '2026-11-15-studio-3';
+  const VERSION = '2026-11-21-studio-4';
 
   globalThis.BRIIX_MUSIC_BRAIN = {
     version: VERSION,

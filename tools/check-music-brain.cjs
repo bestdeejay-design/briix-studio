@@ -282,6 +282,61 @@ const rockish = brain.buildCaption('грув, бас, 96 BPM', { kind: 'song', s
 assert.equal(rockish.layers.style.key, 'rock', 'стиль из резолвера принят мозгом');
 assert.match(rockish.caption, /room|close dry drums|live band/i, 'под рок добавились его приёмы');
 
+// ---------------- (15) двуязычные словари: черновик наставника — английский --
+// Механизм #40 («строка наставника идёт входом в мозг», 20.11) передаёт в
+// buildCaption английскую строку из чата — а словари мозга были русскими.
+// Живой кейс владельца: «dream pop, 90 BPM, warm female vocals» терял жанр,
+// а «female singer» получал дефолтное «male vocals». Починка (#45): ~200
+// английских ключей во всех словарях + граница слова для коротких латинских
+// стемов + фильтр хита-в-хите по позиции («male vocals» внутри «female»).
+const en = brain.buildCaption('dream pop, 90 BPM, warm female vocals', { kind: 'song' });
+assert.ok(en.layers.anchor.genre.includes('dream pop'), 'английский жанр распознан (dream pop)');
+assert.equal(en.layers.style.key, 'dream pop', 'семейство стиля из английского жанра');
+assert.match(en.caption, /female vocals/, 'female vocals прочитан');
+assert.doesNotMatch(en.caption, /(^|, )male vocals(,|$)/, 'дефолт male не дополняется к female');
+// «female singer» — без слова «vocals» — тоже читается и не получает мужской дефолт.
+const singer = brain.buildCaption('dream pop, female singer', { kind: 'song' });
+assert.match(singer.caption, /female vocals/, 'female singer → female vocals');
+assert.doesNotMatch(singer.caption.replace('female vocals', ''), /male vocals/, 'female singer без противоречия male');
+// Короткий латинский стем — только на границе слова: rap ≠ trap, pop ≠ popular.
+const trapEn = brain.buildCaption('trap, 808, dark synth', { kind: 'instrumental' });
+assert.equal(trapEn.layers.anchor.genre.length, 1, '«trap» даёт один жанр, а не trap + rap');
+assert.equal(trapEn.layers.anchor.genre[0], 'trap', '«trap» не распадается на trap + rap');
+const popular = brain.buildTags('popular song about love', { kind: 'song' });
+assert.doesNotMatch(popular.tags, /(^|, )pop(,|$)/, '«popular» не превращается в жанр pop');
+// Английская безударность не получает грув («beatless ambient» — живой кейс).
+const beatless = brain.buildTags('beatless ambient, no drums, deep space', { kind: 'song' });
+assert.match(beatless.tags, /beatless drift/, 'beatless → безударный дрейф');
+assert.doesNotMatch(beatless.tags, /drum groove/, 'грув не доклеивается к безударному треку');
+// Английские вокал (подача/фактура), продакшн, настроение, эпоха.
+const enVoice = brain.buildTags('hoarse whisper, intimate, male singer', { kind: 'song' });
+assert.match(enVoice.tags, /hoarse rasp/, 'hoarse → hoarse rasp');
+assert.match(enVoice.tags, /whispered delivery/, 'whisper → whispered delivery');
+const enProd = brain.buildTags('vinyl, tape saturation, warm analog, 80s synthwave', { kind: 'instrumental' });
+assert.match(enProd.tags, /vinyl crackle/, 'vinyl → vinyl crackle');
+assert.match(enProd.tags, /tape saturation/, 'tape → tape saturation');
+assert.match(enProd.tags, /80s/, 'английская эпоха распознана');
+const enMood = brain.buildTags('melancholic dreamy ballad, grand piano', { kind: 'song' });
+assert.match(enMood.tags, /melancholic/, 'melancholic → тег настроения');
+assert.match(enMood.tags, /dreamy/, 'dreamy → тег настроения');
+// «dream pop» — жанр, а не концепт «лирики о снах» (голого ключа dream нет).
+const dreamPop = brain.buildCaption('dream pop, 90 BPM', { kind: 'song' });
+assert.doesNotMatch(dreamPop.caption, /lyrics about dreams?/, 'dream pop не превращается в «лирику о снах»');
+// Профили всех 23 семейств: ритм и продакшн строятся по семейству целиком —
+// раньше профили покрывали 19/15 из 23, и новые семьи падали на безликую базу.
+const families15 = Object.keys(brain.rules.STYLE_ATMOSPHERE);
+assert.equal(families15.length, 23, '23 семейства стиля');
+for (const f of families15) {
+  assert.ok(brain.rules.dictionaries.RHYTHM_BY_GENRE[f], `ритм-профиль для «${f}»`);
+  assert.ok(brain.rules.dictionaries.PROD_BY_GENRE[f], `продакшн-профиль для «${f}»`);
+}
+// Семейство из draft.style строит всю конструкцию, а не только глубину (#45):
+// без жанровых слов оно становится якорем жанра и задаёт профили ритма/продакшна.
+const byFamily = brain.buildCaption('warm intimate vocals, tape warmth', { kind: 'song', style: 'dream pop' });
+assert.ok(byFamily.layers.anchor.genre.includes('dream pop'), 'семейство — якорь жанра');
+assert.doesNotMatch(byFamily.caption, /steady drum groove \(kick \+ snare\)/, 'ритм не на фолбэке, а по профилю семейства');
+assert.match(byFamily.caption, /soft|shimmer|reverb|pads/i, 'профиль семейства слышен в сборке');
+
 // ------------------------------------------------------------------ вывод --
 console.log('PASS music-brain v3: слои, ритм-всегда, вокал с характером и фиксированной идентичностью, продакшн, бюджет, негативы, self-check, полный трек (роли/микс/форма/защита), глубина и стилевая атмосфера, разделение caption/лирики и потолок токенов');
 console.log('20 брифов (buildTags / buildCaption, символы):');

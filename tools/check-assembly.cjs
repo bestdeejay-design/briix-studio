@@ -40,18 +40,32 @@ function mergePromptTags(base, tags) {
   const add = tags.split(',').map(t => t.trim()).filter(t => t && !low.includes(t.toLowerCase()));
   return add.length ? base + ', ' + add.join(', ') : base;
 }
+// Кап строки звучания — зеркало capStyleLine из studio.js (#45).
+const capStyleLine = (text, budget) => {
+  const v = String(text || '');
+  const max = budget || musicBrain.rules.MAX_CAPTION;
+  if (v.length <= max) return v;
+  let cut = v.slice(0, max + 1).lastIndexOf(',');
+  if (cut <= 0) cut = max;
+  return v.slice(0, cut).trim();
+};
 (async () => {
 
 async function assemble({ idea = '', manualLyrics = '', instrumental = false, advanced = false, translation = null, brainPending = false }) {
   const style = brain.sanitize(idea);
   let lyrics = advanced ? brain.latinizeTags(brain.sanitize(manualLyrics)) : '';
-  const explicit = brain.detectExplicitLanguage(idea);
+  // Язык лирики — одно решение на всю сборку (#45): тег мозга и params.language
+  // совпадают всегда (зеркало songLanguage из createMusic).
+  const explicitLang = brain.detectExplicitLanguage(idea) || brain.detectExplicitLanguage(lyrics || '');
+  const songLanguage = instrumental ? null
+    : (explicitLang === 'ru' || explicitLang === 'en' || explicitLang === 'fr' ? explicitLang
+      : (lyrics && /[\u0400-\u04FF]/.test(lyrics) ? 'ru' : 'en'));
   // Полный caption (≤ 640) — как в студии с 16.11; компактный 240 остался
   // только как legacy-путь buildTags.
   const CAPTION_BUDGET = musicBrain.rules.MAX_CAPTION;
   const build = budget => musicBrain.buildCaption(style || lyrics || '', {
     kind: instrumental ? 'instrumental' : 'song',
-    language: explicit || (instrumental ? null : 'en'),
+    language: songLanguage,
     bpm: musicBrain.detectBpm(style || lyrics || ''),
     maxTags: budget
   });
@@ -78,8 +92,11 @@ async function assemble({ idea = '', manualLyrics = '', instrumental = false, ad
     finalPrompt = mergePromptTags(style, tags.tags);
     brainApplied = true;
   } else finalPrompt = lyrics;
+  // Потолок сборки (#45): зеркало createMusic — сборка с мозгом не уезжает за 640.
+  if (brainApplied) finalPrompt = capStyleLine(finalPrompt, CAPTION_BUDGET);
   const params = { model: 'ace-step-flash' };
   if (instrumental) params.instrumental = true;
+  if (!instrumental && (songLanguage === 'ru' || songLanguage === 'en')) params.language = songLanguage;
   if (lyrics) params.lyrics = lyrics;
   // В POST уходит сборка (prompt), в карточку/сессию — исходная идея (input.prompt).
   const requestBase = idea || lyrics;
@@ -150,6 +167,25 @@ assert.match(ru.postPrompt, /English lyrics/, 'no language stated = English lyri
 const ruExplicit = await assemble({ idea: 'Глубокий ритм, песня на русском' });
 assert.match(ruExplicit.postPrompt, /Russian lyrics/);
 assert.ok(brain.isAsciiOnly(ruExplicit.postPrompt));
+
+// (р) точность черновиков (#45): язык тега мозга = params.language — одно решение.
+// Живой кейс: черновик наставника (англ. промт, без явного языка) + русская лирика
+// раньше получал тег English lyrics при params.language=ru — два разных указания.
+const ruLyricsAsm = await assemble({ idea: 'dream pop, warm female vocals', manualLyrics: '[Verse]\nГород спит\n[Chorus]\nА я не сплю', advanced: true, brainPending: true });
+assert.match(ruLyricsAsm.postPrompt, /Russian lyrics/, 'русская лирика черновика → тег русской лирики');
+assert.equal(ruLyricsAsm.params.language, 'ru', 'тег мозга и params.language совпадают (нет двух указаний)');
+const enLyricsAsm = await assemble({ idea: 'dream pop, warm female vocals', manualLyrics: '[Verse]\nCity sleeps\n[Chorus]\nSo do I', advanced: true, brainPending: true });
+assert.match(enLyricsAsm.postPrompt, /English lyrics/);
+assert.equal(enLyricsAsm.params.language, 'en', 'английская лирика → en везде');
+// (с) потолок сборки 640 (#45): длинная строка наставника + слои мозга не уезжают
+// за потолок ACE-Step (пол бюджета 240 давал до 640+240; модель молча резала хвост).
+// Авторская строка (~560, как реальный путь — parseMusicDraft капит промт на входе)
+// сохраняется целиком, режутся только добавленные мозгом хвостовые теги.
+const longLine = ('dream pop, warm shimmering pads, slow burn, ').repeat(13).replace(/,\s*$/, '').slice(0, 560);
+assert.ok(longLine.length > 500 && longLine.length <= 560, 'строка наставника ~560 символов: ' + longLine.length);
+const longAsm = await assemble({ idea: longLine, advanced: true, brainPending: true });
+assert.ok(longAsm.postPrompt.length <= 640, `потолок сборки 640 (${longAsm.postPrompt.length})`);
+assert.ok(longAsm.postPrompt.startsWith(longLine), 'строка наставника сохранена целиком — резались только теги мозга');
 
 // (г) теги частей всегда латиницей, только теги переписываются.
 assert.equal(brain.latinizeTags('[Куплет 2]\n[Припев]\n[Пред-Припев]\n[Интро]\n[Бридж]\n[Аутро]'),
