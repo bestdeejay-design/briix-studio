@@ -453,11 +453,17 @@ assert.match(rnb.caption, /no male growl, staying in her register/, 'r&b: жен
 const plainLyrics = '[Intro]\nла-ла\n[Verse 1]\nстрока один\n[Pre-Chorus]\nподъём\n[Chorus]\nприпев\n[Verse 2]\nстрока два\n[Chorus]\nприпев\n[Bridge]\nбридж\n[Chorus]\nфинал\n[Outro]\nконец';
 const marked = brain.markLyricsDynamics(plainLyrics);
 assert.ok(marked.marked >= 3 && marked.marked <= 6, `размечено ${marked.marked} секций (норма плотности ≤6)`);
-assert.match(marked.lyrics, /\[Pre-Chorus: (?:filtered drums slowly rising|slow build, riser swell)\]/, 'riser перед припевом');
+assert.match(marked.lyrics, /\[Pre-Chorus: (?:filtered drums slowly rising|slow build, riser swell|percussion building)[^\]]*\]/, 'riser перед припевом');
 assert.match(marked.lyrics, /\[Verse 2: (?:drums drop out|strings enter|breakdown)[^\]]*\]/, 'куплет 2 ≠ куплет 1 (контраст тишины)');
-const lastChorus = marked.lyrics.split('\n').filter(l => /^\[Chorus/.test(l)).pop();
-assert.match(lastChorus, /^\[Chorus: /, 'последний припев получил lift-брекет');
+const allChorus = marked.lyrics.split('\n').filter(l => /^\[Chorus/.test(l));
+assert.equal(allChorus.filter(l => l === '[Chorus]').length, allChorus.length - 1, 'lift — только на последнем припеве');
+assert.match(allChorus[allChorus.length - 1], /^\[Chorus: /, 'последний припев получил lift-брекет');
+assert.match(marked.lyrics, /\[Intro: /, 'интро получил текстурный брекет (референсы §4)');
 assert.match(marked.lyrics, /\[Bridge: (?:cathedral reverb tail|wide stereo echo|tape saturation)[^\]]*\]/, 'брекет пространства');
+assert.match(marked.lyrics, /\[Outro: /, 'аутро получил брекет (бюджет полного трека позволяет)');
+// §2.3: язык брекетов — EN вне зависимости от языка лирики (лирика русская).
+assert.ok((marked.lyrics.match(/^\[[^\]\n]*: [^\]\n]*\]$/gm) || []).every(l => /^[\[\]:A-Za-z0-9 ,'+-]+$/.test(l)),
+  'все брекеты EN ASCII при русской лирике');
 // Текст песни не изменяется: размечаются только теги секций.
 assert.ok(marked.lyrics.includes('строка один') && marked.lyrics.includes('финал'), 'текст лирики не тронут');
 // Детерминизм: одна лирика — одна разметка (условие альбома/A-B пары).
@@ -472,7 +478,63 @@ assert.equal(own.marked, 0, 'поверх авторской разметки м
 const noSections = brain.markLyricsDynamics('просто текст без тегов');
 assert.equal(noSections.marked, 0, 'без секций разметки нет');
 
+// ------- (18) #47 обогащение конструктива: стилевые брекеты ----------------
+// Справки: audits/lyrics-effect-brackets.md (§1–§3) + audits/dm-signatures.md.
+// Инварианты словаря: 8 групп + фолбэк, 7 слотов, ≥3 варианта, EN ASCII,
+// без повторов внутри профиля; все 23 семейства STYLE_ATMOSPHERE покрыты.
+const SLOTS = brain.rules.BRACKET_SLOTS, GROUPS = brain.rules.BRACKETS_BY_GROUP;
+assert.deepEqual(Object.keys(brain.rules.BRACKET_GROUPS).sort(), Object.keys(brain.rules.STYLE_ATMOSPHERE).sort(),
+  'каждое семейство стиля имеет профиль брекетов (паритет со STYLE_ATMOSPHERE)');
+for (const [g, p] of Object.entries(GROUPS)) {
+  for (const s of SLOTS) {
+    assert.ok(Array.isArray(p[s]) && p[s].length >= 3, g + '/' + s + ': ≥3 варианта');
+    assert.ok(p[s].every(fx => /^[a-z0-9 ,'+-]+$/.test(fx)), g + '/' + s + ': только EN ASCII, нижний регистр');
+    assert.equal(new Set(p[s]).size, p[s].length, g + '/' + s + ': без дословных повторов в пуле');
+  }
+}
+for (const s of SLOTS) {
+  assert.ok(brain.rules.BRACKETS_GENERIC[s].length >= 3, 'generic/' + s + ': фолбэк ≥3 варианта');
+}
+// Стилевая привязка: synthwave ≠ jazz — сигнатуры dm-signatures против
+// камерной динамики; семейство приходит и из caption (жанровые слова).
+const synthMarked = brain.markLyricsDynamics(plainLyrics, { style: 'synthwave' });
+assert.equal(synthMarked.style, 'synthwave', 'семейство распознано из явной подсказки');
+assert.ok(synthMarked.lyrics !== marked.lyrics, 'стилевой профиль меняет разметку относительно нейтральной');
+assert.ok(/analog|arpeggio|gated|brass stabs|vinyl|choir pad|tape/.test(synthMarked.lyrics),
+  'synthwave: сигнатуры dm-signatures (analog/gated/brass stabs/vinyl)');
+const jazzMarked = brain.markLyricsDynamics(plainLyrics, { style: 'jazz' });
+assert.ok(/brushes|upright|piano|sax|strings/.test(jazzMarked.lyrics), 'jazz: камерные сигнатуры (brushes/upright/sax)');
+const capResolved = brain.markLyricsDynamics(plainLyrics, { caption: 'dark synthwave, 100 BPM, deep analog bass' });
+assert.equal(capResolved.style, 'synthwave', 'семейство распознаётся из жанровых слов caption');
+// Детерминизм с опциями — одна лирика+стиль = одна разметка.
+assert.equal(brain.markLyricsDynamics(plainLyrics, { style: 'synthwave' }).lyrics, synthMarked.lyrics,
+  'стилевая разметка детерминирована');
+// Соло-слот (категория §1.5): interlude/breakdown/solo получают вставку.
+const soloLyrics = '[Intro]\nx\n[Verse 1]\ny\n[Chorus]\nz\n[Interlude]\n…\n[Verse 2]\nw\n[Chorus]\nv\n[Outro]\nu';
+const soloMarked = brain.markLyricsDynamics(soloLyrics, { style: 'rock' });
+assert.match(soloMarked.lyrics, /\[Interlude: (?:guitar solo|instrumental break|drum fill)[^\]]*\]/,
+  'interlude — соло-вставка (рок: гитара/орган/драмсы)');
+// '[Final Chorus]' — тоже припев: lift достаётся ему.
+const finalChorusLyrics = '[Verse 1]\na\n[Chorus]\nb\n[Verse 2]\nc\n[Chorus]\nd\n[Final Chorus]\ne\n[Outro]\nf';
+const fcMarked = brain.markLyricsDynamics(finalChorusLyrics);
+assert.match(fcMarked.lyrics, /^\[Final Chorus: /m, 'lift на финальном припеве (синоним normalized)');
+// Анти-дублирование §2.4: брекет не повторяет слой caption биграммой —
+// вместо «cathedral reverb tail» берётся другой брекет пространства.
+const dupMarked = brain.markLyricsDynamics(plainLyrics, { caption: 'dreamy pads, cathedral reverb tail, wide stereo echo' });
+assert.ok(!/cathedral reverb|wide stereo echo/.test(dupMarked.lyrics), 'брекет не дублирует слои caption');
+assert.ok(dupMarked.marked >= 3, 'анти-дубль режет только конкретный вариант, не слот');
+// Все варианты слота клэшат с caption → слот пропускается, остальное живёт.
+const fullDup = brain.markLyricsDynamics(plainLyrics, { caption: 'cathedral reverb tail, wide stereo echo, tape saturation, warm hiss' });
+assert.match(fullDup.lyrics, /^\[Bridge\]$/m, 'полностью задублированный слот пропущен (Bridge без брекета)');
+assert.ok(fullDup.marked >= 3 && fullDup.marked <= 5, 'остальные слоты на месте');
+// Норма плотности §3: короткий трек (≤6 секций) — 3–4 брекета.
+const shortMarked = brain.markLyricsDynamics('[Intro]\nx\n[Verse]\ny\n[Chorus]\nz\n[Outro]\nw');
+assert.ok(shortMarked.marked >= 2 && shortMarked.marked <= 4, `короткий трек: ${shortMarked.marked} брекетов (3–4)`);
+// Одиночный [Instrumental] — это режим, а не вставка: не размечаем.
+const onlyInst = brain.markLyricsDynamics('[Instrumental]');
+assert.equal(onlyInst.marked, 0, 'одиночный [Instrumental] не получает соло-брекет');
+
 // ------------------------------------------------------------------ вывод --
-console.log('PASS music-brain v3: слои, ритм-всегда, вокал с характером и фиксированной идентичностью, продакшн, бюджет, негативы, self-check, полный трек (роли/микс/форма/защита), глубина и стилевая атмосфера, разделение caption/лирики и потолок токенов, голос по семи осям (#46: семейные профили, перекрытие осей, запрет противоречий, нейтраль, бейдж), запреты регистра и брекеты динамики (Brain Upgrade Spec)');
+console.log('PASS music-brain v3: слои, ритм-всегда, вокал с характером и фиксированной идентичностью, продакшн, бюджет, негативы, self-check, полный трек (роли/микс/форма/защита), глубина и стилевая атмосфера, разделение caption/лирики и потолок токенов, голос по семи осям (#46: семейные профили, перекрытие осей, запрет противоречий, нейтраль, бейдж), запреты регистра и брекеты динамики (Brain Upgrade Spec), #47 стилевые профили брекетов (8 групп + фолбэк, 7 слотов, анти-дубль с caption, соло-слот, норма плотности)');
 console.log('20 брифов (buildTags / buildCaption, символы):');
 for (const r of rows) console.log(`  ${r.id} ${r.source.padEnd(9)} ${String(r.len).padStart(3)} / ${String(r.captionLen).padStart(3)}  ${r.tags}`);

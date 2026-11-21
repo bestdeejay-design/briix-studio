@@ -1548,60 +1548,195 @@
     return n >= 30 && n <= 300 ? n : null;
   }
 
-  /* Брекеты динамики (audits/lyrics-effect-brackets.md, Brain Upgrade Spec §4):
-   * второй канал описания — динамика ПО СЕКЦИЯМ живёт в лирике, не в caption.
-   * Лирика с обогащёнными брекетами ([Chorus: ...]) проходит БЕЗ ПОТЕРЬ;
-   * без них мозг размечает секции по чек-листу анти-монотонности §3: lift
-   * последнего припева, riser перед главным припевом, куплет 2 ≠ куплет 1
-   * (контраст тишины), брекет пространства. Все брекеты EN, ≤ 6 на трек,
-   * без дословных повторов; caption не дублируют (только изменения во
-   * времени). Выбор варианта — по хешу лирики: разные треки получают разные
-   * эффекты, один и тот же текст — одну и ту же разметку (детерминизм). */
+  /* Брекеты динамики v2 (audits/lyrics-effect-brackets.md + audits/dm-signatures.md,
+   * Brain Upgrade Spec §4): второй канал описания — динамика ПО СЕКЦИЯМ живёт в
+   * лирике, не в caption. Обогащение #47: стилевые профили брекетов (8 групп
+   * семейств + нейтральный фолбэк), 7 слотов (intro / riser / contrast / space /
+   * lift / solo / outro — категории §1: аранжировка, динамика, вокал,
+   * пространство, соло), анти-дублирование с caption биграммами (§2.4),
+   * норма плотности ≤6 на полный трек и 3–4 на короткий (§3). Все брекеты —
+   * EN ASCII вне зависимости от языка лирики (§2.3), без дословных повторов;
+   * выбор варианта — по хешу лирики+стиля (детерминизм для A/B-пар).
+   * Наполнение synthwave-профиля — сигнатуры dm-signatures.md (brass stabs,
+   * breathy choir, reverse reverb swell, twangy slide guitar, vinyl crackle). */
+  const BRACKET_GROUPS = {
+    'psychedelic soul': 'groove', 'soul': 'groove', 'funk': 'groove', 'r&b': 'groove',
+    'dream pop': 'mellow', 'trip-hop': 'mellow', 'lo-fi': 'mellow', 'ambient': 'mellow',
+    'pop': 'band', 'rock': 'band',
+    'techno': 'club', 'tech house': 'club', 'house': 'club', 'edm': 'club',
+    'synthwave': 'synth',
+    'trap': 'urban', 'rap': 'urban', 'hip-hop': 'urban',
+    'jazz': 'acoustic', 'folk': 'acoustic', 'ballad': 'acoustic',
+    'cinematic': 'score', 'orchestral': 'score'
+  };
+  const BRACKETS_BY_GROUP = {
+    club: { // techno / tech house / house / edm — клубная четырёхдольная динамика
+      intro: ['filter slowly opening over kick', 'cold synth stabs, no kick yet', 'drums only, bass rumble underneath'],
+      riser: ['snare roll building, riser swell', 'hi-hats doubling, tension rising', 'kick and claps building, filter rising'],
+      contrast: ['drums drop out, bass only groove', 'breakdown to pads and clap echoes', 'kick mutes, percussion answers'],
+      space: ['big room reverb on claps', 'wide stereo echo, vocal chops panning', 'tape saturation, warm hiss'],
+      lift: ['full drop, layered synth stabs', 'double-time hats, bigger bass', 'key change up, wider synth stack'],
+      solo: ['synth solo, filter opening wide', 'arpeggio cycling, drums dropping', 'drum fill into the drop'],
+      outro: ['kick fades, pads and echo tail', 'elements peel away, filter closing', 'beat runs out, reverb tail only']
+    },
+    synth: { // synthwave — сигнатуры dm-signatures.md (без имён артистов)
+      intro: ['cold arpeggiated synth, deep analog bass pulse', 'slow synth pads, vinyl noise, no drums', 'reverse reverb swell into the first beat'],
+      riser: ['filtered drums slowly rising', 'rising pads, gated snare building', 'arpeggio accelerating, slow build'],
+      contrast: ['drums drop out, sparse analog bass', 'no drums, arpeggio and whisper vocal', 'bass and drums only, minimal pads'],
+      space: ['cathedral reverb on the snare', 'wide stereo echo, distant counter-vocal', 'tape saturation, warm analog hiss'],
+      lift: ['gated snare, brass stabs, low harmonies', 'full drums, octave-doubled vocals', 'choir pad doubles the harmony, wider'],
+      solo: ['twangy guitar solo with slap delay', 'moody synth solo, gliding lead', 'organ swell solo over arpeggio'],
+      outro: ['instruments peel away, pads and tape hiss', 'cold arpeggio fading, bass pulse slowing', 'vinyl crackle, slow fade to hiss']
+    },
+    urban: { // trap / rap / hip-hop — битовое дыхание и адлибы
+      intro: ['808 rumble, vinyl crackle, no drums', 'filtered sample loop, hats whisper', 'ad-libs echoing, beat about to drop'],
+      riser: ['riser swell and snare roll', 'hats speeding up, 808 swelling', 'beat stripped to kick, claps rising'],
+      contrast: ['beat cuts out, a cappella line', 'drums drop, 808 and vocal only', 'sample chops answer the vocal'],
+      space: ['wide stereo echo on ad-libs', 'half-time feel, big reverb on the clap', 'tape saturation, dusty loop hiss'],
+      lift: ['gang vocals, double-time hats, 808 slides', 'full beat returns, layered ad-libs', 'key change up, choir pads behind'],
+      solo: ['beat-only break, scratch fills', '808 gliding alone, bass solo', 'hat rolls and drum fill'],
+      outro: ['beat fades, vinyl crackle remains', '808 tail rings out, echo on the last line', 'hats fade, sample loops alone']
+    },
+    band: { // rock / pop — живая группа
+      intro: ['clean guitar riff, kick counting in', 'drums only build into the riff', 'acoustic strum, room mics opening'],
+      riser: ['floor tom build, cymbal swell', 'guitars opening up, slow build', 'snare rolls rising into the chorus'],
+      contrast: ['drums drop out, bass and guitar only', 'stripped to piano and vocal', 'breakdown to a whisper, then tension'],
+      space: ['cathedral reverb on the last line', 'wide stereo echo, distant answer vocal', 'tape saturation, warm room hiss'],
+      lift: ['bigger harmonies, double tempo drums', 'full-band lift, gang vocals', 'key change up, wider harmonies'],
+      solo: ['guitar solo, wide-vibrato lead', 'instrumental break, organ and riff', 'drum fill into the last chorus'],
+      outro: ['instruments peel away, last chord rings', 'riff slows, feedback fading', 'acoustic strum to silence']
+    },
+    groove: { // psychedelic soul / soul / funk / r&b — духовые и грув
+      intro: ['horn stabs, hi-hat counting in', 'bass and clav riff, no drums', 'wah guitar licks, congas whispering'],
+      riser: ['congas building, horns swelling', 'organ riser, drums opening up', 'tambourine rising into the chorus'],
+      contrast: ['drums drop out, bass and clav only', 'breakdown to handclaps and vocal', 'horns drop out, guitar answers alone'],
+      space: ['wide stereo echo on the horn line', 'vintage plate reverb on the vocal', 'tape saturation, warm analog hiss'],
+      lift: ['full horn section, gang vocals', 'key change up, stacked harmonies', 'double-time groove, tambourine, wider stack'],
+      solo: ['sax solo, breathy and wide', 'clav solo over the breakdown', 'bass solo with popping fills'],
+      outro: ['horns fade, groove rides out', 'band peels away, congas and ad-libs', 'vamp fades, handclaps to the end']
+    },
+    mellow: { // dream pop / trip-hop / lo-fi / ambient — дым и текстура
+      intro: ['hazy pads, vinyl crackle, no drums', 'soft guitar arpeggio, tape hiss', 'distant piano, room tone only'],
+      riser: ['filtered drums slowly rising', 'pads swelling, snare softly building', 'slow build, textures stacking'],
+      contrast: ['drums drop out, bass and pad only', 'breakdown to a whisper vocal', 'beat mutes, keys answer alone'],
+      space: ['cathedral reverb tail, washy guitars', 'wide stereo echo, voice doubled far', 'tape saturation, warm hiss, wow and flutter'],
+      lift: ['bigger harmonies, drums opening wide', 'wall of sound, wider stack', 'key change up, layered vocal haze'],
+      solo: ['dreamy guitar solo, tremolo drift', 'instrumental break, mellotron pad', 'piano break over vinyl crackle'],
+      outro: ['pads and hiss fading to silence', 'instruments dissolve, echo remains', 'tape stops, room tone alone']
+    },
+    acoustic: { // jazz / folk / ballad — камерная динамика
+      intro: ['brushes on snare, upright bass walking', 'piano intro, soft room reverb', 'fingerpicked guitar, warm and close'],
+      riser: ['brushes swelling, piano rising', 'strings entering softly, slow build', 'hushed snare roll, crescendo into chorus'],
+      contrast: ['drums drop out, bass and piano only', 'strings enter, voice alone with them', 'breakdown to voice and guitar'],
+      space: ['hall reverb on the vocal tail', 'wide stereo echo, distant strings answer', 'tape saturation, warm analog hiss'],
+      lift: ['strings soar, bigger harmonies', 'full ensemble, key change up', 'crescendo, choir answers the lead'],
+      solo: ['sax solo, warm and smoky', 'piano solo, sparse and late-night', 'upright bass solo, brushes behind'],
+      outro: ['ensemble fades to piano alone', 'last chord rings, hall tail lingering', 'guitar slows to a whispered end']
+    },
+    score: { // cinematic / orchestral — кинематографические волны
+      intro: ['low strings swell, timpani roll', 'solo piano over a string pad', 'distant choir, hall ambience only'],
+      riser: ['timpani and strings rising', 'crescendo build, brass entering', 'harp glissando into the chorus'],
+      contrast: ['ensemble drops to solo cello', 'strings only, percussion silent', 'breakdown to voice and piano'],
+      space: ['cathedral choir reverb tail', 'wide hall echo, distant brass answer', 'sudden stop, one heartbeat pulse'],
+      lift: ['full orchestra, cymbals, key change up', 'choir and brass together, biggest dynamics', 'crescendo to fortissimo, timpani rolls'],
+      solo: ['violin solo over the strings', 'oboe solo, distant and clear', 'piano cadenza, orchestra silent'],
+      outro: ['orchestra fades to strings alone', 'instruments peel away, hall tail remains', 'final chord decays to silence']
+    }
+  };
+  const BRACKETS_GENERIC = { // нейтральный профиль — семейство не определено
+    intro: ['drums only build, atmosphere entering', 'bass groove alone, no melody yet', 'texture pad, filter slowly opening'],
+    riser: ['filtered drums slowly rising', 'slow build, riser swell', 'percussion building, tension rising'],
+    contrast: ['drums drop out, sparse bass', 'strings enter, bass only', 'breakdown to a whisper'],
+    space: ['cathedral reverb tail', 'wide stereo echo, distant answer', 'tape saturation, warm hiss'],
+    lift: ['bigger harmonies, double tempo drums', 'key change up, wider harmonies', 'full-band lift, gang vocals'],
+    solo: ['instrumental break, lead takes over', 'guitar solo, expressive lead', 'synth solo, filter opening'],
+    outro: ['instruments peel away, slow fade', 'beat fades, echo tail remains', 'elements dissolve to silence']
+  };
+  const BRACKET_SLOTS = ['intro', 'riser', 'contrast', 'space', 'lift', 'solo', 'outro'];
   const SECTION_LINE_RE = /^\[([A-Za-z][^\]\n]{0,60})\]$/;
-  function markLyricsDynamics(lyrics) {
+  // Биграммы текста — для анти-дублирования брекетов с caption (§2.4): брекет
+  // описывает ИЗМЕНЕНИЕ во времени и не должен повторять слой caption дословно
+  // (одно общее слово «drums» допустимо — «gated snare drops out» это изменение).
+  function bracketBigrams(s) {
+    const w = String(s || '').toLowerCase().match(/[a-z]+/g) || [];
+    const set = new Set();
+    for (let i = 0; i + 1 < w.length; i++) set.add(w[i] + ' ' + w[i + 1]);
+    return set;
+  }
+
+  function markLyricsDynamics(lyrics, options) {
+    const opts = options || {};
     const text = String(lyrics || '');
-    const none = { lyrics: text, marked: 0, authored: 0 };
+    const none = { lyrics: text, marked: 0, authored: 0, style: null };
     if (!text.trim()) return none;
     // Автор уже размечал эффекты? ([Chorus: layered harmonies] — двоеточие
     // внутри тега.) Тогда лирика идёт в модель как есть — мозг не дописывает.
     const authored = text.match(/\[[^\]\n]+:[^\]\n]+\]/g) || [];
-    if (authored.length) return { lyrics: text, marked: 0, authored: authored.length };
+    if (authored.length) return { lyrics: text, marked: 0, authored: authored.length, style: null };
     const lines = text.split(/\r?\n/);
     const tagOf = line => { const m = (line || '').trim().match(SECTION_LINE_RE); return m ? m[1] : null; };
     const base = label => label.split(':')[0].trim();
-    const key = label => base(label).toLowerCase().replace(/\s+\d+$/, '');
+    // 'Final Chorus'/'Last Chorus' — тоже припев; номера куплетов снимаются.
+    const key = label => base(label).toLowerCase().replace(/^(?:final|last)\s+/, '').replace(/\s+\d+$/, '');
     const sections = {};
-    lines.forEach((l, i) => { const t = tagOf(l); if (t) (sections[key(t)] = sections[key(t)] || []).push(i); });
+    const tagLines = [];
+    lines.forEach((l, i) => {
+      const t = tagOf(l);
+      if (t) { tagLines.push(i); (sections[key(t)] = sections[key(t)] || []).push(i); }
+    });
     // Нет секций — структуру не выдумываем (правило «ничего не выдумывать»).
-    if (!Object.keys(sections).length) return none;
-    const pick = (pool, salt) => pool[hashText(text + '|' + salt) % pool.length];
+    if (!tagLines.length) return none;
+    // Стилевой профиль: явное семейство (черновик сессии) → жанровые слова caption.
+    const family = resolveStyle(
+      scan(String(opts.caption || '') + ' ' + String(opts.style || ''), GENRE_WORDS, 2).map(g => g.tag),
+      { style: opts.style }).key;
+    const profile = family && BRACKET_GROUPS[family] ? BRACKETS_BY_GROUP[BRACKET_GROUPS[family]] : BRACKETS_GENERIC;
+    const captionBigrams = bracketBigrams(opts.caption);
+    const usedFx = new Set();   // §3: ни один брекет не повторяет другой дословно
+    const usedLine = new Set(); // §2.2: один брекет на секцию
+    const pick = (pool, salt) => {
+      const free = pool.filter(e => !usedFx.has(e) && ![...bracketBigrams(e)].some(b => captionBigrams.has(b)));
+      return free.length ? free[hashText(text + '|' + (family || 'generic') + '|' + salt) % free.length] : null;
+    };
     const enrich = (i, effect) => {
       const t = tagOf(lines[i]); if (!t) return false;
       lines[i] = '[' + base(t) + ': ' + effect + ']';
       return true;
     };
+    // Норма плотности §3: ≤6 на полную лирику, коротким трекам (≤6 секций) — 3–4.
+    const cap = tagLines.length <= 6 ? 4 : 6;
+    const first = k => (sections[k] || [])[0];
+    const last = k => { const a = sections[k] || []; return a.length ? a[a.length - 1] : undefined; };
+    // Соло-слот (категория §1.5): interlude/solo/breakdown/drop; одиночный
+    // [Instrumental] на всю лирику не размечаем — это не вставка, а режим.
+    const soloAt = Object.keys(sections).length > 1
+      ? tagLines.find(i => /(?:solo|interlude|breakdown|instrumental|drop)/.test(key(tagOf(lines[i]))))
+      : undefined;
+    const spaceAt = first('bridge') !== undefined ? first('bridge') : first('outro');
+    // Приоритет чек-листа §3: lift финального припева (§2.7) → riser перед
+    // первым припевом → куплет 2 ≠ куплет 1 → брекет пространства → интро →
+    // соло-вставка → аутро. Незаполненный слот не тратит бюджет.
+    const slots = [
+      { at: last('chorus') !== undefined ? last('chorus') : last('hook'), pool: 'lift', salt: 'lift' },
+      { at: first('pre-chorus'), pool: 'riser', salt: 'riser' },
+      { at: (sections['verse'] || [])[1], pool: 'contrast', salt: 'verse2' },
+      { at: spaceAt, pool: 'space', salt: 'space' },
+      { at: first('intro'), pool: 'intro', salt: 'intro' },
+      { at: soloAt, pool: 'solo', salt: 'solo' },
+      { at: first('outro'), pool: 'outro', salt: 'outro' }
+    ];
     let marked = 0;
-    const lifts = ['bigger harmonies, double tempo drums', 'key change up, wider harmonies', 'full-band lift, gang vocals'];
-    const risers = ['filtered drums slowly rising', 'slow build, riser swell'];
-    const contrasts = ['drums drop out, sparse bass', 'strings enter, bass only', 'breakdown to a whisper'];
-    const spaces = ['cathedral reverb tail', 'wide stereo echo, distant answer', 'tape saturation, warm hiss'];
-    // 1) последний припев — lift (§2.7: финальный припев почти всегда с брекетом)
-    const choruses = sections['chorus'] || sections['hook'] || [];
-    if (choruses.length && enrich(choruses[choruses.length - 1], pick(lifts, 'lift'))) marked++;
-    // 2) riser/build перед главным припевом (§3 чек-лист)
-    const pre = sections['pre-chorus'] || [];
-    if (pre.length && enrich(pre[pre.length - 1], pick(risers, 'riser'))) marked++;
-    // 3) куплет 2 ≠ куплет 1 — контраст тишины (§3 чек-лист)
-    const verses = sections['verse'] || [];
-    if (verses.length >= 2 && enrich(verses[1], pick(contrasts, 'verse2'))) marked++;
-    // 4) брекет пространства — бридж, при его отсутствии — аутро (§3 чек-лист)
-    const spaceAt = (sections['bridge'] || [])[0] != null ? sections['bridge'][0] : (sections['outro'] || [])[0];
-    if (spaceAt != null && enrich(spaceAt, pick(spaces, 'space'))) marked++;
-    // Норма плотности §2.2 (≤6 на трек) выполнена: максимум 4 брекета.
-    return { lyrics: lines.join('\n'), marked, authored: 0 };
+    for (const slot of slots) {
+      if (marked >= cap) break;
+      if (slot.at === undefined || usedLine.has(slot.at)) continue;
+      const effect = pick(profile[slot.pool] || BRACKETS_GENERIC[slot.pool], slot.salt);
+      if (!effect) continue;
+      if (enrich(slot.at, effect)) { usedFx.add(effect); usedLine.add(slot.at); marked++; }
+    }
+    return { lyrics: lines.join('\n'), marked, authored: 0, style: family || null };
   }
 
-  const VERSION = '2026-11-22-vocal-2';
+  const VERSION = '2026-11-23-brackets-2';
 
   globalThis.BRIIX_MUSIC_BRAIN = {
     version: VERSION,
@@ -1618,6 +1753,7 @@
     rules: {
       MAX_TAGS, MAX_CAPTION, MAX_CAPTION_WORDS, POSITIVE, LANG_TAGS,
       DEPTH_WORDS, DEPTH_BASE, STYLE_ATMOSPHERE, STYLE_ALIASES, resolveStyle, pickDepth,
+      BRACKET_GROUPS, BRACKETS_BY_GROUP, BRACKETS_GENERIC, BRACKET_SLOTS,
       VOICE_IDENTITY, DEFAULT_VOICE_IDENTITY,
       VOCAL_AXIS_ORDER, VOCAL_AXIS_WORDS, GUARDED_AXIS_WORDS, VOCAL_PROFILES, VOCAL_CONTRA_PAIRS,
       layerOrder: ['anchor', 'voice', 'rhythm', 'space', 'arrangement', 'tail', 'guards'],
