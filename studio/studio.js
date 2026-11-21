@@ -786,7 +786,7 @@
     stageBody.append(wait.row, eta.el);
     (async () => {
       try {
-        const result = await pollJob(rec.job, { shouldStop: () => handle.cancelled, onStatus: d => {
+        const result = await pollJob(rec.job, { timeoutMs: rec.kind === 'music' ? 60 * 60000 : 40 * 60000, shouldStop: () => handle.cancelled, onStatus: d => {
           if (d.stage) stageBody.querySelector('[data-wait]')?.setAttribute('data-wait-stage', d.stage);
         }, onRetry: n => setStatus(n ? ('Связь прерывается, пробуем снова (' + n + '/5)…') : 'Работаем…', true) });
         settleSessionJob(session, rec.job);
@@ -805,6 +805,10 @@
               : 'Отменить задачу на сервере не удалось. Проверьте результат в библиотеке.';
           };
           if (handle.serverCancelled === null) handle.onServerCancel = applyCancelNote; else applyCancelNote(handle.serverCancelled);
+        } else if (error.code === 'timeout') {
+          // #41: ожидание прервано — задача жива на сервере, запись в session.jobs
+          // сохранена: следующая перезагрузка подхватит готовый результат.
+          card('notice', 'Ожидание прервано', 'Задача всё ещё выполняется на сервере. Результат появится после перезагрузки страницы или в «Библиотеке».', session);
         } else {
           card('error', 'Ошибка', error.message || 'Неизвестная ошибка.', session);
         }
@@ -1657,19 +1661,32 @@
   }
 
   // Transparency-блок: что уехало в модель (#109) + происхождение лирики и имя/исполнитель.
+  // #41: мета-блок (название/исполнитель/слои мозга/источник лирики) + отдельные
+  // строки чтения «Промпт в модель», «Исходная идея» и «Текст песни» — тот же
+  // draftReadRow, что в черновиках: разворачиваются, копируются целиком.
   function addMusicDetails(container, input) {
     const details = document.createElement('details'); details.className = 'track-details';
     const summary = document.createElement('summary'); summary.textContent = 'Что уехало в модель';
-    const text = document.createElement('div');
-    let trackInfo = 'Промпт в модель: ' + (input.promptSent || input.prompt || '—');
-    if (input.brainLayers) trackInfo += '\n\nПромт собран мозгом: ' + input.brainLayers + ' слоёв.'; // #40: честная плашка
-    if (input.promptSent && input.prompt) trackInfo += '\n\nИсходная идея: ' + input.prompt;
-    if (input.title) trackInfo += '\n\nНазвание: ' + input.title;
-    if (input.artist) trackInfo += '\nИсполнитель: ' + input.artist;
-    trackInfo += '\n\nТекст песни: ' + (input.lyrics || (input.instrumental ? 'Инструментал' : '—'));
-    trackInfo += '\n\nИсточник лирики: ' + (input.lyricsSource || (input.instrumental ? 'инструментал' : 'не записан (старая карточка)'));
-    text.textContent = trackInfo;
-    details.append(summary, text); container.append(details);
+    const meta = document.createElement('div'); meta.className = 'track-meta';
+    const metaLine = (label, value) => {
+      if (!value) return;
+      const line = document.createElement('div');
+      line.textContent = label + ': ' + value;
+      meta.append(line);
+    };
+    metaLine('Название', input.title);
+    metaLine('Исполнитель', input.artist);
+    if (input.brainLayers) {
+      const badge = document.createElement('div'); badge.className = 'brain-badge';
+      badge.textContent = 'Промт собран мозгом: ' + input.brainLayers + ' слоёв.'; // #40: честная плашка
+      meta.append(badge);
+    }
+    metaLine('Источник лирики', input.lyricsSource || (input.instrumental ? 'инструментал' : null));
+    details.append(summary, meta);
+    details.append(draftReadRow('Промпт в модель', input.promptSent || input.prompt || ''));
+    if (input.promptSent && input.prompt) details.append(draftReadRow('Исходная идея', input.prompt));
+    details.append(draftReadRow('Текст песни', input.lyrics || (input.instrumental ? 'Инструментал' : '')));
+    container.append(details);
   }
 
   // Кнопка «Скачать» под готовым фото (blob уже в памяти или догрузится).
@@ -2617,7 +2634,10 @@
       const id = await submitJob({ type: 'music', prompt: finalPrompt, params });
       handle.jobId = id; // ✕ после отправки отменяет джобу и на сервере (T-05)
       recordSessionJob(session, id, 'music', input);
-      const result = await pollJob(id, { shouldStop: () => handle.cancelled, onStatus: d => {
+      // #41: серверный бюджет vocal на CPU — 2400с (40 мин) плюс очередь и обложка:
+      // прежний общий потолок 40 мин рвался ровно на длинных генерациях. Для музыки
+      // — 60 мин; при превышении задача не «умирает», а продолжает жить на сервере.
+      const result = await pollJob(id, { timeoutMs: 60 * 60000, shouldStop: () => handle.cancelled, onStatus: d => {
         if (d.stage) stageBody.querySelector('[data-wait]')?.setAttribute('data-wait-stage', d.stage);
       }, onRetry: n => setStatus(n ? ('Связь прерывается, пробуем снова (' + n + '/5)…') : 'Работаем…', true) });
       settleSessionJob(session, id);
@@ -2660,6 +2680,13 @@
           if (handle.serverCancelled === null) handle.onServerCancel = applyCancelNote; else applyCancelNote(handle.serverCancelled);
         }
       } else {
+        if (error.code === 'timeout') {
+          // #41: потолок ожидания исчерпан, но задача на сервере ЖИВА (запись в
+          // session.jobs не снята): перезагрузка страницы подхватит готовый трек
+          // через resumeSessionJobs, он же появится в Библиотеке.
+          card('notice', 'Ожидание прервано', 'Задача всё ещё выполняется на сервере — длинные генерации могут занять больше часа. Трек появится в этой сессии после перезагрузки страницы или в «Библиотеке», когда будет готов.', session);
+          return;
+        }
         // текст остаётся в полях для правки (в т.ч. после 422)
         restoreMusicDraft();
         errorCard(error, session);
@@ -2854,7 +2881,7 @@
     stage.append(wait.row);
     setBusy(true, 'Подготавливаем черновик…');
     let timedOut = false;
-    const timer = setTimeout(() => { timedOut = true; handle.controller.abort(); }, 150000);
+    const timer = setTimeout(() => { timedOut = true; handle.controller.abort(); }, 210000); // #41: 150с резали черновики (GLM-ответ длиннее минуты) — 210с при серверных 180с
     let raw = '';
     try {
       // Save the source before making the request, including when the user switches sessions.

@@ -66,7 +66,11 @@ TEXT_MODEL = "qwen3:4b-instruct"
 ZAI_BASE = "https://api.z.ai/api/paas/v4"
 ZAI_MODEL = "glm-4.5-flash"
 TEXT_FALLBACK_MODEL = TEXT_MODEL
-GLM_TIMEOUT = 60  # ≤60с на непотоковый вызов; для SSE — sock_read=60
+GLM_TIMEOUT = 60        # sock_read для SSE-потока и разово-быстрых вызовов
+# issue #41: непотоковый вызов (продюсерский черновик, 1800 токенов) физически
+# длиннее минуты — 60с резали каждый второй черновик на 502 upstream_error.
+# 180с ≈ клиентский потолок ожидания продюсера (210с) с запасом на сеть.
+GLM_TIMEOUT_NONSTREAM = 180
 
 
 def _load_zai_env(name):
@@ -164,7 +168,13 @@ HARD_PATTERNS = [
     r"\bsex scene\b", r"\bpornographic\b", r"\bhandjob\b", r"\bfacial\b.*\bsex\b",
 ]
 MINOR_TERMS = re.compile(r"\b(детск|ребен|ребён|малолет|несовершеннолетн|подростк|школьниц|школьник|дочк|сыночк|teens?|teenagers?|minors?|children|kids?|underage|preteen|loli|shota|schoolgirl|schoolboy)\w*", re.IGNORECASE)
-SEXUAL_TERMS = re.compile(r"\b(секс|сексуальн|эрот|порн|гол[аоу]|обнаж|интим|nude|naked|nsfw|sex|sexual|erotic|porn|unclothed|topless)\w*", re.IGNORECASE)
+# issue #41: «гол[аоу]» ловил «голос/голоса/голубой/голод» (обычные слова песен) —
+# вместе с MINOR_TERMS («детск/школьн/…» из ностальгических тем) это давало
+# жёсткий 422 «explicit» без LLM-ступени. Матчатся только формы прилагательного
+# «голый» — «голос» и «голубой» больше не считаются сексуальной лексикой; бонус:
+# множественные формы («голых», «голые», «голым»), которые старое правило
+# пропускало, теперь ловятся.
+SEXUAL_TERMS = re.compile(r"\b(секс|сексуальн|эрот|порн|гол(?:ый|ая|ое|ые|ым|ого|ой|ому|ых|ыми|ую)|обнаж|интим|nude|naked|nsfw|sex|sexual|erotic|porn|unclothed|topless)\w*", re.IGNORECASE)
 CRIME_PATTERNS = [
     r"как\s+(сделать|изготовить|сварить)\s+(бомбу|взрывчатк\w*|наркотик\w*|мет\w*|яд)",
     r"\b(how to (make|build|synthesize)\s+(a\s+)?(bomb|explosive|meth|poison))\b",
@@ -1039,7 +1049,7 @@ async def _chat_glm(request, body, payload, rid, err_event):
         try:
             async with ClientSession() as s:
                 async with s.post(url, json=glm_payload, headers=headers,
-                                  timeout=ClientTimeout(total=GLM_TIMEOUT)) as r:
+                                  timeout=ClientTimeout(total=GLM_TIMEOUT_NONSTREAM)) as r:
                     if r.status != 200:
                         log(f"glm {rid} http {r.status} -> fallback {TEXT_MODEL}")
                         return None
@@ -1676,6 +1686,21 @@ async def mux_music(j):
         return await asyncio.to_thread(build_m4a, j)
 
 
+async def _prebuild_m4a(j):
+    """issue #41: фоновая сборка M4A сразу после ready — к моменту первого
+    GET /files/{id} кэш уже тёплый, слушатель не ждёт mux-on-download после
+    длинной генерации (клиентское окно первых байтов — 90 с, ffmpeg на длинном
+    треке может не успеть). Ошибки некритичны: путь скачивания пересоберёт сам."""
+    try:
+        if j.get("deleted") or j.get("status") != "ready":
+            return
+        if not (RESULTS / f"{j['id']}.m4a").exists() and (RESULTS / f"{j['id']}.wav").exists():
+            await mux_music(j)
+            log(f"m4a prebuilt {j['id']}")
+    except Exception as e:
+        log(f"m4a prebuild {j['id']}: {type(e).__name__}")
+
+
 def build_peaks(jid):
     """infra#108: один проход ffmpeg по results/{id}.wav -> PCM s16le mono,
     окна-пики, нормировка 0..1, компактный JSON рядом с WAV (~1-2 КБ)."""
@@ -1864,6 +1889,10 @@ async def executor():
             j["provenance"]["wall_clock_ms"] = round((time.time() - j["started_at"]) * 1000)
             j["finished_at"] = time.time()
             log(f"ready {jid} wall={j['provenance']['wall_clock_ms']}ms")
+            if j["type"] == "music":
+                # issue #41: тёплый кэш M4A — первый слушатель не ждёт
+                # mux-on-download после длинной генерации.
+                asyncio.ensure_future(_prebuild_m4a(j))
         except asyncio.CancelledError:
             raise
         except TimeoutError as e:
