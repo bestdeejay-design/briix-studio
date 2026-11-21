@@ -310,7 +310,8 @@
     sessionsList: $('sessionsList'), storageWarning: $('storageWarning'),
     opsOverlay: $('opsOverlay'), opsText: $('opsText'), opsStopLogout: $('opsStopLogout'),
     opsStay: $('opsStay'), opsCancel: $('opsCancel'), opsBadge: $('opsBadge'),
-    keyRemember: $('keyRemember'), profileWipeBtn: $('profileWipeBtn'), netBanner: $('netBanner')
+    keyRemember: $('keyRemember'), profileWipeBtn: $('profileWipeBtn'), netBanner: $('netBanner'),
+    coachHint: $('coachHint'), coachDismiss: $('coachDismiss') // #35 волна UX: подсказка первого запуска
   };
 
   let mode = 'music';
@@ -497,6 +498,7 @@
     ensureRoot(activeSession);
     rootFor(activeSession).hidden = false;
     loadDraft(activeSession);
+    restoreScroll(); // #35 волна UX: рестор открывает ленту на последнем посте
     renderOpsBadge();
   }
   function handleStorageConflict() {
@@ -664,7 +666,23 @@
       session.titleSet = true;
     }
     session.updatedAt = Date.now();
+    if (d.t === 'user') updateCoachHint(); // #35 волна UX: разговор начался — подсказка больше не нужна
     return persistSessions();
+  }
+
+  // ---- #35 волна UX: подсказка первого запуска -------------------------------
+  // Владелец на приёмке 21.11 не нашёл настройки с первого раза. Одна строка
+  // над композером на свежей сессии; крестик записывает hintDismissed в профиль
+  // сессий (необязательное булево поле, схема остаётся v2 — санитайзер знает поле).
+  function updateCoachHint() {
+    const fresh = Boolean(activeSession && Array.isArray(activeSession.feed) && activeSession.feed.length === 0);
+    els.coachHint.hidden = !fresh || !sessionProfile || sessionProfile.hintDismissed === true;
+  }
+  function dismissCoachHint() {
+    if (!sessionProfile) return;
+    sessionProfile.hintDismissed = true;
+    els.coachHint.hidden = true;
+    persistSessions(); // факт показа переживёт перезагрузку (санитайзер поля)
   }
   // T-33: track — флаг, а не копия текста (раньше ответ хранился дважды:
   // в text и в track). Старые записи со строкой в track читаются как раньше.
@@ -968,6 +986,27 @@
       setTimeout(() => { obs.disconnect(); }, 900);
     }
     setTimeout(reStick, 450); // rAF сознательно не используется: T-39 держит кадр и считает очереди
+  }
+  // #35 волна UX (акцепт 21.11 «открывается первый, а не последний пост»):
+  // восстановленная/переключённая сессия открывает ленту на последнем посте —
+  // принудительный скролл к низу + та же докрутка reStick, что у F-39 (ленивые
+  // медиа дорисовываются после скролла и растягивают ленту). Порог — прежний
+  // F-39 (140px), без новых пиксельных констант. Пилюля «новых» не вооружается:
+  // её счёт (noteNewCard) живёт в card() и restore-карточки не считает.
+  function restoreScroll() {
+    if (els.feed.hidden) return;
+    const top = els.feed.scrollHeight;
+    els.feed.scrollTop = top;
+    const reStick = () => {
+      if (els.feed.scrollTop >= top - els.feed.clientHeight - 140) els.feed.scrollTop = els.feed.scrollHeight;
+    };
+    let obs = null;
+    if (typeof MutationObserver === 'function') {
+      obs = new MutationObserver(reStick);
+      obs.observe(els.feed, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+      setTimeout(() => { obs.disconnect(); }, 900);
+    }
+    setTimeout(reStick, 450);
   }
 
   // ---- F-39: пилюля «↓ N новых» ----------------------------------------------
@@ -3018,6 +3057,8 @@
     rootFor(session).hidden = false;
     loadDraft(session);
     setView('chat');
+    restoreScroll(); // #35 волна UX: смена сессии — тоже рестор ленты
+    updateCoachHint(); // #35 волна UX: свежая сессия — подсказка видна, у разговора скрыта
     closeSessions();
     renderOpsBadge(); // T-20: чужая занятость меняется при смене сессии
     persistSessions();
@@ -3166,6 +3207,8 @@
       }
       sessionProfile.activeSessionId = activeSession.id;
       ensureRoot(activeSession); rootFor(activeSession).hidden = false; loadDraft(activeSession);
+      restoreScroll(); // #35 волна UX: вход — лента сразу на последнем посте
+      updateCoachHint(); // #35 волна UX: подсказка первого запуска
       storageBlocked = false;
       document.documentElement.setAttribute('data-storage-ready', '1'); // хук сюит (#35)
       await persistSessions();
@@ -3846,7 +3889,8 @@
     closeMenus(); // #35: кнопка живёт в «⋯»-панели — запуск закрывает её
     await createMusic(promptValue());
   });
-  els.prepareMusic.addEventListener('click', () => { closeMenus(); prepareMusic(); }); // #35: тоже в «⋯»-панели
+  els.prepareMusic.addEventListener('click', () => { closeMenus(); prepareMusic(); }); // #35 волна UX: кнопка в меню студии (бургере) — запуск закрывает меню
+  els.coachDismiss.addEventListener('click', dismissCoachHint); // #35 волна UX: подсказка закрывается в профиль
   // F-33: черновик композера пишется на вводе (дебаунс 400 мс) — раньше
   // набранный текст терялся при закрытии вкладки без смены сессии.
   for (const el of [els.prompt, els.lyrics, els.musicPrompt]) el.addEventListener('input', saveDraftSoon);

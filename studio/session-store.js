@@ -239,6 +239,12 @@
     // Ничего не изменилось — возвращаем профиль как есть: open() не переписывает
     // валидную запись в хранилище при каждом открытии. Битые записи по-прежнему
     // перезаписываются (хотфикс #23).
+    // #35 волна UX: hintDismissed — необязательный булев флаг профиля (подсказка
+    // первого запуска показана). Отсутствие не создаём; не-булево чиним. Схема
+    // остаётся v2: поле необязательное, старые версии его просто игнорируют.
+    if (profile.hintDismissed !== undefined && typeof profile.hintDismissed !== 'boolean') {
+      return { profile: { ...profile, sessions, hintDismissed: Boolean(profile.hintDismissed) }, changed: true };
+    }
     if (!changed) return { profile, changed: false };
     return { profile: { ...profile, sessions }, changed: true };
   }
