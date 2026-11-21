@@ -79,9 +79,11 @@ assert.match(overload.tags, PROD_RE, 'при усечении продакшн-�
 assert.match(overload.tags, VOICE_CHAR_RE, 'при усечении характер вокала выживает');
 assert.ok(overload.notes.some(n => /срезано/.test(n.tag)), 'усечение видно в notes (не молчаливое)');
 // Короткий бриф не раздувается: caption остаётся в рамках трёх слоёв + хвост
-// (+ одна базовая пара планов глубины, ~30 символов).
+// (+ одна базовая пара планов глубины, ~30 символов; с #46 нейтральный
+// голосовой профиль из трёх токенов — «кто поёт, тембр, обработка» — вместо
+// одного «intimate delivery», поэтому планка 160, а не 150).
 const short = brain.buildTags('песня', { kind: 'song' });
-assert.ok(short.tags.length <= 150, `короткий бриф не раздувается (${short.tags.length} <= 150)`);
+assert.ok(short.tags.length <= 160, `короткий бриф не раздувается (${short.tags.length} <= 160)`);
 assert.ok(short.tags.split(', ').length <= 9, 'не больше 9 блоков на короткой задумке');
 
 // ------------------------------------------------------ (5) 20 брифов -------
@@ -316,9 +318,14 @@ const enProd = brain.buildTags('vinyl, tape saturation, warm analog, 80s synthwa
 assert.match(enProd.tags, /vinyl crackle/, 'vinyl → vinyl crackle');
 assert.match(enProd.tags, /tape saturation/, 'tape → tape saturation');
 assert.match(enProd.tags, /80s/, 'английская эпоха распознана');
-const enMood = brain.buildTags('melancholic dreamy ballad, grand piano', { kind: 'song' });
-assert.match(enMood.tags, /melancholic/, 'melancholic → тег настроения');
-assert.match(enMood.tags, /dreamy/, 'dreamy → тег настроения');
+// Настроение — на полном пути 640 (реальный путь студии): в компактном 240
+// голосовой блок #46 весит больше хвоста (правило 1 справки — голос первым),
+// и хвост настроения режется бюджетом — это видно в notes, не молча.
+const enMood = brain.buildCaption('melancholic dreamy ballad, grand piano', { kind: 'song' });
+assert.match(enMood.caption, /melancholic/, 'melancholic → тег настроения');
+assert.match(enMood.caption, /dreamy/, 'dreamy → тег настроения');
+const enMoodCompact = brain.buildTags('melancholic dreamy ballad, grand piano', { kind: 'song' });
+assert.match(enMoodCompact.tags, /male vocals/, 'компакт держит голосовой блок');
 // «dream pop» — жанр, а не концепт «лирики о снах» (голого ключа dream нет).
 const dreamPop = brain.buildCaption('dream pop, 90 BPM', { kind: 'song' });
 assert.doesNotMatch(dreamPop.caption, /lyrics about dreams?/, 'dream pop не превращается в «лирику о снах»');
@@ -337,7 +344,81 @@ assert.ok(byFamily.layers.anchor.genre.includes('dream pop'), 'семейств�
 assert.doesNotMatch(byFamily.caption, /steady drum groove \(kick \+ snare\)/, 'ритм не на фолбэке, а по профилю семейства');
 assert.match(byFamily.caption, /soft|shimmer|reverb|pads/i, 'профиль семейства слышен в сборке');
 
+// ------------- (16) VOCAL PROFILE VOCABULARY — голос по семи осям (#46) -----
+// Справка координатора (audits/vocal-profile-vocabulary.md, 22.11): голос
+// задаётся характеристиками, у всех 23 семей есть профиль, голосовой блок
+// открывает caption, перекрытие идёт по осям, противоречия запрещены,
+// вместо generic-хвоста — нейтраль, источник голоса виден (бейдж).
+const vprof = brain.rules.VOCAL_PROFILES;
+const axisWords = brain.rules.VOCAL_AXIS_WORDS;
+assert.deepEqual([...brain.rules.VOCAL_AXIS_ORDER], ['who', 'register', 'timbre', 'power', 'technique', 'character', 'processing'],
+  'семь осей голоса в порядке справки');
+for (const f of Object.keys(brain.rules.STYLE_ATMOSPHERE)) {
+  const p = vprof[f];
+  assert.ok(p, `профиль голоса для «${f}»`);
+  assert.ok((p.who || []).length, `«${f}»: ось «кто поёт»`);
+  assert.ok((p.timbre || []).length, `«${f}»: ось тембра`);
+  assert.ok((p.power || []).length, `«${f}»: ось подачи`);
+  assert.ok(typeof p.mood === 'string' && p.mood, `«${f}»: семейный дефолт настроения`);
+}
+// Профили чистые: ни одна семья не носит взаимоисключающие токены (правило 3).
+for (const [f, p] of Object.entries(vprof)) {
+  const all = Object.keys(p).filter(k => k !== 'mood').flatMap(k => p[k]);
+  for (const [rough, soft] of brain.rules.VOCAL_CONTRA_PAIRS) {
+    for (const t of all) {
+      const others = all.filter(o => o !== t).join(' ');
+      assert.ok(!(rough.test(t) && soft.test(others)), `«${f}»: профиль без противоречий (${t})`);
+    }
+  }
+}
+// Голосовой блок — ПЕРВЫМ в caption (правило 1: модели весят начало выше).
+const rockCap = brain.buildCaption('rock, 96 BPM', { kind: 'song' });
+assert.match(rockCap.caption, /^gritty baritone/, 'голосовой блок открывает caption');
+assert.ok(rockCap.caption.indexOf('gritty baritone') < rockCap.caption.indexOf('rock'), 'голос стоит раньше якоря жанра');
+assert.match(rockCap.caption, /raspy aggressive delivery/, 'семейный профиль рока слышен');
+assert.match(rockCap.caption, /sung verses shouted into a full-throated chorus/, 'техника семьи доезжает целиком');
+assert.ok(rockCap.caption.length <= MAX_CAPTION, 'богатый голосовой профиль укладывается в 640');
+// Перекрытие по осям (правило 2): «рок, женский вокал шёпотом» — пол и подача
+// от автора, незатронутые оси остаются от семьи.
+const rockOver = brain.buildCaption('rock, женский вокал шёпотом', { kind: 'song' });
+assert.match(rockOver.caption, /female vocals/, 'пол от автора перекрыл семью');
+assert.match(rockOver.caption, /whispered delivery/, 'подача от автора перекрыла семью');
+assert.match(rockOver.caption, /thick midrange timbre/, 'незатронутая ось (тембр) осталась от семьи');
+assert.doesNotMatch(rockOver.caption, /raspy aggressive/, 'затронутая ось (подача) не дополняется семьёй');
+// Запрет противоречий (правило 3): семейный «рычащий» токен уступает
+// придыханию автора (growl + breathy — пример справки).
+const contra = brain.buildCaption('rock, придыханный голос', { kind: 'song' });
+assert.match(contra.caption, /breathy tone/, 'придыхание автора на месте');
+assert.doesNotMatch(contra.caption, /raspy aggressive/, 'семейная агрессия снята при придыхании автора');
+assert.doesNotMatch(contra.caption, /sung verses shouted/, 'кричащий припев семьи снят при тихой подаче автора');
+assert.doesNotMatch(contra.caption, /gritty baritone/, 'грубый регистр семьи снят при мягком голосе автора');
+// Нейтраль (правило 6): семья не распознана и автор промолчал — чистый сухой
+// профиль вместо generic-хвоста «intimate delivery» (§5 справки).
+const neut = brain.buildCaption('песня про дорогу', { kind: 'song' });
+assert.match(neut.caption, /clean tone/, 'нейтральный тембр');
+assert.match(neut.caption, /dry upfront vocal/, 'нейтральная обработка');
+assert.doesNotMatch(neut.caption, /intimate delivery/, 'generic-хвост больше не дописывается всем подряд');
+// Бейдж (правило 5): источник голоса честно виден в слоях.
+assert.equal(neut.layers.voice.profile.source, 'neutral', 'бейдж: нейтральный профиль');
+assert.equal(rockCap.layers.voice.profile.source, 'style', 'бейдж: голос из стиля');
+assert.equal(rockCap.layers.voice.profile.family, 'rock', 'бейдж называет семью');
+assert.equal(rockOver.layers.voice.profile.source, 'mixed', 'бейдж: смешанный источник');
+assert.ok(rockOver.layers.voice.profile.userCount >= 2, 'признаки автора считаются');
+assert.ok(rockCap.notes.some(n => n.layer === 'voice.profile'), 'профиль голоса в notes (не молчаливое решение)');
+// Семейный дефолт настроения вместо generic-«atmospheric» (§5).
+assert.ok(rockCap.layers.tail.mood.includes('aggressive'), 'rock → агрессивное настроение');
+const dpMood = brain.buildCaption('dream pop, 90 BPM', { kind: 'song' });
+assert.ok(dpMood.layers.tail.mood.includes('dreamy'), 'dream pop → мечтательное настроение');
+// A/B (§4 справки): одна задумка, два стиля — голосовые блоки различимы,
+// оба caption проходят самопроверку (разница слышна без подсказки).
+const abA = brain.buildCaption('грув, бас, 96 BPM', { kind: 'song', style: 'dream pop' });
+const abB = brain.buildCaption('грув, бас, 96 BPM', { kind: 'song', style: 'rock' });
+assert.notEqual(abA.layers.voice.tags.join(','), abB.layers.voice.tags.join(','), 'A/B: голосовые профили различимы');
+assert.ok(abA.selfCheck.ok && abB.selfCheck.ok, 'оба A/B caption проходят самопроверку');
+// Слои осей видны наружу для отладки и карточки.
+assert.ok(abA.layers.voice.axes.timbre && Array.isArray(abA.layers.voice.axes.timbre.tokens), 'оси экспортированы в слоях');
+
 // ------------------------------------------------------------------ вывод --
-console.log('PASS music-brain v3: слои, ритм-всегда, вокал с характером и фиксированной идентичностью, продакшн, бюджет, негативы, self-check, полный трек (роли/микс/форма/защита), глубина и стилевая атмосфера, разделение caption/лирики и потолок токенов');
+console.log('PASS music-brain v3: слои, ритм-всегда, вокал с характером и фиксированной идентичностью, продакшн, бюджет, негативы, self-check, полный трек (роли/микс/форма/защита), глубина и стилевая атмосфера, разделение caption/лирики и потолок токенов, голос по семи осям (#46: семейные профили, перекрытие осей, запрет противоречий, нейтраль, бейдж)');
 console.log('20 брифов (buildTags / buildCaption, символы):');
 for (const r of rows) console.log(`  ${r.id} ${r.source.padEnd(9)} ${String(r.len).padStart(3)} / ${String(r.captionLen).padStart(3)}  ${r.tags}`);

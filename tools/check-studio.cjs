@@ -1817,6 +1817,9 @@ function bffServer(port) {
   // #40: честная плашка в карточке — «Промт собран мозгом: N слоёв» (#41: в .brain-badge мета-блока).
   const modelInfoText = await p.evaluate(() => [...document.querySelectorAll('.track-details')].map(el => el.textContent).join('\n'));
   assert.match(modelInfoText, /Промт собран мозгом: \d+ слоёв/, '#40: честная плашка слоёв в карточке трека');
+  // #46: бейдж происхождения голоса — «female vocals» из строки наставника
+  // перекрыл ось «кто поёт» семейного профиля dream pop → смешанный источник.
+  assert.match(modelInfoText, /Голос задан характеристиками: 1 признак \(свой выбор\)/, '#46: бейдж происхождения голоса в карточке трека');
   assert.equal(state.chatPosts.filter(x => x.stream === false && x.max_tokens === 300).length, 0, 'promptReady path skips silent translation');
   // Диалог и черновики персистятся в session-store (#35 W1-2: единый поток на сессии).
   const savedDialog = await p.evaluate(async () => {

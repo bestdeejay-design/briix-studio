@@ -258,6 +258,160 @@
   const VOICE_IDENTITY = { male: 'male vocals', female: 'female vocals' };
   const DEFAULT_VOICE_IDENTITY = 'male';
   const IDENTITY_RE = /female|male|baritone|tenor|bass voice|choir|duet/i;
+
+  /* ===== VOCAL PROFILE VOCABULARY (audits/vocal-profile-vocabulary.md, 22.11) =====
+   *
+   * Голос задаётся ХАРАКТЕРИСТИКАМИ по семи осям, а не именами артистов
+   * (#109: имена не попадают в caption никогда — утечки ловит styleLeaks).
+   * Оси 1/3/4 наследуют боевые словари VOCAL_GENDER / VOCAL_TEXTURE /
+   * VOCAL_DELIVERY: тот же вход, но теперь видно, КАКАЯ ось затронута, —
+   * перекрытие семейного профиля идёт по осям (правило 2 справки), а не
+   * «всё сразу» или «ничего». */
+  const VOCAL_AXIS_ORDER = ['who', 'register', 'timbre', 'power', 'technique', 'character', 'processing'];
+  const VOCAL_AXIS_WORDS = {
+    // ось 1 «кто поёт» — пол и идентичность (VOCAL_GENDER) + возраст
+    who: VOCAL_GENDER.concat([
+      ['девушк', 'young female vocals'], ['юна', 'young female vocals'], ['юный', 'young male vocals'],
+      ['young girl', 'young female vocals'], ['young female', 'young female vocals'],
+      ['young male', 'young male vocals'], ['boyish', 'boyish male vocals'],
+      ['mature man', 'mature male vocals'], ['mature male', 'mature male vocals'],
+      ['child', 'child-like vocals'], ['детск', 'child-like vocals'], ['ребён', 'child-like vocals']
+    ]),
+    // ось 2 «регистр» — сопрано/альт/тенор/баритон/бас
+    register: [
+      ['сопрано', 'soprano'], ['soprano', 'soprano'], ['альт', 'alto'], ['alto', 'alto'],
+      ['высокий голос', 'high-pitched vocals'], ['high-pitched', 'high-pitched vocals'],
+      ['тонкий голос', 'thin vocals'], ['тенор', 'male tenor'], ['tenor', 'male tenor'],
+      ['баритон', 'male baritone'], ['baritone', 'male baritone'],
+      ['низкий голос', 'deep male voice'], ['бас-голос', 'deep bass voice'],
+      ['deep bass voice', 'deep bass voice'], ['низкий вокал', 'deep male voice']
+    ],
+    // ось 3 «тембр» — фактура голоса (VOCAL_TEXTURE) + яркость/гладкость/нос
+    timbre: VOCAL_TEXTURE.concat([
+      ['bright vocal', 'bright timbre'], ['bright voice', 'bright timbre'], ['bright timbre', 'bright timbre'],
+      ['гнусав', 'nasal timbre'], ['nasal', 'nasal timbre'],
+      ['smooth vocal', 'smooth timbre'], ['smooth voice', 'smooth timbre'], ['smooth timbre', 'smooth timbre'],
+      ['thin vocal', 'thin vocals'], ['тонкий вокал', 'thin vocals'],
+      ['thick midrange', 'thick midrange timbre']
+    ]),
+    // ось 4 «мощь / подача» — как поёт (VOCAL_DELIVERY) + мощь и агрессия
+    power: VOCAL_DELIVERY.concat([
+      ['powerful', 'powerful belting'], ['belting', 'powerful belting'],
+      ['aggressive vocal', 'gritty aggressive delivery'], ['gritty', 'gritty aggressive delivery'],
+      ['брутальн', 'gritty aggressive delivery'],
+      ['laid-back', 'laid-back delivery'], ['расслабленн', 'laid-back delivery'],
+      ['shouted', 'shouted delivery'], ['на крик', 'shouted delivery']
+    ]),
+    // ось 5 «техника» — рык/скрим/вибрато/стаккато/фразировка
+    technique: [
+      ['рык', 'growl'], ['growl', 'growl'], ['скрим', 'screamo'], ['screamo', 'screamo'],
+      ['припев на крик', 'sung-to-shouted chorus'], ['sung-to-shouted', 'sung-to-shouted chorus'],
+      ['вибрат', 'wide vibrato'], ['vibrato', 'wide vibrato'],
+      ['стаккато', 'staccato punchy phrasing'], ['staccato', 'staccato punchy phrasing'],
+      ['melodic phrasing', 'melodic pop phrasing'], ['pop phrasing', 'melodic pop phrasing'],
+      ['речитатив', 'spoken word'], ['spoken word', 'spoken word'],
+      ['spoken-word', 'confident spoken-word flow']
+    ],
+    // ось 6 «характер» — настроение подачи
+    character: [
+      ['весёл', 'cheerful'], ['весел', 'cheerful'], ['cheerful', 'cheerful'],
+      ['игрив', 'playful'], ['playful', 'playful'], ['дерзк', 'confident'], ['confident', 'confident'],
+      ['злой голос', 'menacing'], ['menacing', 'menacing'], ['угрюм', 'menacing'],
+      ['тосклив', 'melancholic'], ['melancholic vocal', 'melancholic'],
+      ['соблазн', 'seductive'], ['seductive', 'seductive'],
+      ['героич', 'heroic'], ['heroic', 'heroic'], ['swagger', 'casual swagger']
+    ],
+    // ось 7 «обработка» — как голос записан
+    processing: [
+      ['сухой вокал', 'dry upfront vocal'], ['dry vocal', 'dry upfront vocal'], ['dry upfront', 'dry upfront vocal'],
+      ['двойной вокал', 'doubled vocals'], ['doubled vocal', 'doubled vocals'], ['дублирован', 'doubled vocals'],
+      ['хором', 'layered harmonies'], ['подпевки', 'layered harmonies'],
+      ['layered harmon', 'layered harmonies'], ['backing harmon', 'layered harmonies'],
+      ['с эхо', 'wide reverb vocal'], ['эхо на голос', 'wide reverb vocal'],
+      ['wide reverb vocal', 'wide reverb vocal'], ['reverb vocal', 'wide reverb vocal'],
+      ['автотюн', 'autotune-light polish'], ['autotune', 'autotune-light polish'],
+      ['radio-polished', 'radio-polished'], ['студийный голос', 'radio-polished'], ['radio polish', 'radio-polished']
+    ]
+  };
+  // Ключи, которые лазят в чужие смыслы без контекста голоса: «мощный бас» —
+  // это не belting, «звонкий бубенец» — не тембр вокала. Срабатывают только
+  // когда в задумке назван голос (тот же приём, что у LOW_VOICE_HINTS).
+  const GUARDED_AXIS_WORDS = {
+    who: [['взросл', 'mature vocals']],
+    power: [['мощн', 'powerful belting'], ['ленив', 'laid-back delivery'], ['агрессивн', 'gritty aggressive delivery']],
+    timbre: [['звонк', 'bright timbre'], ['гладк', 'smooth timbre']],
+    character: [['угрюм', 'menacing']]
+  };
+  /* Семейные профили голоса: готовый блок по осям для всех 23 семей
+   * STYLE_ATMOSPHERE (паритет проверяет check-music-brain, секция 16).
+   * Источник — §2 справки (проверенные кейсы координатора: евроданс, металл,
+   * европоп, баллада, девичий поп, рэп, ретро-диско) + остальные семьи в той
+   * же лексике. Профили чистые — без взаимоисключающих токенов (правило 3);
+   * mood — семейный дефолт настроения вместо generic-«atmospheric» (§5). */
+  const VOCAL_PROFILES = {
+    'psychedelic soul': { who: ['male vocals'], register: ['warm baritone'], timbre: ['warm timbre'],
+      power: ['laid-back delivery'], processing: ['dry upfront vocal'], mood: 'psychedelic' },
+    'soul': { who: ['female vocals'], register: ['alto'], timbre: ['warm timbre'],
+      power: ['powerful belting'], technique: ['wide vibrato'], processing: ['close-mic dry vocal'], mood: 'emotional' },
+    'funk': { who: ['male vocals'], timbre: ['bright timbre'], power: ['laid-back delivery'],
+      technique: ['staccato punchy phrasing'], character: ['playful'], processing: ['dry upfront vocal'], mood: 'euphoric' },
+    'dream pop': { who: ['young female vocals'], timbre: ['breathy tone'], power: ['fragile intimate delivery'],
+      processing: ['wide reverb vocal'], mood: 'dreamy' },
+    'pop': { who: ['young female vocals'], register: ['soprano'], timbre: ['bright timbre'],
+      power: ['confident delivery'], technique: ['melodic pop phrasing'], processing: ['radio-polished'], mood: 'euphoric' },
+    'rock': { who: ['male vocals'], register: ['gritty baritone'], timbre: ['thick midrange timbre'],
+      power: ['raspy aggressive delivery'], technique: ['sung verses shouted into a full-throated chorus'],
+      processing: ['punchy upfront vocal'], mood: 'aggressive' },
+    'techno': { who: ['female vocals'], timbre: ['thin vocals'], power: ['detached delivery'],
+      processing: ['dry upfront vocal'], mood: 'hypnotic' },
+    'tech house': { who: ['male vocals'], timbre: ['thin vocals'], power: ['spoken-sung'],
+      processing: ['dry upfront vocal'], mood: 'hypnotic' },
+    'house': { who: ['soulful female vocals'], timbre: ['bright timbre'], power: ['confident delivery'],
+      technique: ['melodic pop phrasing'], processing: ['wide reverb vocal'], mood: 'euphoric' },
+    'trap': { who: ['young male vocals'], timbre: ['nasal timbre'], power: ['laid-back delivery'], technique: ['staccato punchy phrasing'],
+      processing: ['autotune-light polish'], character: ['confident'], mood: 'dark' },
+    'rap': { who: ['male vocals'], timbre: ['chest voice'], power: ['confident spoken-word flow'], technique: ['rhythmic staccato phrasing'],
+      character: ['casual swagger'], processing: ['dry upfront vocal'], mood: 'urban' },
+    'hip-hop': { who: ['male vocals'], timbre: ['warm timbre'], power: ['laid-back spoken-word flow'],
+      technique: ['staccato punchy phrasing'], processing: ['dry upfront vocal'], mood: 'urban' },
+    'lo-fi': { who: ['female vocals'], timbre: ['muffled tone'], power: ['intimate delivery'],
+      processing: ['dry upfront vocal'], mood: 'nostalgic' },
+    'ambient': { who: ['female vocals'], timbre: ['breathy tone'], power: ['laid-back delivery'],
+      processing: ['wide reverb vocal'], mood: 'meditative' },
+    'cinematic': { who: ['choir'], timbre: ['warm timbre'], power: ['stately delivery'],
+      processing: ['wide reverb vocal'], mood: 'cinematic' },
+    'orchestral': { who: ['choir'], timbre: ['warm timbre'], power: ['stately delivery'],
+      processing: ['wide reverb vocal'], mood: 'anthemic' },
+    'jazz': { who: ['female vocals'], register: ['alto'], timbre: ['warm timbre'],
+      power: ['laid-back delivery'], technique: ['wide vibrato'], processing: ['close-mic dry vocal'], mood: 'nostalgic' },
+    'ballad': { who: ['mature male vocals'], timbre: ['warm timbre'], power: ['intimate soft delivery'],
+      technique: ['melodic pop phrasing'], processing: ['close-mic dry vocal'], mood: 'emotional' },
+    'edm': { who: ['young male vocals'], register: ['boyish tenor'], timbre: ['bright timbre'],
+      power: ['playful cheerful delivery'], technique: ['melodic pop phrasing'], processing: ['dry upfront vocal'],
+      mood: 'euphoric' },
+    'synthwave': { who: ['male vocals'], register: ['mid-register lead'], timbre: ['bright timbre'],
+      power: ['confident delivery'], technique: ['falsetto accents'],
+      character: ['confident'], processing: ['layered harmonies', 'wide reverb vocal'], mood: 'nostalgic' },
+    'trip-hop': { who: ['female vocals'], timbre: ['breathy tone'], power: ['laid-back delivery'],
+      processing: ['wide reverb vocal'], mood: 'haunting' },
+    'r&b': { who: ['female vocals'], timbre: ['velvet tone'], power: ['soft intimate delivery'],
+      technique: ['melodic pop phrasing'], processing: ['layered harmonies'], mood: 'sensual' },
+    'folk': { who: ['male vocals'], timbre: ['warm timbre'], power: ['plain intimate delivery'],
+      processing: ['close-mic dry vocal'], mood: 'warm' }
+  };
+  // Взаимоисключающие пары (правило 3 справки: raspy + smooth, growl + breathy).
+  // При конфликте семейный токен уступает авторскому — приоритет запроса (правило 2).
+  const VOCAL_CONTRA_PAIRS = [
+    [/(?:hoarse rasp|gravel|rough texture|growl|screamo|scream|shout|rasp|gritty|aggressive)/i,
+     /(?:smooth|clean tone|velvet|polished|soft|tender|delicate)/i],
+    [/(?:growl|screamo|scream|shout|gritty|aggressive|powerful belting|full-voice)/i,
+     /(?:breathy|whisper|half-whisper|intimate|soft|tender|fragile)/i]
+  ];
+  function dropContradictory(familyTokens, userTokens) {
+    const user = (userTokens || []).join(' ');
+    return (familyTokens || []).filter(t => !VOCAL_CONTRA_PAIRS.some(([rough, soft]) =>
+      (rough.test(t) && soft.test(user)) || (soft.test(t) && rough.test(user))));
+  }
   const FALSETTO_GUARD = 'chest voice, register never rises';
 
   // L1 SPACE — инструменты и продакшн-цепочка.
@@ -864,14 +1018,23 @@
       'soft', 'tight', 'dry', 'rolling', 'hypnotic', 'driving', 'broken', 'bouncy',
       'straight', 'chopped', 'unhurried', 'beatless', 'loose', 'organic', 'clean', 'smooth'];
     const head = uniq(chars.length ? chars : [profile.char])
+      // Слово характера не повторяет грув, который уже начинается с него:
+      // профиль рока {char:'live', groove:'live drum groove'} иначе давал
+      // «live live drum groove».
+      .filter(w => !grooveWord.startsWith(w + ' ') && grooveWord !== w)
       .sort((a, b) => CHAR_ORDER.indexOf(a) - CHAR_ORDER.indexOf(b));
     return {
-      phrase: [head.join(' ') + ' ' + grooveWord, '(' + kit + ')'].join(' '),
+      phrase: [[head.join(' '), grooveWord].filter(Boolean).join(' '), '(' + kit + ')'].join(' '),
       groove: grooveWord, kit, char: head.join(' '), from: { groove: grooveHit.map(h => h.from), kit: kitHit.map(h => h.from) }
     };
   }
 
-  function pickVoice(text, options) {
+  /* Голос по семи осям (vocal-profile-vocabulary.md): семейный профиль +
+   * перекрытие затронутых осей словами автора (правило 2) + нейтраль, когда
+   * семья не распознана и автор о голосе не сказал (правило 6). Идентичность
+   * (задумка → профиль слушателя → дефолт канала) и антифальцетный страж
+   * сохраняют прежнюю механику — они старше справки и проверены прогонами. */
+  function pickVoice(text, options, style) {
     const isSong = options.kind === 'song';
     const gender = scan(text, VOCAL_GENDER, 2);
     const delivery = scan(text, VOCAL_DELIVERY, 2);
@@ -886,28 +1049,72 @@
     const identityKey = String(options.voiceIdentity || '').toLowerCase();
     const identityTag = VOICE_IDENTITY[identityKey] || VOICE_IDENTITY[DEFAULT_VOICE_IDENTITY];
     const identityFrom = identityKey && VOICE_IDENTITY[identityKey] ? 'профиль' : 'дефолт канала';
-    // Пол назван в задумке → он сильнее профиля. Названа только фактура
-    // («бэк-вокал») → пол лида всё равно фиксируем, иначе он поплывёт.
-    const askedIdentity = gender.some(g => IDENTITY_RE.test(g.tag));
-    const genderTags = !isSong
-      ? []
-      : askedIdentity
-        ? gender.map(g => g.tag)
-        : gender.map(g => g.tag).concat(identityTag);
-    const character = [];
-    delivery.forEach(d => character.push(d.tag));
-    texture.forEach(t => character.push(t.tag));
-    if (antiFalsetto && !character.includes('falsetto')) character.push(FALSETTO_GUARD);
-    // Фактура есть всегда для песни: без неё голос описывает только пол.
-    if (isSong && !character.length) character.push('intimate delivery');
+
+    // Семейный профиль голоса: есть семья → её оси становятся дефолтами.
+    const familyKey = style && style.key && VOCAL_PROFILES[style.key] ? style.key : null;
+    const familyProfile = familyKey ? VOCAL_PROFILES[familyKey] : null;
+    // Скан по осям: базовые словари + ключи, требующие контекста голоса.
+    const dictFor = axis => voiceWords
+      ? VOCAL_AXIS_WORDS[axis].concat(GUARDED_AXIS_WORDS[axis] || [])
+      : VOCAL_AXIS_WORDS[axis];
+    const hits = {};
+    for (const axis of VOCAL_AXIS_ORDER) hits[axis] = scan(text, dictFor(axis), 2).map(h => h.tag);
+
+    // — ось 1 «кто поёт»: слова автора → профиль слушателя → семья → дефолт.
+    // Названа только фактура («бэк-вокал») → идентичность лида всё равно
+    // фиксируется, иначе пол поплывёт (прогон 15.11).
+    const userWho = uniq(hits.who);
+    const askedIdentity = userWho.some(t => IDENTITY_RE.test(t));
+    const familyWho = familyProfile && (familyProfile.who || []).length ? familyProfile.who : [];
+    let whoTokens = userWho.slice();
+    if (!askedIdentity) {
+      const identityFiller = identityFrom === 'профиль' || !familyWho.length ? [identityTag] : familyWho;
+      whoTokens = whoTokens.concat(identityFiller);
+    }
+    // — остальные оси: автор перекрывает, семья дополняет (правило 2).
+    const axes = { who: { tokens: uniq(whoTokens), source: userWho.length ? 'user' : (familyWho.length ? 'style' : 'identity') } };
+    const userAxes = [];
+    if (userWho.length) userAxes.push('who');
+    for (const axis of VOCAL_AXIS_ORDER.slice(1)) {
+      if (hits[axis].length) { axes[axis] = { tokens: uniq(hits[axis]), source: 'user' }; userAxes.push(axis); }
+      else if (familyProfile && (familyProfile[axis] || []).length) axes[axis] = { tokens: familyProfile[axis].slice(), source: 'style' };
+      else axes[axis] = { tokens: [], source: 'none' };
+    }
+    // — нейтраль (правило 6): семья не распознана и автор промолчал про
+    // характерные оси — чистый сухой профиль вместо generic-хвоста
+    // «intimate delivery», который раньше дописывался европопу и металлу alike.
+    if (!familyProfile) {
+      if (!axes.timbre.tokens.length) axes.timbre = { tokens: ['clean tone'], source: 'neutral' };
+      if (!axes.processing.tokens.length) axes.processing = { tokens: ['dry upfront vocal'], source: 'neutral' };
+    }
+    // — противоречия (правило 3): семейный токен, конфликтующий с авторским
+    // (raspy + smooth, growl + breathy), отбрасывается — приоритет запроса.
+    const userAll = [];
+    for (const axis of VOCAL_AXIS_ORDER) userAll.push(...hits[axis]);
+    for (const axis of VOCAL_AXIS_ORDER) {
+      if (axes[axis].source === 'style') axes[axis].tokens = dropContradictory(axes[axis].tokens, userAll);
+    }
+    // — сборка блока в порядке осей 1–7; антифальцетный страж — в конец.
+    let profileTokens = [];
+    for (const axis of VOCAL_AXIS_ORDER) profileTokens = profileTokens.concat(axes[axis].tokens);
+    if (antiFalsetto && !profileTokens.includes('falsetto')) profileTokens.push(FALSETTO_GUARD);
+    // Назван регистр — голый пол избыточен («male vocals» рядом с «male baritone»).
+    const hasRegister = profileTokens.some(t => /baritone|tenor|bass voice|soprano|alto|choir|duet/.test(t));
+    if (hasRegister) profileTokens = profileTokens.filter(t => t !== 'male vocals' && t !== 'female vocals');
+    // Бейдж происхождения голоса (правило 5): источник виден и честен.
+    const styleAxes = VOCAL_AXIS_ORDER.filter(a => axes[a].source === 'style').length;
+    const badgeSource = userAll.length ? (styleAxes ? 'mixed' : 'user') : (styleAxes ? 'style' : 'neutral');
+
     return {
-      tags: uniq(genderTags.concat(character)),
-      genderTags: uniq(genderTags),
-      characterTags: uniq(character),
+      tags: uniq(profileTokens),
+      genderTags: uniq(axes.who.tokens),
+      characterTags: uniq(VOCAL_AXIS_ORDER.slice(1).flatMap(a => axes[a].tokens)),
       character: delivery.map(d => d.tag).concat(texture.map(t => t.tag)),
       antiFalsetto,
       identityTag: isSong && !askedIdentity ? identityTag : null,
       identityFrom: isSong && !askedIdentity ? identityFrom : 'задумка',
+      axes,
+      profile: { source: badgeSource, userCount: userAll.length, family: familyKey },
       from: { gender: gender.map(g => g.from), delivery: delivery.map(d => d.from), texture: texture.map(t => t.from) }
     };
   }
@@ -953,7 +1160,13 @@
 
     const era = scan(text, ERA_WORDS, 1).map(e => e.tag);
     const mood = scan(text, MOOD_WORDS, 2).map(m => m.tag);
-    if (!mood.length) mood.push(FORM_MOOD[options.mood] || 'atmospheric');
+    // Дефолт настроения — семейный (§5 справки): у европопа и металла он
+    // разный, generic-«atmospheric» всем подряд больше не дописывается.
+    // Выбор автора в «Музыке» (options.mood) сильнее семьи.
+    if (!mood.length) {
+      const familyMood = styleResolved.key && VOCAL_PROFILES[styleResolved.key] ? VOCAL_PROFILES[styleResolved.key].mood : null;
+      mood.push(FORM_MOOD[options.mood] || familyMood || 'atmospheric');
+    }
     const dynamics = scan(text, DYNAMICS_WORDS, 2).map(d => d.tag);
     const conceptAll = uniq(scan(text, CONCEPT_WORDS, 2).map(c => c.tag));
     const concept = conceptAll.filter(t => !conceptAll.some(o => o !== t && o.includes(t)));
@@ -978,7 +1191,7 @@
 
     return {
       anchor: { genre: uniq(anchorTags), era },
-      voice: isSong ? pickVoice(text, options) : { tags: [], character: [], from: {} },
+      voice: isSong ? pickVoice(text, options, styleResolved) : { tags: [], character: [], from: {} },
       rhythm: Object.assign(pickRhythm(text, primaryGenre, options), { bpm, bass }),
       space: pickSpace(text, primaryGenre),
       roles, mix, arrangement, guards, depth,
@@ -1037,15 +1250,23 @@
       if (text) units.push({ block, text, priority });
     };
 
-    // Порядок блоков = формула корпуса (жанр → вокал → BPM → ритм-секция →
-    // инструменты → продакшн → настроение → концепт).
+    // Порядок блоков: голосовой профиль — ПЕРВЫМ (vocal-profile-vocabulary.md,
+    // правило 1: модели весят начало строки выше), дальше формула корпуса
+    // (жанр → BPM → ритм-секция → инструменты → продакшн → настроение → концепт).
+    // Приоритет 1: бюджет голосовой блок не срезает никогда. Компактный бюджет
+    // (≤300, legacy buildTags) ужимает блок умно: сначала уходят нейтральные
+    // заполнители («clean tone» / «dry upfront vocal»), остаются три ведущих
+    // токена; антифальцетный страж не режется никогда — это защита регистра.
+    const compactVoice = list => {
+      const guard = list.find(t => /register never rises/.test(t));
+      let core = list.filter(t => t !== 'clean tone' && t !== 'dry upfront vocal').slice(0, 3);
+      if (core.length < 2) core = list.slice(0, 3); // нейтраль без характерных осей — заполнители нужны
+      return guard && !core.includes(guard) ? core.concat(guard) : core;
+    };
+    add('vocal.profile', budget <= 300 ? compactVoice(voice.tags || []) : (voice.tags || []), 1);
+    if (options.kind === 'song') add('voice.language', [LANG_TAGS[options.language] || LANG_TAGS.en], 1);
     add('anchor.genre', anchor.genre, 1);
     if (layers.instrumental) add('instrumental', ['instrumental'], 1);
-    // «male vocals» избыточно, если назван конкретный регистр (baritone / bass voice).
-    const registers = (voice.genderTags || []).filter(t => /baritone|tenor|bass voice|choir|duet/.test(t));
-    add('voice.gender', (voice.genderTags || []).filter(t => !registers.length || /baritone|tenor|bass voice|choir|duet/.test(t)), 1);
-    add('voice.character', voice.characterTags || [], 1);
-    if (options.kind === 'song') add('voice.language', [LANG_TAGS[options.language] || LANG_TAGS.en], 1);
     // Ритм — ядро (приоритет 1): «caption обязан содержать ритм-слой всегда»
     // (приёмка #20), поэтому бюджет его не срезает никогда.
     add('rhythm.groove', [rhythm.phrase], 1);
@@ -1172,6 +1393,14 @@
     if (layers.voice.identityTag) {
       push('идентичность голоса: ' + layers.voice.identityTag + ' (' + layers.voice.identityFrom + ')', 'голос', 'voice.identity');
     }
+    if (layers.voice.profile) {
+      const p = layers.voice.profile;
+      const origin = p.source === 'style' ? 'семья «' + p.family + '»'
+        : p.source === 'mixed' ? p.userCount + ' признак(ов) автора поверх семьи «' + p.family + '»'
+        : p.source === 'user' ? p.userCount + ' признак(ов) автора'
+        : 'нейтральный профиль (семья не распознана)';
+      push('профиль голоса: ' + origin, 'голос', 'voice.profile');
+    }
     if (options.kind === 'song') push(LANG_TAGS[options.language] || LANG_TAGS.en, 'язык вокала', 'voice');
     if (layers.rhythm.bpm) push(layers.rhythm.bpm, 'темп', 'rhythm');
     push(layers.rhythm.phrase, 'ритм-слой', 'rhythm');
@@ -1287,7 +1516,7 @@
     return n >= 30 && n <= 300 ? n : null;
   }
 
-  const VERSION = '2026-11-21-studio-4';
+  const VERSION = '2026-11-22-vocal-1';
 
   globalThis.BRIIX_MUSIC_BRAIN = {
     version: VERSION,
@@ -1304,8 +1533,9 @@
       MAX_TAGS, MAX_CAPTION, MAX_CAPTION_WORDS, POSITIVE, LANG_TAGS,
       DEPTH_WORDS, DEPTH_BASE, STYLE_ATMOSPHERE, STYLE_ALIASES, resolveStyle, pickDepth,
       VOICE_IDENTITY, DEFAULT_VOICE_IDENTITY,
+      VOCAL_AXIS_ORDER, VOCAL_AXIS_WORDS, GUARDED_AXIS_WORDS, VOCAL_PROFILES, VOCAL_CONTRA_PAIRS,
       layerOrder: ['anchor', 'voice', 'rhythm', 'space', 'arrangement', 'tail', 'guards'],
-      captionOrder: ['genre', 'vocals', 'bpm', 'rhythm-section', 'instruments-roles', 'mix',
+      captionOrder: ['vocals', 'language', 'genre', 'bpm', 'rhythm-section', 'instruments-roles', 'mix',
         'production', 'depth', 'arrangement', 'dynamics', 'mood', 'concept', 'guards'],
       tagOrder: ['genre', 'instruments', 'vocals', 'bpm', 'mood', 'era', 'production'],
       dictionaries: {

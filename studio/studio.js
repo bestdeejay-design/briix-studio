@@ -1681,6 +1681,11 @@
       badge.textContent = 'Промт собран мозгом: ' + input.brainLayers + ' слоёв.'; // #40: честная плашка
       meta.append(badge);
     }
+    if (input.voiceBadge) {
+      const vb = document.createElement('div'); vb.className = 'brain-badge';
+      vb.textContent = input.voiceBadge; // #46: происхождение голоса (семь осей)
+      meta.append(vb);
+    }
     metaLine('Источник лирики', input.lyricsSource || (input.instrumental ? 'инструментал' : null));
     details.append(summary, meta);
     details.append(draftReadRow('Промпт в модель', input.promptSent || input.prompt || ''));
@@ -2410,6 +2415,20 @@
     return n;
   }
 
+  // #46: честный бейдж происхождения голоса (vocal-profile-vocabulary.md,
+  // правило 5): характеристики автора → «задан характеристиками», семья →
+  // «голос из стиля», иначе нейтральный профиль. Формулировки — из справки.
+  function voiceBadgeText(profile) {
+    if (!profile) return null;
+    if (profile.source === 'user' || profile.source === 'mixed') {
+      const n = profile.userCount || 0;
+      const word = n % 10 === 1 && n % 100 !== 11 ? 'признак' : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? 'признака' : 'признаков');
+      return 'Голос задан характеристиками: ' + n + ' ' + word + ' (свой выбор)';
+    }
+    if (profile.source === 'style') return 'Голос из стиля: ' + profile.family;
+    return 'Голос: нейтральный профиль';
+  }
+
   // Перевод не-ASCII идеи в английский связный промпт через producer-чат.
   // Не обязателен, если brain-теги уже закрыли смысл (правило #109), — поэтому
   // неудача перевода не роняет генерацию: brain-теги остаются гарантированным
@@ -2628,6 +2647,11 @@
       if (brainApplied) finalPrompt = capStyleLine(finalPrompt, CAPTION_BUDGET);
       // #40: честная плашка в карточке — сколько слоёв мозга реально в сборке.
       const brainLayers = brainApplied ? brainLayerCount(brain.layers) : 0;
+      // #46: бейдж происхождения голоса — из профиля мозга (семь осей,
+      // vocal-profile-vocabulary.md): «из стиля» / «задан характеристиками» /
+      // нейтральный. У инструментала голоса нет — бейджа тоже.
+      const voiceBadge = brainApplied && !snapshot.instrumental && brain.layers.voice && brain.layers.voice.profile
+        ? voiceBadgeText(brain.layers.voice.profile) : null;
       if (snapshot.advanced && !snapshot.instrumental && lyrics) {
         const structure = BriixProducer.structureWarnings(lyrics); // ручная лирика: предупредить, не навязывать
         if (structure.length) card('notice', 'Структура лирики', structure.join(' '), session);
@@ -2656,7 +2680,7 @@
       // promptSent — ровно то, что ушло в модель; повтор подставляет исходную идею.
       const requestBase = rawIdea || lyrics;
       const input = { prompt: requestBase, promptSent: finalPrompt !== requestBase ? finalPrompt : undefined, lyrics, model: MUSIC_MODELS[snapshot.quality], instrumental: snapshot.instrumental, parentJobId: snapshot.parentJobId,
-        title: trackTitle, artist: currentUser(), brainLayers: brainLayers || undefined,
+        title: trackTitle, artist: currentUser(), brainLayers: brainLayers || undefined, voiceBadge: voiceBadge || undefined,
         lyricsSource: draftSource || (snapshot.advanced ? 'написал пользователь' : (vocal && !lyrics ? 'автолирика (автор песен)' : 'написал пользователь')) };
       const id = await submitJob({ type: 'music', prompt: finalPrompt, params });
       handle.jobId = id; // ✕ после отправки отменяет джобу и на сервере (T-05)
