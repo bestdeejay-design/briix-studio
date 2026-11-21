@@ -264,7 +264,8 @@ function bffServer(port) {
         const release = () => { if (!done) { done = true; current.activeFiles--; } };
         res.on('close', release);
         // T-27: файлы из slowFiles висят вечно — слот очереди держит только
-        // клиентский таймаут (60 с); разрыв фиксируем закрытием соединения.
+        // клиентский таймаут (#41: 90 с на первые байты); разрыв фиксируем
+        // закрытием соединения.
         if (current.slowFiles.some(f => req.url.includes(f))) return;
         const finish = () => { release(); res.writeHead(200, { 'Content-Type': isWav ? 'audio/wav' : music ? 'audio/mp4' : 'image/png', ...cors }); res.end(isWav ? WAV : music ? M4A : PNG); };
         if (current.fileDelay) setTimeout(finish, current.fileDelay); else finish();
@@ -1629,16 +1630,23 @@ function bffServer(port) {
   assert.match(state.chatPosts[0].messages[1].content, /собаке/);
   assert.equal(await p.locator('.producer-warning').first().isVisible(), true);
   const review = p.locator('.producer-draft').first();
-  await review.locator('[data-producer-field="title"]').fill('Новые огни');
-  await review.locator('[data-producer-field="lyrics"]').fill('[Verse]\nMa propre chanson');
+  // #41: черновик — только чтение: полей ввода в карточке нет, значения — строки.
+  assert.equal(await review.locator('input, textarea').count(), 0, 'в карточке нет полей редактирования (#41)');
+  assert.match(await review.locator('.draft-read-plain .draft-read-value').innerText(), /Огни/, 'название — строка для чтения');
+  assert.ok((await review.getByRole('button', { name: 'Копировать' }).count()) >= 2, 'у строк есть копирование в буфер (#41)');
+  await review.locator('.draft-read .draft-read-label').filter({ hasText: 'Лирика' }).click(); // развернуть строку (клик по метке — не по «Копировать»)
+  assert.match(await review.locator('.draft-read[open] .draft-read-full').first().innerText(), /Город засыпает/, 'лирика читается после разворота');
   await review.getByRole('button', { name: 'Принять в поля' }).click();
   await p.waitForFunction(() => document.querySelector('#musicPrompt').value === 'dream pop, 72 BPM, no guitar');
-  assert.equal(await p.locator('#lyrics').inputValue(), '[Verse]\nMa propre chanson');
+  assert.equal(await p.locator('#lyrics').inputValue(), '[Verse]\nГород засыпает');
   assert.equal(state.jobPosts.length, 0, 'accepting does not start audio generation');
   assert.ok(await review.getByRole('button', { name: 'Сгенерировать трек' }).isVisible(), 'producer draft has the same Generate action as the mentor draft (F-11)');
+  // #41: правки — в «Тонко настроить» (композер), не в карточке; автосохранение F-33 переживает перезагрузку.
+  await p.locator('#lyrics').fill('[Verse]\nMa propre chanson');
+  await p.waitForTimeout(700); // debounce автосохранения (400 мс)
   await p.reload();
   await p.locator('.producer-draft').first().waitFor();
-  assert.equal(await p.locator('[data-producer-field="title"]').first().inputValue(), 'Новые огни');
+  assert.equal(await p.locator('#lyrics').inputValue(), '[Verse]\nMa propre chanson', 'правка из композера пережила перезагрузку');
   assert.equal(await p.locator('#musicPrompt').inputValue(), 'dream pop, 72 BPM, no guitar');
   // F-13: возврат — через собственный диалог; Escape = отмена без действий.
   await p.getByRole('button', { name: 'Вернуть как было' }).first().click();
@@ -1652,7 +1660,7 @@ function bffServer(port) {
   await p.waitForFunction(() => !document.querySelector('#prompt').hidden);
   assert.equal(await p.locator('#prompt').inputValue(), idea);
   assert.equal(state.jobPosts.length, 0);
-  ok('producer mobile: review/edit/apply/restore and reload, no implicit audio job');
+  ok('producer mobile: read-only review/apply/restore; edits live in the composer (#41), no implicit audio job');
 
   // Existing authored lyrics are sent as context but never replaced by the LLM.
   resetBff(); state.chatImproveText = JSON.stringify({ title: 'Моё', prompt: 'jazz piano', lyrics: 'другая лирика' });
@@ -1660,7 +1668,7 @@ function bffServer(port) {
   await p.locator('#musicPrompt').fill('джаз по моей лирике');
   await p.locator('#lyrics').fill('Моя собственная строка');
   await openProducer(p); await p.locator('.producer-draft').waitFor();
-  assert.equal(await p.locator('[data-producer-field="lyrics"]').inputValue(), 'Моя собственная строка');
+  assert.match(await p.locator('.producer-draft .draft-read summary').filter({ hasText: 'Лирика' }).innerText(), /Моя собственная строка/, 'авторская лирика — в строке чтения (#41)');
   assert.match(state.chatPosts[0].messages[1].content, /Моя собственная строка/);
   await p.locator('#lyrics').fill('Новая правка в ожидании');
   await p.getByRole('button', { name: 'Принять в поля' }).click();
@@ -1681,7 +1689,7 @@ function bffServer(port) {
   p = await page(); await p.locator('.mode[data-mode="music"]').click(); await openMore(p); await p.locator('.seg-btn[data-vocal="1"]').click();
   await p.locator('#prompt').fill('инструментал без вокала'); await openProducer(p);
   await p.locator('.producer-draft').waitFor();
-  assert.equal(await p.locator('[data-producer-field="lyrics"]').count(), 0);
+  assert.equal(await p.locator('.producer-draft .draft-read summary').filter({ hasText: 'Лирика' }).count(), 0, 'у инструментала строки лирики нет (#41)');
   await p.getByRole('button', { name: 'Принять в поля' }).click();
   await p.waitForFunction(() => document.querySelector('#musicPrompt').value === 'ambient synth');
   await openMore(p); await p.locator('#genTrack').click(); await p.waitForSelector('#feed audio', { timeout: 25000 });
@@ -1815,7 +1823,12 @@ function bffServer(port) {
   assert.ok(savedDialog.drafts >= 2, 'draft cards persisted in the feed');
   await p.reload();
   await p.waitForSelector('.music-draft', { timeout: 10000 });
-  // Отдельная кнопка «Сгенерировать трек» в композере: явная генерация без диалога.
+  // #41: после генерации из черновика композер остаётся в «Тонко настроить»;
+  // сохранение advanced в сессии гоняется с перезагрузкой (асинхронная очередь
+  // IndexedDB), поэтому после рестарта возвращаемся в Simple явным тумблером —
+  // как это делает пользователь.
+  if (await p.locator('#prompt').isHidden()) { await openMore(p); await p.locator('#tuneToggle').click(); }
+  await p.waitForFunction(() => !document.getElementById('prompt').hidden);
   await p.locator('#prompt').fill('спокойный эмбиент для чтения');
   await openMore(p); await p.locator('#genTrack').click();
   await p.waitForFunction(() => document.querySelectorAll('#feed audio').length >= 1, {}, { timeout: 30000 });
@@ -2233,8 +2246,9 @@ function bffServer(port) {
   ok('media LRU: 9 files → 8 live URLs, evicted file reloads on demand (T-31/A12)');
   await p.close();
 
-  // T-27: зависший сервер не держит слоты очереди вечно — 60 с и честная
-  // ошибка; ожидающая очередь оживает.
+  // T-27/#41: зависший сервер не держит слоты очереди вечно — таймаут
+  // «на первые байты» (90 с, молчаливый сервер) и честная ошибка; ожидающая
+  // очередь оживает. Обрыв на середине (progressed) ретраится отдельно.
   resetBff(); state.slowFiles = ['slow-a.m4a', 'slow-b.m4a'];
   p = await page();
   await p.evaluate(() => {
@@ -2253,12 +2267,12 @@ function bffServer(port) {
   await libDownload(2); // оба слота заняты — быстрый ждёт
   await p.waitForTimeout(400);
   assert.equal(state.fileOrder.some(u => u.includes('fast-1')), false, 'T-27: быстрый файл ждёт за зависшими слотами');
-  await p.clock.fastForward(61000); // 60 секунд виртуально: зависшие рвутся
-  await p.waitForFunction(() => [...document.querySelectorAll('.lib-error')].some(e => e.textContent.includes('60 с')), {}, { timeout: 15000 });
+  await p.clock.fastForward(91000); // #41: 90 секунд виртуально — молчащий сервер рвётся без ретраев
+  await p.waitForFunction(() => [...document.querySelectorAll('.lib-error')].some(e => e.textContent.includes('90 с')), {}, { timeout: 15000 });
   await p.waitForFunction(() => [...document.querySelectorAll('.toast.done')].some(t => t.textContent.includes('Скачано')), {}, { timeout: 15000 });
   assert.ok(state.fileOrder.some(u => u.includes('fast-1')), 'T-27: очередь ожила после таймаута — быстрый файл скачан');
   await waitForState(() => state.activeFiles === 0, { what: 'file slots released' });
-  ok('hung file server releases queue slots after 60s timeout (T-27)');
+  ok('hung file server releases queue slots after the 90s first-byte timeout (T-27/#41)');
   await p.close();
 
   // T-26: фоновая вкладка не поллит; возврат — немедленный опрос.
