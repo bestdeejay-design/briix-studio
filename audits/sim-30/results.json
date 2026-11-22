@@ -1060,7 +1060,7 @@
     "problems": [],
     "notes": [],
     "post": {
-      "prompt": "dark ambient, deep space drones, dark ambient, deep space drones, dark ambient, deep space drones, dark ambient, deep space drones, dark ambient, deep space drones, dark ambient, deep space drones, dark ambient, deep space drones, dark ambient, deep space drones, dark ambient, deep space drones, dark ambient, deep space drones, dark ambient, deep space drones, dark ambient, deep space drones, dark ambient, deep space drones, dark ambient, deep space drones, female vocals, breathy tone, laid-back delivery, English lyrics, beatless drift without a drum kit (sub-bass pulse), space ambience, tape saturation, deep reverb space",
+      "prompt": "dark ambient, deep space drones, dark ambient, deep space drones, dark ambient, deep space drones, dark ambient, deep space drones, dark ambient, deep space drones, dark ambient, deep space drones, dark ambient, deep space drones, dark ambient, deep space drones, dark ambient, deep space drones, dark ambient, deep space drones, dark ambient, deep space drones, dark ambient, deep space drones, dark ambient, deep space drones, dark ambient, deep space drones, female vocals, breathy tone, laid-back delivery, English lyrics, beatless drift without a drum kit (sub-bass drone), space ambience, tape saturation, deep reverb space",
       "params": {
         "model": "ace-step-flash",
         "title": "Deep Field",

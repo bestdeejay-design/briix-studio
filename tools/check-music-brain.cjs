@@ -329,11 +329,11 @@ assert.match(enMoodCompact.tags, /male vocals/, 'компакт держит г�
 // «dream pop» — жанр, а не концепт «лирики о снах» (голого ключа dream нет).
 const dreamPop = brain.buildCaption('dream pop, 90 BPM', { kind: 'song' });
 assert.doesNotMatch(dreamPop.caption, /lyrics about dreams?/, 'dream pop не превращается в «лирику о снах»');
-// Профили всех 26 семейств (23 + 3 новых Н2/#51): ритм и продакшн строятся
-// по семейству целиком — раньше профили покрывали 19/15 из 23, и новые семьи
-// падали на безликую базу.
+// Профили всех семейств (26 базовых + 116 из style pack #45): ритм и продакшн
+// строятся по семейству целиком — раньше профили покрывали 19/15 из 23, и
+// новые семьи падали на безликую базу.
 const families15 = Object.keys(brain.rules.STYLE_ATMOSPHERE);
-assert.equal(families15.length, 26, '26 семейств стиля (23 + heavy metal/eurodance/drum and bass, Н2 #51)');
+assert.equal(families15.length, 142, '142 семейства стиля (26 базовых + 116 style pack #45)');
 for (const f of families15) {
   assert.ok(brain.rules.dictionaries.RHYTHM_BY_GENRE[f], `ритм-профиль для «${f}»`);
   assert.ok(brain.rules.dictionaries.PROD_BY_GENRE[f], `продакшн-профиль для «${f}»`);
@@ -588,7 +588,57 @@ assert.equal(brain.styleOf('как у Metallica'), null, 'имя артиста 
 assert.ok(families.includes('heavy metal') && families.includes('eurodance') && families.includes('drum and bass'),
   'новые семейства известны резолверу наставника');
 
+// ------- (21) #45 STYLE PACK: 116 семейств из dj1-ресёрча --------------------
+// Пакет audits/style-research (index.json + families/*.md) кодируется в мозг
+// генератором tools/gen-style-pack.cjs. Здесь — живые инварианты кодирования:
+// резолв новых семей (EN/RU/алиасы), снятые алиасы (trance≠edm больше),
+// ложные срабатывания рискованных стемов, семейная решётка в сборке.
+assert.equal(brain.styleOf('uplifting trance, 138 BPM'), 'trance', 'алиас trance-семьи');
+assert.equal(brain.styleOf('psytrance'), 'psytrance', 'psytrance — своя семья (спор с trance решён именем)');
+assert.equal(brain.styleOf('трэнс на рассвете'), 'trance', 'RU-стем трэнс');
+assert.equal(brain.styleOf('industrial noise, distorted'), 'industrial', 'industrial больше не алиас techno');
+assert.equal(brain.styleOf('shoegaze wall of guitars'), 'shoegaze', 'shoegaze больше не алиас dream pop');
+assert.equal(brain.styleOf('хочу дрилл бит'), 'drill', 'RU-стем дрилл');
+assert.equal(brain.styleOf('dark disco bassline'), 'disco', 'диско резолвится');
+assert.equal(brain.styleOf('амапьяно с лог-драмами'), 'amapiano', 'RU-стем амапьяно');
+// Снятые алиасы: раньше «trance» вёл к edm — теперь честная своя семья.
+assert.equal(brain.rules.STYLE_ALIASES.trance, 'trance', 'STYLE_ALIASES: trance = trance (не edm)');
+assert.equal(brain.rules.STYLE_ALIASES.industrial, 'industrial', 'STYLE_ALIASES: industrial = industrial (не techno)');
+assert.equal(brain.rules.STYLE_ALIASES.shoegaze, 'shoegaze', 'STYLE_ALIASES: shoegaze = shoegaze (не dream pop)');
+// Рискованные стемы НЕ дают ложных жанров (карта правок генератора):
+assert.equal(brain.styleOf('песня про Марию'), null, '«Мария» ≠ опера (алиас «ария» снят)');
+assert.equal(brain.styleOf('дорога и маршрут'), null, '«маршрут» ≠ march (алиас «марш» снят)');
+assert.equal(brain.styleOf('сказка на ночь'), null, '«сказка» ≠ ska (алиас «ска» снят)');
+assert.equal(brain.styleOf('песня про операцию'), null, '«операция» ≠ опера (стем «оперн»)');
+assert.equal(brain.styleOf('confusion in my head'), null, '«confusion» ≠ jazz fusion (алиас «fusion» снят)');
+// Жанровый ключ пакета не дублирует базовый с другим тегом: «metalcore» и
+// «nu metal» — свои семьи (Н2 алиасила их в heavy metal).
+assert.equal(brain.styleOf('metalcore breakdown'), 'metalcore', 'metalcore — своя семья');
+assert.equal(brain.styleOf('nu metal riff'), 'nu metal', 'nu metal — своя семья');
+assert.equal(brain.styleOf('thrash metal'), 'heavy metal', 'thrash остаётся алиасом heavy metal');
+// Семейная решётка в сборке: голос/ритм/атмосфера из пакета, не фолбэк.
+const drillCap = brain.buildCaption('dark drill beat, sliding 808s', { kind: 'song' });
+assert.equal(drillCap.layers.style.key, 'drill', 'drill: семейство из пакета');
+assert.ok(drillCap.layers.anchor.genre.includes('drill'), 'drill: якорь жанра');
+assert.match(drillCap.caption, /male vocals/, 'drill: голос из профиля пакета');
+const tranceCap = brain.buildCaption('uplifting trance anthem, 138 BPM', { kind: 'song' });
+assert.equal(tranceCap.layers.style.key, 'trance', 'trance: семейство из пакета');
+assert.match(tranceCap.caption, /female vocals/, 'trance: женский ведущий (архив 248:92)');
+assert.match(tranceCap.caption, /four-on-the-floor|offbeat bass/i, 'trance: ритм-профиль слышен');
+assert.ok(tranceCap.caption.length <= MAX_CAPTION, 'trance caption в бюджете 640');
+const bachata = brain.buildCaption('босса-нова на закате', { kind: 'song' });
+assert.equal(bachata.layers.style.key, 'bossa nova', 'босса-нова: RU-стем резолвится');
+// Брекеты: каждое новое семейство попадает в одну из 8 групп (паритет уже
+// проверен в секции 18); спот-чек группы клуба и акустики.
+assert.equal(brain.rules.BRACKET_GROUPS.trance, 'club', 'trance → клубные брекеты');
+assert.equal(brain.rules.BRACKET_GROUPS['bossa nova'], 'acoustic', 'bossa nova → акустические брекеты');
+assert.equal(brain.rules.BRACKET_GROUPS['power metal'], 'band', 'power metal → живая группа');
+// Наставник знает все 142: список продюсера = ключи STYLE_ATMOSPHERE.
+assert.equal(families.length, 142, 'producer STYLE_FAMILIES: 142');
+// Генератор идемпотентен и данные свежие (защита от правок блока руками).
+require('node:child_process').execSync('node tools/gen-style-pack.cjs --check', { cwd: ROOT, stdio: 'pipe' });
+
 // ------------------------------------------------------------------ вывод --
-console.log('PASS music-brain v3: слои, ритм-всегда, вокал с характером и фиксированной идентичностью, продакшн, бюджет, негативы, self-check, полный трек (роли/микс/форма/защита), глубина и стилевая атмосфера, разделение caption/лирики и потолок токенов, голос по семи осям (#46: семейные профили, перекрытие осей, запрет противоречий, нейтраль, бейдж), запреты регистра и брекеты динамики (Brain Upgrade Spec), #47 стилевые профили брекетов (8 групп + фолбэк, 7 слотов, анти-дубль с caption, соло-слот, норма плотности), #48 styleOf (общий резолв семейства), Н2 #51 (heavy metal/eurodance/drum and bass — 26 семейств)');
+console.log('PASS music-brain v3: слои, ритм-всегда, вокал с характером и фиксированной идентичностью, продакшн, бюджет, негативы, self-check, полный трек (роли/микс/форма/защита), глубина и стилевая атмосфера, разделение caption/лирики и потолок токенов, голос по семи осям (#46: семейные профили, перекрытие осей, запрет противоречий, нейтраль, бейдж), запреты регистра и брекеты динамики (Brain Upgrade Spec), #47 стилевые профили брекетов (8 групп + фолбэк, 7 слотов, анти-дубль с caption, соло-слот, норма плотности), #48 styleOf (общий резолв семейства), Н2 #51 (heavy metal/eurodance/drum and bass), #45 style pack (116 семейств из dj1-ресёрча — 142 в паритете, генератор tools/gen-style-pack.cjs)');
 console.log('20 брифов (buildTags / buildCaption, символы):');
 for (const r of rows) console.log(`  ${r.id} ${r.source.padEnd(9)} ${String(r.len).padStart(3)} / ${String(r.captionLen).padStart(3)}  ${r.tags}`);
