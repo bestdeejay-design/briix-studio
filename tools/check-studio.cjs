@@ -1766,6 +1766,41 @@ function bffServer(port) {
   assert.equal(state.jobPosts.length, 0);
   ok('producer 429 preserves the input and never starts a job');
 
+  // Инцидент 21.11 (#36): фронт хоста при деградации отдаёт 429 БЕЗ конверта
+  // bff (тело пустое или HTML) — это не очередь. Клиент обязан честно сказать
+  // «сервер перегружен», а не «очередь сервера заполнена».
+  resetBff(); p = await page();
+  await p.route(`http://127.0.0.1:${BFF_PORT}/v1/chat/completions`, route => route.fulfill({
+    status: 429, headers: { 'Access-Control-Allow-Origin': `http://127.0.0.1:${STATIC_PORT}` },
+    contentType: 'text/html', body: '<html><body>rate limit</body></html>'
+  }));
+  await p.locator('.mode[data-mode="music"]').click(); await p.locator('#prompt').fill('Идея при деградации хоста');
+  await openProducer(p); await p.locator('.card.error').waitFor();
+  const frontCard = await p.locator('.card.error').first().innerText();
+  assert.match(frontCard, /Сервер перегружен/, 'front 429 → honest «server overloaded» title');
+  assert.match(frontCard, /перегружен или временно недоступен/, 'front 429 → honest message');
+  assert.doesNotMatch(frontCard, /очередь/i, 'front 429 must NOT claim the queue is full');
+  assert.equal(await p.locator('#prompt').inputValue(), 'Идея при деградации хоста');
+  assert.equal(state.jobPosts.length, 0);
+  ok('front 429 without envelope (producer) → «Сервер перегружен», not queue_full');
+
+  // Тот же инцидент на пути генерации: POST /jobs поймал фронтовой 429 с пустым
+  // телом — карточка честная, текст остался в поле, джоба на сервере нет.
+  resetBff(); p = await page();
+  await p.route(`http://127.0.0.1:${BFF_PORT}/jobs`, route => route.fulfill({
+    status: 429, headers: { 'Access-Control-Allow-Origin': `http://127.0.0.1:${STATIC_PORT}` },
+    contentType: 'text/plain', body: ''
+  }));
+  await p.locator('.mode[data-mode="music"]').click(); await p.locator('#prompt').fill('Трек при деградации хоста');
+  await openMore(p); await p.locator('#genTrack').click();
+  await p.locator('.card.error').waitFor();
+  const genCard = await p.locator('.card.error').first().innerText();
+  assert.match(genCard, /Сервер перегружен/, 'gen front 429 → honest «server overloaded» title');
+  assert.doesNotMatch(genCard, /очередь/i, 'gen front 429 must NOT claim the queue is full');
+  assert.equal(await p.locator('#prompt').inputValue(), 'Трек при деградации хоста');
+  assert.equal(state.jobPosts.length, 0);
+  ok('front 429 without envelope (generation) → «Сервер перегружен», input preserved');
+
   // ---- Вариант B «Студия-агент»: разговорный музыкальный режим ------------------
   // send в Simple-режиме НЕ создаёт джобу: это диалог с выбранным наставником.
   resetBff();
