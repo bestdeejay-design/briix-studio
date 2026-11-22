@@ -232,8 +232,14 @@ button:disabled { cursor: not-allowed; opacity: .4; }
   background: var(--surface-2); border: 1px solid var(--line-focus);
   border-radius: 12px; box-shadow: 0 12px 32px var(--shadow);
   display: flex; flex-direction: column;
+  /* #18 iOS-gate: меню, зашедшее за правый край якоря, не должно рвать
+   * вёрстку на 320px: ширина ограничена вьюпортом, длинные слова переносятся. */
+  max-width: calc(100vw - 16px); overflow-wrap: anywhere;
 }
 .menu-down { bottom: auto; top: calc(100% + 8px); } /* меню шапки открывается вниз */
+/* #18 iOS-gate: бургер в шапке прижат к правому краю — меню якорим правым
+ * краем, иначе на 320px оно уходит за экран (left:0 давало +144px скролла). */
+#profileMenu { left: auto; right: 0; }
 
 /* ⋯-панель «Ещё» (#35 компакт): редкие контролы в одном тапе от поля.
  * overflow visible — вложенное меню моделей не клипается панелью. */
@@ -540,7 +546,9 @@ button:disabled { cursor: not-allowed; opacity: .4; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 /* T-42/T-43: ключ и очистка устройства */
 .key-remember { display: flex; align-items: center; gap: 8px; min-height: 32px; margin: 8px 0 0; color: var(--muted); font-size: 13px; }
-.key-remember input { accent-color: var(--accent); }
+/* #18 iOS-gate: чекбокс — тоже input; iOS зумит поля с font-size <16px.
+ * На вид чекбокса размер шрифта не влияет, но computed 16px снимает риск зума. */
+.key-remember input { accent-color: var(--accent); font-size: 16px; }
 #profileMenu .danger { color: var(--danger); }
 .studio-header {
   flex: 0 0 auto; min-height: 56px; display: flex; align-items: center;

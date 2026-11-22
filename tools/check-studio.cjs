@@ -893,6 +893,43 @@ function bffServer(port) {
   await p.screenshot({ path: path.join(require('node:os').tmpdir(), 'studio-390-music.png'), fullPage: false });
   ok('mobile 390x844: composer sticky bottom, no h-scroll, touch targets >=44', { ...geo });
 
+  // 18-iOS-gate: (1) ни одно поле ввода не зумится на iOS — computed font-size >=16px;
+  // (2) худшие неразрывные токены в карточках/меню не дают горскролла на 320px.
+  // Отдельная страница: p ниже нужен F-35/F-37 с их калибровкой под 390×844.
+  const iosPage = await page({ viewport: { width: 320, height: 568 } });
+  const zoomers = await iosPage.evaluate(() => [...document.querySelectorAll('input, select, textarea')]
+    .map(el => ({ id: el.id || el.className || el.type, fs: parseFloat(getComputedStyle(el).fontSize) }))
+    .filter(x => x.fs < 16));
+  assert.deepEqual(zoomers, [], '#18: все input/select/textarea >=16px (iOS-зум), нарушители: ' + JSON.stringify(zoomers));
+  const worstCase = await iosPage.evaluate(() => {
+    const worst = 'Слово' + 'Ы'.repeat(120);
+    const latin = 'Supercalifragilisticexpialidocious_DONT_BE_RIDICULOUS_remember'.repeat(3);
+    const url = 'https://example.com/' + 'a'.repeat(200) + '/p?q=' + 'b'.repeat(100);
+    const feed = document.getElementById('feed');
+    const card = document.createElement('div'); card.className = 'card';
+    card.innerHTML = '<div class="who">' + worst + '</div>'
+      + '<div class="track-title">' + worst + '</div>'
+      + '<div class="track-meta"><div>' + worst + '</div><div>' + url + '</div></div>'
+      + '<div class="track-details">' + latin + '</div>'
+      + '<div class="draft-read-plain"><span class="draft-read-value">' + worst + '</span></div>'
+      + '<div class="draft-read-full">' + worst + '\n' + url + '</div>';
+    feed.append(card);
+    const overflow = document.documentElement.scrollWidth - document.documentElement.clientWidth;
+    card.remove();
+    return overflow;
+  });
+  assert.ok(worstCase <= 0, '#18: нет горскролла на 320px с худшими токенами в карточке, overflow=' + worstCase);
+  await iosPage.click('#profileBtn');
+  const menuCase = await iosPage.evaluate(() => {
+    const m = document.getElementById('profileMenu');
+    const r = m.getBoundingClientRect();
+    return { overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth, right: Math.round(r.right), left: Math.round(r.left) };
+  });
+  assert.ok(menuCase.overflow <= 0, '#18: бургер-меню не рвёт вёрстку на 320px, overflow=' + menuCase.overflow);
+  assert.ok(menuCase.right <= 320 && menuCase.left >= 0, '#18: меню в кадре 320px, в кадре [' + menuCase.left + ',' + menuCase.right + ']');
+  ok('#18 iOS gate: inputs >=16px on 320x568, worst-case tokens and profile menu stay in viewport', { worstCase, menuCase });
+  await iosPage.context().close();
+
   // 18b. F-35/F-36/F-37 — мобайл глубже: клавиатура, ландшафт, 320px без обрезки.
   // F-35: meta даёт Android-уменьшение вьюпорта, visualViewport-подстраховка — iOS.
   const kbMeta = await p.evaluate(() => document.querySelector('meta[name="viewport"]').content);
