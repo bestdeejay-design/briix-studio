@@ -93,7 +93,21 @@
     ['rap', 'rap'], ['lofi', 'lo-fi'], ['cinematic', 'cinematic'], ['orchestral', 'orchestral'],
     ['jazz', 'jazz'], ['ballad', 'ballad'], ['edm', 'edm'], ['synthwave', 'synthwave'],
     ['retrowave', 'synthwave'], ['trip-hop', 'trip-hop'], ['trip hop', 'trip-hop'],
-    ['rnb', 'r&b'], ['folk', 'folk'], ['phonk', 'phonk'], ['indie rock', 'rock']
+    ['rnb', 'r&b'], ['folk', 'folk'], ['phonk', 'phonk'], ['indie rock', 'rock'],
+    // Н2 (симуляция #51): популярные у пользователей жанры, не входившие в
+    // 23 семейства, — metal/eurodance/jungle/киномузыка оставляли голос
+    // нейтральным. Профили — §2 справки владельца vocal-profile-vocabulary.md
+    // («classic heavy metal / Metallica», «eurodance / Руки Вверх»).
+    ['метал', 'heavy metal'], ['евродэнс', 'eurodance'], ['евроданс', 'eurodance'],
+    ['евро-дэнс', 'eurodance'], ['евродэнц', 'eurodance'],
+    ['джангл', 'drum and bass'], ['драм-н-бейс', 'drum and bass'], ['драм-энд-бейс', 'drum and bass'],
+    ['киномузык', 'cinematic'], ['саундтрек', 'cinematic'],
+    ['heavy metal', 'heavy metal'], ['metal', 'heavy metal'], ['thrash metal', 'heavy metal'],
+    ['thrash', 'heavy metal'], ['metalcore', 'heavy metal'], ['nu metal', 'heavy metal'],
+    ['eurodance', 'eurodance'], ['euro dance', 'eurodance'], ['euro-dance', 'eurodance'],
+    ['drum and bass', 'drum and bass'], ['drum-and-bass', 'drum and bass'],
+    ['drum n bass', 'drum and bass'], ['dnb', 'drum and bass'], ['jungle', 'drum and bass'],
+    ['liquid dnb', 'drum and bass'], ['soundtrack', 'cinematic']
   ];
   const FORM_GENRE = {           // жанр из формы «Музыки» → тег таксономии
     lofi: 'lo-fi', ambient: 'ambient', cinematic: 'cinematic', pop: 'pop',
@@ -168,12 +182,17 @@
     'trip-hop': { char: 'slow', groove: 'downtempo groove', kit: 'dusty kick + snare, vinyl hats' },
     'folk': { char: 'organic', groove: 'hand percussion groove', kit: 'shaker + tambourine' },
     'orchestral': { char: 'slow', groove: 'orchestral pulse', kit: 'timpani + low strings' },
-    // недостающие семейства (#45): профили обязаны покрывать все 23 семьи
+    // недостающие семейства (#45): профили обязаны покрывать все 26 семей
     // STYLE_ATMOSPHERE — паритет ловит тест check-music-brain (секция 15)
     'funk': { char: 'tight', groove: 'syncopated funk groove', kit: 'kick + snare, tight hats' },
     'dream pop': { char: 'laid-back', groove: 'soft steady groove', kit: 'kick + snare, brushed hats' },
     'synthwave': { char: 'driving', groove: 'steady synth drum groove', kit: 'kick + snare, gated snare reverb' },
-    'r&b': { char: 'smooth', groove: 'slow smooth groove', kit: 'kick + snare, crisp hats' }
+    'r&b': { char: 'smooth', groove: 'slow smooth groove', kit: 'kick + snare, crisp hats' },
+    // Н2 (#51): ритм-профили новых семейств — без них джангл получал
+    // generic «fast steady drum groove (kick + snare)» вместо брейкбитов.
+    'heavy metal': { char: 'heavy', groove: 'driving metal groove', kit: 'kick + snare, double-kick runs' },
+    'eurodance': { char: 'driving', groove: 'four-on-the-floor kick groove', kit: 'punchy kick + claps, offbeat rave bass' },
+    'drum and bass': { char: 'fast', groove: 'fast chopped breakbeats', kit: 'chopped breakbeats, deep sub-bass' }
   };
   const RHYTHM_FALLBACK = { char: 'steady', groove: 'drum groove', kit: 'kick + snare' };
 
@@ -412,7 +431,19 @@
     'r&b': { who: ['female vocals'], timbre: ['velvet tone'], power: ['soft intimate delivery'],
       technique: ['melodic pop phrasing'], processing: ['layered harmonies'], guard: [GUARD_FEMALE], mood: 'sensual' },
     'folk': { who: ['male vocals'], timbre: ['warm timbre'], power: ['plain intimate delivery'],
-      processing: ['close-mic dry vocal'], guard: [GUARD_MALE], mood: 'warm' }
+      processing: ['close-mic dry vocal'], guard: [GUARD_MALE], mood: 'warm' },
+    // Н2 (#51): профили из §2 справки владельца (vocal-profile-vocabulary.md):
+    // «classic heavy metal / Metallica», «eurodance / Руки Вверх» — справка
+    // для этого и писалась; до сих пор металл получал поповый clean tone.
+    // Правило 0 соблюдено: в мужских профилях нет thin/light/breathy.
+    'heavy metal': { who: ['male vocals'], register: ['gritty baritone'], timbre: ['thick midrange timbre'],
+      power: ['raspy aggressive delivery'], technique: ['sung verses shouted into a full-throated chorus'],
+      character: ['menacing'], processing: ['punchy upfront vocal'], guard: [GUARD_LOW_MALE], mood: 'aggressive' },
+    'eurodance': { who: ['young male vocals'], register: ['bright boyish tenor'], timbre: ['90s euro-pop timbre'],
+      power: ['playful cheerful delivery'], technique: ['melodic pop phrasing'], character: ['playful'],
+      processing: ['dry upfront vocal'], guard: [GUARD_MALE], mood: 'euphoric' },
+    'drum and bass': { who: ['soulful female vocals'], timbre: ['bright timbre'], power: ['confident delivery'],
+      technique: ['melodic pop phrasing'], processing: ['dry upfront vocal'], guard: [GUARD_FEMALE], mood: 'euphoric' }
   };
   // Взаимоисключающие пары (правило 3 справки: raspy + smooth, growl + breathy).
   // При конфликте семейный токен уступает авторскому — приоритет запроса (правило 2).
@@ -516,7 +547,11 @@
     'funk': ['live room sound', 'punchy low end'],
     'dream pop': ['reverb-drenched mix', 'soft focus production'],
     'synthwave': ['analog synth production', 'wide stereo mix'],
-    'r&b': ['clean modern production', 'silky top end']
+    'r&b': ['clean modern production', 'silky top end'],
+    // Н2 (#51): продакшн-профили новых семейств (паритет ловит тест, секция 15)
+    'heavy metal': ['live room sound', 'punchy midrange'],
+    'eurodance': ['clean 90s dance production', 'wide stereo mix'],
+    'drum and bass': ['clean modern production', 'punchy low end']
   };
   const PROD_FALLBACK = ['analog warmth'];
   /* L3 DEPTH — «где это звучит и насколько далеко» + стилевая атмосфера.
@@ -655,6 +690,25 @@
     'folk': {
       devices: ['single close-mic guitar', 'room sound around the vocal', 'everything dry and near'],
       depth: ['everything close, one room mic', 'close guitar, distant room tone']
+    },
+    // Н2 (#51): стилевые пулы новых семейств — приёмы жанровой практики,
+    // как у остальных семей (RESEARCH_PACK §1: D6–D9).
+    'heavy metal': {
+      devices: ['doubled rhythm guitars panned hard left and right',
+        'close dry drums with cranked room mics', 'palm-muted gallop riffing',
+        'guitar solo riding on top of the mix', 'tight low-tuned rhythm guitars'],
+      depth: ['guitars wide, vocal upfront in the middle', 'close dry drums, distant room mics behind']
+    },
+    'eurodance': {
+      devices: ['pumping offbeat bass line', 'bright synth stabs answering the vocal',
+        'hoover rave lead in the drop', 'gated drum machine'],
+      depth: ['vocal upfront, synths wide behind', 'dry kick close, pad wash far behind']
+    },
+    'drum and bass': {
+      devices: ['chopped breakbeats rolling over a sub-bass line',
+        'dub delay stabs answered by the break', 'reese bass under fast hats',
+        'long sub-bass tail under the break'],
+      depth: ['break up close, sub-bass far below', 'dry drums, wide pad behind']
     }
   };
   // Базовая глубина: когда стиль не определён, но трек существует, геометрия
@@ -680,7 +734,14 @@
     // английские алиасы семей (#45): черновик наставника пишет их в draft.style
     'rnb': 'r&b', 'hip hop': 'hip-hop', 'hiphop': 'hip-hop', 'lofi': 'lo-fi',
     'dreampop': 'dream pop', 'synth-pop': 'synthwave', 'synthpop': 'synthwave',
-    'retrowave': 'synthwave', 'downtempo': 'trip-hop'
+    'retrowave': 'synthwave', 'downtempo': 'trip-hop',
+    // Н2 (#51): алиасы новых семейств — явная подсказка резолвера сильнее слов
+    'heavy metal': 'heavy metal', 'metal': 'heavy metal', 'thrash': 'heavy metal',
+    'thrash metal': 'heavy metal', 'metalcore': 'heavy metal', 'nu metal': 'heavy metal',
+    'eurodance': 'eurodance', 'euro-dance': 'eurodance', 'euro dance': 'eurodance',
+    'drum and bass': 'drum and bass', 'drum-and-bass': 'drum and bass',
+    'drum n bass': 'drum and bass', 'dnb': 'drum and bass', 'jungle': 'drum and bass',
+    'soundtrack': 'cinematic'
   };
 
   function hashText(text) {
@@ -1567,7 +1628,10 @@
     'synthwave': 'synth',
     'trap': 'urban', 'rap': 'urban', 'hip-hop': 'urban',
     'jazz': 'acoustic', 'folk': 'acoustic', 'ballad': 'acoustic',
-    'cinematic': 'score', 'orchestral': 'score'
+    'cinematic': 'score', 'orchestral': 'score',
+    // Н2 (#51): новые семейства — метал в живую группу (гитарные соло,
+    // gang vocals), евродэнс и джангл — в клубную динамику (дропы/райзеры).
+    'heavy metal': 'band', 'eurodance': 'club', 'drum and bass': 'club'
   };
   const BRACKETS_BY_GROUP = {
     club: { // techno / tech house / house / edm — клубная четырёхдольная динамика
@@ -1743,7 +1807,7 @@
     return { lyrics: lines.join('\n'), marked, authored: 0, style: family || null };
   }
 
-  const VERSION = '2026-11-23-lyrics-1';
+  const VERSION = '2026-11-23-sim51-1';
 
   globalThis.BRIIX_MUSIC_BRAIN = {
     version: VERSION,

@@ -329,10 +329,11 @@ assert.match(enMoodCompact.tags, /male vocals/, 'компакт держит г�
 // «dream pop» — жанр, а не концепт «лирики о снах» (голого ключа dream нет).
 const dreamPop = brain.buildCaption('dream pop, 90 BPM', { kind: 'song' });
 assert.doesNotMatch(dreamPop.caption, /lyrics about dreams?/, 'dream pop не превращается в «лирику о снах»');
-// Профили всех 23 семейств: ритм и продакшн строятся по семейству целиком —
-// раньше профили покрывали 19/15 из 23, и новые семьи падали на безликую базу.
+// Профили всех 26 семейств (23 + 3 новых Н2/#51): ритм и продакшн строятся
+// по семейству целиком — раньше профили покрывали 19/15 из 23, и новые семьи
+// падали на безликую базу.
 const families15 = Object.keys(brain.rules.STYLE_ATMOSPHERE);
-assert.equal(families15.length, 23, '23 семейства стиля');
+assert.equal(families15.length, 26, '26 семейств стиля (23 + heavy metal/eurodance/drum and bass, Н2 #51)');
 for (const f of families15) {
   assert.ok(brain.rules.dictionaries.RHYTHM_BY_GENRE[f], `ритм-профиль для «${f}»`);
   assert.ok(brain.rules.dictionaries.PROD_BY_GENRE[f], `продакшн-профиль для «${f}»`);
@@ -481,7 +482,7 @@ assert.equal(noSections.marked, 0, 'без секций разметки нет'
 // ------- (18) #47 обогащение конструктива: стилевые брекеты ----------------
 // Справки: audits/lyrics-effect-brackets.md (§1–§3) + audits/dm-signatures.md.
 // Инварианты словаря: 8 групп + фолбэк, 7 слотов, ≥3 варианта, EN ASCII,
-// без повторов внутри профиля; все 23 семейства STYLE_ATMOSPHERE покрыты.
+// без повторов внутри профиля; все 26 семейств STYLE_ATMOSPHERE покрыты.
 const SLOTS = brain.rules.BRACKET_SLOTS, GROUPS = brain.rules.BRACKETS_BY_GROUP;
 assert.deepEqual(Object.keys(brain.rules.BRACKET_GROUPS).sort(), Object.keys(brain.rules.STYLE_ATMOSPHERE).sort(),
   'каждое семейство стиля имеет профиль брекетов (паритет со STYLE_ATMOSPHERE)');
@@ -553,7 +554,41 @@ const sameFamily = brain.markLyricsDynamics('[Intro]\nx\n[Verse 1]\ny\n[Chorus]\
 assert.equal(sameFamily.style, brain.styleOf('dark synthwave, 100 BPM'),
   'markLyricsDynamics и styleOf резолвят одинаково (единый источник)');
 
+// ------- (20) Н2 (симуляция #51): популярные жанры вне 23 семейств --------
+// Живые кейсы прогона №08 «как у Metallica», №06/29 евродэнс, №03/17 джангл,
+// №25 «брутальный металл»: GENRE_WORDS их не знал — голос оставался
+// нейтральным (clean tone на трэш-метале), ритм — generic. Профили — §2
+// справки владельца vocal-profile-vocabulary.md.
+const hm = brain.buildCaption('heavy thrash metal, aggressive guitars, 140 BPM, powerful male vocals', { kind: 'song' });
+assert.equal(hm.layers.style.key, 'heavy metal', 'metal-промт → семейство heavy metal');
+assert.match(hm.caption, /gritty baritone/, 'метал: грубый регистр вместо нейтрального');
+assert.match(hm.caption, /powerful belting|raspy aggressive delivery/, 'метал: ось подачи не нейтральная (слова автора перекрывают семью — правило 2)');
+assert.doesNotMatch(hm.caption, /\bclean tone\b/, 'нейтральный тембр не дописывается металлу');
+// Без голосовых слов автора семейная решётка §2 доезжает целиком.
+const hm2 = brain.buildCaption('heavy thrash metal, aggressive guitars, 140 BPM', { kind: 'song' });
+assert.match(hm2.caption, /raspy aggressive delivery/, 'метал: семейная решётка §2 (raspy/shouted) без перекрытий');
+const ed = brain.buildCaption('energetic eurodance, 150 BPM, 90s synth stabs, catchy chorus, male vocals', { kind: 'song' });
+assert.equal(ed.layers.style.key, 'eurodance', 'eurodance-промт → семейство eurodance');
+assert.match(ed.caption, /boyish tenor|young male/, 'евродэнс: юный мужской голос §2 (Руки Вверх)');
+assert.match(ed.caption, /four-on-the-floor/, 'евродэнс: четырёхдольный ритм вместо generic');
+const dnb = brain.buildCaption('jungle, 170 BPM, fast chopped breakbeats, deep sub bass', { kind: 'song' });
+assert.equal(dnb.layers.style.key, 'drum and bass', 'jungle-промт → семейство drum and bass');
+assert.match(dnb.caption, /chopped breakbeats/, 'джангл: рубленые брейкбиты вместо generic-грува');
+assert.match(dnb.caption, /female vocals/, 'dnb: женский ведущий вокал');
+// RU-стемы новых семей читаются без перевода (простой путь).
+assert.equal(brain.styleOf('весёлый евродэнс 150 BPM'), 'eurodance', 'RU-стем евродэнс');
+assert.equal(brain.styleOf('брутальный металл, рык'), 'heavy metal', 'RU-стем металл');
+assert.equal(brain.styleOf('быстрый джангл'), 'drum and bass', 'RU-стем джангл');
+assert.equal(brain.styleOf('эпичная киномузыка'), 'cinematic', 'RU-стем киномузыка');
+assert.equal(brain.styleOf('саундтрек к фильму'), 'cinematic', 'RU-стем саундтрек');
+// Имя Metallica не резолвится жанром (#109: имена — не жанры; их переводит
+// переводчик в «heavy metal»), а бытовой «popular» не даёт pop.
+assert.equal(brain.styleOf('как у Metallica'), null, 'имя артиста — не жанровое слово');
+// Новые семейства в списке наставника (producer-brain, паритет секции 14).
+assert.ok(families.includes('heavy metal') && families.includes('eurodance') && families.includes('drum and bass'),
+  'новые семейства известны резолверу наставника');
+
 // ------------------------------------------------------------------ вывод --
-console.log('PASS music-brain v3: слои, ритм-всегда, вокал с характером и фиксированной идентичностью, продакшн, бюджет, негативы, self-check, полный трек (роли/микс/форма/защита), глубина и стилевая атмосфера, разделение caption/лирики и потолок токенов, голос по семи осям (#46: семейные профили, перекрытие осей, запрет противоречий, нейтраль, бейдж), запреты регистра и брекеты динамики (Brain Upgrade Spec), #47 стилевые профили брекетов (8 групп + фолбэк, 7 слотов, анти-дубль с caption, соло-слот, норма плотности), #48 styleOf (общий резолв семейства)');
+console.log('PASS music-brain v3: слои, ритм-всегда, вокал с характером и фиксированной идентичностью, продакшн, бюджет, негативы, self-check, полный трек (роли/микс/форма/защита), глубина и стилевая атмосфера, разделение caption/лирики и потолок токенов, голос по семи осям (#46: семейные профили, перекрытие осей, запрет противоречий, нейтраль, бейдж), запреты регистра и брекеты динамики (Brain Upgrade Spec), #47 стилевые профили брекетов (8 групп + фолбэк, 7 слотов, анти-дубль с caption, соло-слот, норма плотности), #48 styleOf (общий резолв семейства), Н2 #51 (heavy metal/eurodance/drum and bass — 26 семейств)');
 console.log('20 брифов (buildTags / buildCaption, символы):');
 for (const r of rows) console.log(`  ${r.id} ${r.source.padEnd(9)} ${String(r.len).padStart(3)} / ${String(r.captionLen).padStart(3)}  ${r.tags}`);

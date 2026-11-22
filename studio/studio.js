@@ -2090,6 +2090,66 @@
     return found;
   }
 
+  // Н3 (симуляция #51): имя исполнителя срезается из строки только по КРАЮ —
+  // вырезание из середины ломает грамматику («Мы смотрели кино до утра» →
+  // «Мы смотрели до утра»). Возвращает остаток строки; если имя осталось
+  // внутри — пустую строку (сигнал пересобирать название с нуля).
+  function stripArtistNameAtEdges(title, names) {
+    const patterns = [];
+    for (const n of names || []) patterns.push(...[n].concat(ARTIST_ALIASES[String(n).toLowerCase()] || []));
+    const alt = patterns.filter(Boolean).map(escapeRegExp).join('|');
+    if (!alt) return String(title || '').trim();
+    const EDGE = '[\\s\\d!.,;:«»"\'()+\\-–—]*';
+    let t = String(title || '').trim();
+    let stripped = false;
+    for (let i = 0; i < 3; i++) {
+      const next = t
+        .replace(new RegExp('^' + EDGE + '(?:' + alt + ')' + EDGE, 'i'), '')
+        .replace(new RegExp(EDGE + '(?:' + alt + ')' + EDGE + '$', 'i'), '');
+      if (next === t) break;
+      stripped = true;
+      t = next.trim();
+    }
+    // Свисающие предлоги/союзы ПОСЛЕ среза («Песня про кино» → «Песня про» →
+    // «Песня»; «Party как у» → «Party»): одиночная связка на краю — не
+    // название. Чистое название («В плену у джаза») не трогаем — трим только
+    // если срез был.
+    if (stripped) {
+      for (let i = 0; i < 3; i++) {
+        const next = t
+          .replace(/\s+(?:про|в|на|без|и|с|о|для|от|до|к|у|за|по|под|над|как|the|of|and|for|with)$/i, '')
+          .replace(/^(?:про|в|на|без|и|с|о|для|от|до|к|у|за|по|под|над|как|the|of|and|for|with)\s+/i, '')
+          .trim();
+        if (next === t) break;
+        t = next;
+      }
+    }
+    return artistNameHits(names, t).length ? '' : t;
+  }
+
+  // Н3 (симуляция #51): пересборка названия без имени исполнителя. Порядок:
+  // 1) имя на краю строки («Кино — ночная песня») — честный срез края;
+  // 2) первая осмысленная строка лирики без имени — название из содержания
+  //    песни, а не битая фраза с дырой посередине;
+  // 3) тема идеи без фразы-ссылки на исполнителя (как guard черновика);
+  // 4) семейство стиля с заглавной буквы. Пусто — вызывающий ставит fallback.
+  function rebuildTitleWithoutNames(title, opts) {
+    const names = (opts && opts.names) || [];
+    const edge = stripArtistNameAtEdges(title, names);
+    if (edge && edge.replace(/[\s\d!.,;:«»"'()+\-–—]+/g, '').length >= 2)
+      return edge.slice(0, BriixProducer.MAX_TITLE);
+    const cleanLine = String((opts && opts.lyrics) || '').split('\n').map(s => s.trim())
+      .find(s => s.length > 2 && !/^\[[^\]]+\]$/.test(s) && !artistNameHits(names, s).length);
+    if (cleanLine) return BriixProducer.sanitize(cleanLine).slice(0, BriixProducer.MAX_TITLE);
+    const theme = String((opts && opts.idea) || '')
+      .replace(/(?:в\s+стиле|в\s+духе|как\s+у|наподобие|подобно|style\s+of|in\s+the\s+style\s+of|like)\s+[^,.;:!?\n]*/gi, ' ')
+      .replace(/[\s!.,;:«»"()+\-–—]+/g, ' ').trim().slice(0, 60)
+      .replace(/^(?:песня|песню|песне|трек|сделай|напиши|сочини|создай)(?:\s+|$)/i, '').trim();
+    if (theme) return (theme.charAt(0).toUpperCase() + theme.slice(1)).slice(0, BriixProducer.MAX_TITLE);
+    if (opts && opts.style) return opts.style.replace(/\b\w/g, c => c.toUpperCase()).slice(0, BriixProducer.MAX_TITLE);
+    return '';
+  }
+
   // Защитная постобработка черновика: style — через normalizeStyle (неизвестное
   // семейство отбрасывается), prompt — styleLeaks/имена → предупреждение в карточке,
   // title — не равен имени артиста (совпало → пересборка из семейства/темы),
@@ -2114,9 +2174,9 @@
     }
     if (hits(draft.title).length || BriixProducer.styleLeaks(draft.title) > 0) {
       warnings.push('Название совпало с именем исполнителя — заменено автоматически.');
-      let t = String(draft.title || '');
-      for (const n of names) t = t.replace(new RegExp(escapeRegExp(n), 'gi'), ' ');
-      t = t.replace(/[\s!.,;:«»"'()+\-–—]+/g, ' ').trim();
+      // Н3 (#51): имя срезается только по краю — из середины фразы вырезание
+      // ломает грамматику; остаток пересобирается по цепочке ниже.
+      let t = stripArtistNameAtEdges(String(draft.title || ''), names);
       if (!t && draft.style) t = draft.style.replace(/\b\w/g, c => c.toUpperCase()); // из семейства
       if (!t) { // из темы идеи без ссылки на артиста
         t = String(idea || '')
@@ -2604,12 +2664,27 @@
     });
     watchStage.observe(stageBody, { subtree: true, attributes: true, attributeFilter: ['data-wait-stage'] });
     setBusy(true, vocal && !lyrics ? 'Пишем текст песни…' : 'Отправляем задачу…');
-    // #48: семейство для атмосферного направления автолирики — черновик сессии
-    // или жанровые слова идеи (styleOf — тот же резолв, что у брекетов #47).
-    const lyricStyleFamily = session.draft?.styleFamily
-      || (globalThis.BRIIX_MUSIC_BRAIN && typeof BRIIX_MUSIC_BRAIN.styleOf === 'function'
-        ? BRIIX_MUSIC_BRAIN.styleOf(style || lyrics || 'песня') : null);
+    // Н1 (симуляция #51): жанр часто живёт только в переводе («грустная песня»
+    // → «sad acoustic ballad»), поэтому не-ASCII идея переводится ДО автолирики
+    // и сборки — тот же вызов translatePrompt, что раньше жил в ветке сборки,
+    // только раньше. Семейство: черновик сессии → жанровые слова исходника →
+    // жанровые слова перевода. До фикса голос и настроение автолирики
+    // оставались нейтральными на RU-идеях, где жанр есть только в переводе
+    // (styleOf — тот же резолв, что у брекетов #47).
+    const familyOfText = text => (globalThis.BRIIX_MUSIC_BRAIN && typeof BRIIX_MUSIC_BRAIN.styleOf === 'function'
+      ? BRIIX_MUSIC_BRAIN.styleOf(String(text || '')) : null);
+    let fluent = null;
+    const resolveStyleFamily = () => session.draft?.styleFamily
+      || familyOfText(style || lyrics || '')
+      || (fluent ? familyOfText(fluent) : null);
     try {
+      if (style && !BriixProducer.isAsciiOnly(style)) {
+        try { fluent = await translatePrompt(style, handle.controller.signal); }
+        catch (error) { if (error.name === 'AbortError' || error.code === 'cancelled') throw error; }
+      }
+      // #48: семейство для атмосферного направления автолирики — общий
+      // резолв Н1 (черновик → исходник → перевод).
+      const lyricStyleFamily = resolveStyleFamily();
       if (vocal && !lyrics) {
         try {
           lyrics = await autoLyrics(style || lyrics || 'песня', handle.controller.signal, { styleFamily: lyricStyleFamily });
@@ -2634,8 +2709,10 @@
       // Исходная идея в карточке/сессии по-прежнему не переписывается (правило #109).
       const CAPTION_BUDGET = BRIIX_MUSIC_BRAIN.rules.MAX_CAPTION;
       // P1 аудита #35: семейство стиля читается из состояния сессии — генерация в
-      // сессии B больше не наследует стиль сессии A молча.
-      const styleFamily = session.draft?.styleFamily || undefined;
+      // сессии B больше не наследует стиль сессии A молча. Н1 (#51): в цепочке
+      // семейства теперь и жанровые слова перевода — голос/moodLine/якорь жанра
+      // строятся по нему, если жанра нет ни в черновике, ни в исходнике.
+      const styleFamily = resolveStyleFamily() || undefined;
       // Язык лирики — одно решение на всю сборку (#45, точность черновиков):
       // явное указание в идее → явное в лирике → кириллическая лирика → дефолт en.
       // Тег мозга (English/Russian lyrics) и params.language обязаны совпадать —
@@ -2674,11 +2751,9 @@
         }
       } else if (style && !BriixProducer.isAsciiOnly(style)) {
         // Не-ASCII идея (например русская) → связный английский перевод через
-        // producer-чат; brain-теги приоритетнее сырого перевода и остаются,
-        // если перевод не состоялся. Болтовня/JSON/markdown отбраковываются.
-        let fluent = null;
-        try { fluent = await translatePrompt(style, handle.controller.signal); }
-        catch (error) { if (error.name === 'AbortError' || error.code === 'cancelled') throw error; }
+        // producer-чат (Н1: перевод уже выполнен до автолирики, повторно не
+        // зовём); brain-теги приоритетнее сырого перевода и остаются, если
+        // перевод не состоялся. Болтовня/JSON/markdown отбраковываются.
         if (fluent) brain = brainFor(brainBudget(fluent));
         finalPrompt = fluent ? mergePromptTags(fluent, brain.tags) : (brain.tags || style);
         brainApplied = true;
@@ -2736,18 +2811,27 @@
       const ideaArtistRefs = extractArtistRefs(rawIdea);
       const lyricLeaks = !snapshot.instrumental && lyrics ? artistNameHits(ideaArtistRefs, lyrics) : [];
       if (lyricLeaks.length) {
-        card('notice', 'Имя исполнителя в тексте песни', 'Имя (' + lyricLeaks.join(', ') + ') звучит в лирике — модель может принять его за отсылку к исполнителю. Проверьте текст: имена не должны попадать в лирику.', session);
+        // Н3 (симуляция #51): контекст строки отличает настоящую отсылку
+        // («пою в стиле Кино») от бытового омонима («мы смотрели кино до
+        // утра», «hands up high») — формулировка предупреждения честная.
+        const isReference = lyricLeaks.some(n => {
+          const refBefore = new RegExp('(?:в\\s+стиле|в\\s+духе|как\\s+у|наподобие|подобно|style\\s+of|in\\s+the\\s+style\\s+of|like)\\s+(?:[A-Za-zА-Яа-яЁё0-9]+\\s+){0,2}' + escapeRegExp(n), 'i');
+          return String(lyrics || '').split(/\r?\n/).some(line => new RegExp(escapeRegExp(n), 'i').test(line) && refBefore.test(line));
+        });
+        card('notice', 'Имя исполнителя в тексте песни', isReference
+          ? 'Отсылка к исполнителю (' + lyricLeaks.join(', ') + ') звучит прямо в лирике — модель может перенять его манеру вместо вашего стиля. Уберите имя из текста.'
+          : 'В лирике есть слово, совпавшее с именем исполнителя (' + lyricLeaks.join(', ') + ') — возможно, это обычное слово, а не отсылка. Если всё же это отсылка («в стиле», «как у»), её лучше убрать: имена не должны попадать в лирику.', session);
       }
       let finalTitle = trackTitle;
       const titleLeaks = artistNameHits(ideaArtistRefs, trackTitle);
       if (titleLeaks.length) {
-        let t = trackTitle;
-        for (const n of ideaArtistRefs) {
-          for (const p of [n].concat(ARTIST_ALIASES[n.toLowerCase()] || [])) t = t.replace(new RegExp(escapeRegExp(p), 'gi'), ' ');
-        }
-        t = t.replace(/[\s!.,;:«»""()+\-–—]+/g, ' ').trim();
-        if (t) finalTitle = t.slice(0, BriixProducer.MAX_TITLE);
-        card('notice', 'Название очищено от имени исполнителя', 'Имя (' + titleLeaks.join(', ') + ') не должно попадать в название трека — вычищено автоматически.', session);
+        // Н3 (симуляция #51): имя не вырезается из середины фразы — «Мы
+        // смотрели кино до утра» превращалось в битое «Мы смотрели до утра»
+        // и уезжало в теги трека. Название пересобирается: край → чистая
+        // строка лирики → тема идеи без ссылки → семейство стиля.
+        finalTitle = rebuildTitleWithoutNames(trackTitle, { names: ideaArtistRefs, lyrics, idea: rawIdea, style: styleFamily })
+          || ('BRIIX track ' + new Date().toISOString().slice(0, 10));
+        card('notice', 'Название очищено от имени исполнителя', 'Имя (' + titleLeaks.join(', ') + ') не должно попадать в название трека — название пересобрано без него.', session);
       }
       // Brain Upgrade Spec §4 (lyrics-effect-brackets.md): брекеты динамики —
       // второй канал описания. Авторская разметка проходит без потерь; без неё
