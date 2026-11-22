@@ -1,0 +1,6736 @@
+{
+ "count": 116,
+ "families": [
+  {
+   "family": "trance",
+   "en": "trance",
+   "ru": "транс",
+   "batch": "0",
+   "aliases_en": [
+    "trance",
+    "uplifting trance",
+    "goa trance",
+    "psytrance"
+   ],
+   "aliases_ru": [
+    "транс",
+    "трэнс"
+   ],
+   "rhythm": [
+    "driving",
+    "four-on-the-floor kick groove",
+    "punchy kick, rolling offbeat bass"
+   ],
+   "production": [
+    "clean modern production",
+    "wide stereo mix"
+   ],
+   "atmosphere": [
+    "supersaw leads answering the break",
+    "long breakdown into a euphoric drop",
+    "sidechained pads breathing with the kick",
+    "rolling offbeat bass under the groove",
+    "dry kick close, supersaw wide behind",
+    "close groove, distant breakdown wash"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "bright timbre"
+    ],
+    "power": [
+     "confident delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "euphoric"
+   },
+   "brackets_group": "club",
+   "bpm": "136–142",
+   "examples": [
+    "trance, 136–142, four-on-the-floor kick groove, punchy kick, rolling offbeat bass",
+    "trance, female vocals, confident delivery, euphoric mood",
+    "транс: driving four-on-the-floor kick groove, настроение euphoric"
+   ],
+   "sources": [
+    "arch-368 (hypnotic:160, euphoric:124, anthem:65, supersaw:53, club:113; BPM 130–145, female:male 248:92)"
+   ],
+   "archive_tracks": 582,
+   "archive_favorites": 517
+  },
+  {
+   "family": "industrial",
+   "en": "industrial",
+   "ru": "индастриал",
+   "batch": "0",
+   "aliases_en": [
+    "industrial"
+   ],
+   "aliases_ru": [
+    "индастриал"
+   ],
+   "rhythm": [
+    "heavy",
+    "stomping industrial beat",
+    "metallic percussion, clanging kicks"
+   ],
+   "production": [
+    "distorted gritty production",
+    "wide stereo mix"
+   ],
+   "atmosphere": [
+    "clanging metallic percussion",
+    "distorted drone underneath the beat",
+    "mechanical stutter rhythms",
+    "cold factory room tone",
+    "dry stomp close, distorted drone far behind",
+    "close mechanical beat, cavernous hall behind"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "register": [
+     "gritty baritone"
+    ],
+    "timbre": [
+     "rough texture"
+    ],
+    "power": [
+     "shouted delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "staying in the basement throughout, no falsetto and no high-pitched screaming ever",
+    "mood": "dark"
+   },
+   "brackets_group": "club",
+   "bpm": null,
+   "examples": [
+    "industrial, stomping industrial beat, metallic percussion, clanging kicks",
+    "industrial, male vocals, shouted delivery, dark mood",
+    "индастриал: heavy stomping industrial beat, настроение dark"
+   ],
+   "sources": [
+    "arch-273 (dark:167, distorted:97, noise:67, aggressive:66; male:female 121:82)"
+   ],
+   "archive_tracks": 273,
+   "archive_favorites": 174
+  },
+  {
+   "family": "deep house",
+   "en": "deep house",
+   "ru": "дип-хаус",
+   "batch": "A",
+   "aliases_en": [
+    "deep house",
+    "deephouse"
+   ],
+   "aliases_ru": [
+    "дип-хаус"
+   ],
+   "rhythm": [
+    "smooth",
+    "four-on-the-floor kick groove",
+    "soft kick, warm filtered bass, shaker"
+   ],
+   "production": [
+    "analog warmth",
+    "tight low end"
+   ],
+   "atmosphere": [
+    "filtered jazz chords behind the groove",
+    "warm analog bass in the pocket",
+    "rolling shaker loop",
+    "dusty Rhodes chords over the bass",
+    "close bass, wide chord wash behind",
+    "dry vocal, distant filtered loop"
+   ],
+   "vocal": {
+    "who": [
+     "soulful female vocals"
+    ],
+    "timbre": [
+     "warm timbre"
+    ],
+    "power": [
+     "laid-back delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "hypnotic"
+   },
+   "brackets_group": "club",
+   "bpm": "120–124",
+   "examples": [
+    "deep house, 120–124, four-on-the-floor kick groove, soft kick, warm filtered bass, shaker",
+    "deep house, soulful female vocals, laid-back delivery, hypnotic mood",
+    "дип-хаус: smooth four-on-the-floor kick groove, настроение hypnotic"
+   ],
+   "sources": [
+    "arch-38"
+   ],
+   "archive_tracks": 38,
+   "archive_favorites": 44
+  },
+  {
+   "family": "progressive house",
+   "en": "progressive house",
+   "ru": "прогрессив-хаус",
+   "batch": "A",
+   "aliases_en": [
+    "progressive house"
+   ],
+   "aliases_ru": [
+    "прогрессив-хаус"
+   ],
+   "rhythm": [
+    "driving",
+    "four-on-the-floor kick groove",
+    "punchy kick, wide plucky synths"
+   ],
+   "production": [
+    "clean modern production",
+    "wide stereo mix"
+   ],
+   "atmosphere": [
+    "long filtered build into the soft drop",
+    "plucky arpeggios answering the kick",
+    "wide pads breathing under the groove",
+    "slow tension curve across the whole track",
+    "dry kick close, pads far behind",
+    "close plucks, wide breakdown wash"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "bright timbre"
+    ],
+    "power": [
+     "confident delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "euphoric"
+   },
+   "brackets_group": "club",
+   "bpm": "126–130",
+   "examples": [
+    "progressive house, 126–130, four-on-the-floor kick groove, punchy kick, wide plucky synths",
+    "progressive house, female vocals, confident delivery, euphoric mood",
+    "прогрессив-хаус: driving four-on-the-floor kick groove, настроение euphoric"
+   ],
+   "sources": [
+    "arch-12"
+   ],
+   "archive_tracks": 12,
+   "archive_favorites": 6
+  },
+  {
+   "family": "afro house",
+   "en": "afro house",
+   "ru": "афро-хаус",
+   "batch": "A",
+   "aliases_en": [
+    "afro house",
+    "afrohouse"
+   ],
+   "aliases_ru": [
+    "афро-хаус"
+   ],
+   "rhythm": [
+    "organic",
+    "four-on-the-floor kick groove",
+    "log drum bass, djembe, shaker"
+   ],
+   "production": [
+    "clean modern production",
+    "wide stereo mix"
+   ],
+   "atmosphere": [
+    "log drum bassline carrying the low end",
+    "rolling djembe polyrhythms",
+    "marimba stabs answering the kick",
+    "call-and-response chants in the background",
+    "close percussion, wide chant wash behind",
+    "dry kick, distant marimba loop"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "warm timbre"
+    ],
+    "power": [
+     "confident delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "euphoric"
+   },
+   "brackets_group": "club",
+   "bpm": "120–124",
+   "examples": [
+    "afro house, 120–124, four-on-the-floor kick groove, log drum bass, djembe, shaker",
+    "afro house, female vocals, confident delivery, euphoric mood",
+    "афро-хаус: organic four-on-the-floor kick groove, настроение euphoric"
+   ],
+   "sources": [
+    "web: жанровая практика (log drum, djembe)"
+   ],
+   "archive_tracks": 0,
+   "archive_favorites": 0
+  },
+  {
+   "family": "acid house",
+   "en": "acid house",
+   "ru": "эйсид-хаус",
+   "batch": "A",
+   "aliases_en": [
+    "acid house",
+    "acid"
+   ],
+   "aliases_ru": [
+    "эйсид-хаус"
+   ],
+   "rhythm": [
+    "driving",
+    "four-on-the-floor kick groove",
+    "drum machine kick, acid squelch bass"
+   ],
+   "production": [
+    "analog warmth",
+    "tight low end"
+   ],
+   "atmosphere": [
+    "TB-303 squelch answering the kick",
+    "filters slowly opening over the groove",
+    "cheap drum machine claps",
+    "hypnotic loop tightening every eight bars",
+    "dry kick close, squelch wide behind",
+    "mono groove, distant filter sweep"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "chest voice"
+    ],
+    "power": [
+     "spoken-sung"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "staying in the basement throughout, no falsetto and no high-pitched screaming ever",
+    "mood": "hypnotic"
+   },
+   "brackets_group": "club",
+   "bpm": "120–125",
+   "examples": [
+    "acid house, 120–125, four-on-the-floor kick groove, drum machine kick, acid squelch bass",
+    "acid house, male vocals, spoken-sung, hypnotic mood",
+    "эйсид-хаус: driving four-on-the-floor kick groove, настроение hypnotic"
+   ],
+   "sources": [
+    "arch-5"
+   ],
+   "archive_tracks": 31,
+   "archive_favorites": 33
+  },
+  {
+   "family": "dub techno",
+   "en": "dub techno",
+   "ru": "даб-техно",
+   "batch": "A",
+   "aliases_en": [
+    "dub techno"
+   ],
+   "aliases_ru": [
+    "даб-техно"
+   ],
+   "rhythm": [
+    "hypnotic",
+    "straight kick pulse",
+    "deep kick, rimshot, dub chord echoes"
+   ],
+   "production": [
+    "dry driving production",
+    "deep reverb space"
+   ],
+   "atmosphere": [
+    "cavernous dub chords trailing the kick",
+    "deep ambient drones under the pulse",
+    "echo steps on the rimshot",
+    "foggy static texture behind the beat",
+    "dry kick close, echoes far behind",
+    "mono pulse, wide dub tail"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "thin vocals"
+    ],
+    "power": [
+     "detached delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "hypnotic"
+   },
+   "brackets_group": "club",
+   "bpm": "118–126",
+   "examples": [
+    "dub techno, 118–126, straight kick pulse, deep kick, rimshot, dub chord echoes",
+    "dub techno, female vocals, detached delivery, hypnotic mood",
+    "даб-техно: hypnotic straight kick pulse, настроение hypnotic"
+   ],
+   "sources": [
+    "web: жанровая практика"
+   ],
+   "archive_tracks": 0,
+   "archive_favorites": 0
+  },
+  {
+   "family": "hardstyle",
+   "en": "hardstyle",
+   "ru": "хардстайл",
+   "batch": "A",
+   "aliases_en": [
+    "hardstyle"
+   ],
+   "aliases_ru": [
+    "хардстайл"
+   ],
+   "rhythm": [
+    "heavy",
+    "banging half-time hard kick",
+    "distorted hard kick, screech lead"
+   ],
+   "production": [
+    "loud brickwall master",
+    "punchy midrange"
+   ],
+   "atmosphere": [
+    "reverse bass rolling into the hard kick",
+    "screech leads answering the kick",
+    "long epic breakdown into the drop",
+    "pitched vocal hook over the master",
+    "dry kick close, screech wide behind",
+    "close drop, distant epic pads"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "bright timbre"
+    ],
+    "power": [
+     "powerful belting"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "aggressive"
+   },
+   "brackets_group": "club",
+   "bpm": "145–155",
+   "examples": [
+    "hardstyle, 145–155, banging half-time hard kick, distorted hard kick, screech lead",
+    "hardstyle, female vocals, powerful belting, aggressive mood",
+    "хардстайл: heavy banging half-time hard kick, настроение aggressive"
+   ],
+   "sources": [
+    "arch-2",
+    "web: https://electronicmusic.fandom.com/wiki/Types_of_Kicks_in_Hardcore_and_Hard_Dance (distorted kick replaces bassline, screech leads, reverse bass)"
+   ],
+   "archive_tracks": 2,
+   "archive_favorites": 0
+  },
+  {
+   "family": "gabber",
+   "en": "gabber",
+   "ru": "габбер",
+   "batch": "A",
+   "aliases_en": [
+    "gabber",
+    "gabba",
+    "hardcore techno"
+   ],
+   "aliases_ru": [
+    "габбер"
+   ],
+   "rhythm": [
+    "fast",
+    "hammering four-on-the-floor hardcore kick",
+    "distorted gabber kick, reverse bass"
+   ],
+   "production": [
+    "distorted gritty production",
+    "punchy midrange"
+   ],
+   "atmosphere": [
+    "distorted kick hammering the beat",
+    "reverse bass rolling into the kick",
+    "shouted hardcore chants",
+    "screamer leads over the master",
+    "dry kick close, chants wide behind",
+    "close hammering kick, distant screamer lead"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "register": [
+     "gritty baritone"
+    ],
+    "timbre": [
+     "rough texture"
+    ],
+    "power": [
+     "shouted delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "staying in the basement throughout, no falsetto and no high-pitched screaming ever",
+    "mood": "aggressive"
+   },
+   "brackets_group": "club",
+   "bpm": "160–200",
+   "examples": [
+    "gabber, 160–200, hammering four-on-the-floor hardcore kick, distorted gabber kick, reverse bass",
+    "gabber, male vocals, shouted delivery, aggressive mood",
+    "габбер: fast hammering four-on-the-floor hardcore kick, настроение aggressive"
+   ],
+   "sources": [
+    "web: https://electronicmusic.fandom.com/wiki/Types_of_Kicks_in_Hardcore_and_Hard_Dance (distorted bouncy kick + reversed bass)"
+   ],
+   "archive_tracks": 0,
+   "archive_favorites": 0
+  },
+  {
+   "family": "happy hardcore",
+   "en": "happy hardcore",
+   "ru": "хэппи-хардкор",
+   "batch": "A",
+   "aliases_en": [
+    "happy hardcore"
+   ],
+   "aliases_ru": [
+    "хэппи-хардкор"
+   ],
+   "rhythm": [
+    "fast",
+    "rushing four-on-the-floor hardcore kick",
+    "saturated kick, bouncy rave stabs"
+   ],
+   "production": [
+    "clean 90s dance production",
+    "punchy midrange"
+   ],
+   "atmosphere": [
+    "rushing kick under pitched-up vocal hooks",
+    "bright rave piano stabs",
+    "uplifting breakdown into the bounce",
+    "bright synth leads answering the kick",
+    "dry kick close, piano stabs wide behind",
+    "close hook, distant rave pads"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "bright timbre"
+    ],
+    "power": [
+     "powerful belting"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "euphoric"
+   },
+   "brackets_group": "club",
+   "bpm": "160–180",
+   "examples": [
+    "happy hardcore, 160–180, rushing four-on-the-floor hardcore kick, saturated kick, bouncy rave stabs",
+    "happy hardcore, female vocals, powerful belting, euphoric mood",
+    "хэппи-хардкор: fast rushing four-on-the-floor hardcore kick, настроение euphoric"
+   ],
+   "sources": [
+    "web: жанровая практика"
+   ],
+   "archive_tracks": 0,
+   "archive_favorites": 0
+  },
+  {
+   "family": "dubstep",
+   "en": "dubstep",
+   "ru": "дабстеп",
+   "batch": "A",
+   "aliases_en": [
+    "dubstep",
+    "brostep"
+   ],
+   "aliases_ru": [
+    "дабстеп"
+   ],
+   "rhythm": [
+    "heavy",
+    "half-time wobbling groove",
+    "wobbling bass, half-time snare"
+   ],
+   "production": [
+    "clean modern production",
+    "punchy low end"
+   ],
+   "atmosphere": [
+    "wobble bass answering the half-time snare",
+    "sparse drums with sub weight",
+    "bass drop landing on the third beat",
+    "glitched vocal fragments over the drop",
+    "dry snare close, sub-bass far below",
+    "sparse drums, wide wobble behind"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "rough texture"
+    ],
+    "power": [
+     "gritty aggressive delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "staying in the basement throughout, no falsetto and no high-pitched screaming ever",
+    "mood": "dark"
+   },
+   "brackets_group": "club",
+   "bpm": "140 (half-time)",
+   "examples": [
+    "dubstep, 140 (half-time), half-time wobbling groove, wobbling bass, half-time snare",
+    "dubstep, male vocals, gritty aggressive delivery, dark mood",
+    "дабстеп: heavy half-time wobbling groove, настроение dark"
+   ],
+   "sources": [
+    "arch-84",
+    "web: жанровая практика (140 BPM half-time, wobble bass, snare on the 3rd beat)"
+   ],
+   "archive_tracks": 90,
+   "archive_favorites": 43
+  },
+  {
+   "family": "uk garage",
+   "en": "UK garage",
+   "ru": "ю-кей гараж",
+   "batch": "A",
+   "aliases_en": [
+    "uk garage",
+    "ukg",
+    "2-step garage",
+    "2-step"
+   ],
+   "aliases_ru": [
+    "двухшаговый гараж",
+    "ю-кей гараж"
+   ],
+   "rhythm": [
+    "bouncy",
+    "swinging two-step groove",
+    "shuffled kick and snare, sub bass"
+   ],
+   "production": [
+    "clean modern production",
+    "wide stereo mix"
+   ],
+   "atmosphere": [
+    "sped-up vocal chops over the shuffle",
+    "sub bass answering the snare",
+    "syncopated two-step hats",
+    "speed-garage hats rushing the shuffle",
+    "close shuffle, wide vocal chops behind",
+    "dry snare, distant sub sweep"
+   ],
+   "vocal": {
+    "who": [
+     "soulful female vocals"
+    ],
+    "timbre": [
+     "smooth timbre"
+    ],
+    "power": [
+     "laid-back delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "sensual"
+   },
+   "brackets_group": "club",
+   "bpm": "130–140",
+   "examples": [
+    "UK garage, 130–140, swinging two-step groove, shuffled kick and snare, sub bass",
+    "UK garage, soulful female vocals, laid-back delivery, sensual mood",
+    "ю-кей гараж: bouncy swinging two-step groove, настроение sensual"
+   ],
+   "sources": [
+    "web: жанровая практика (shuffled 2-step, sped-up R&B vocal chops, sub bass)"
+   ],
+   "archive_tracks": 2,
+   "archive_favorites": 6
+  },
+  {
+   "family": "big beat",
+   "en": "big beat",
+   "ru": "биг-бит",
+   "batch": "A",
+   "aliases_en": [
+    "big beat"
+   ],
+   "aliases_ru": [
+    "биг-бит"
+   ],
+   "rhythm": [
+    "heavy",
+    "sawed-off breakbeat stomp",
+    "fat breakbeat drums, filtered loops"
+   ],
+   "production": [
+    "analog warmth",
+    "punchy midrange"
+   ],
+   "atmosphere": [
+    "filtered breakbeat intro",
+    "fat drum hits slamming the loop",
+    "bass riff locking to the break",
+    "crowd samples answering the drums",
+    "dry drums close, filtered loop far behind",
+    "close stomp, distant siren texture"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "chest voice"
+    ],
+    "power": [
+     "spoken word"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "staying in the basement throughout, no falsetto and no high-pitched screaming ever",
+    "mood": "aggressive"
+   },
+   "brackets_group": "club",
+   "bpm": "100–125",
+   "examples": [
+    "big beat, 100–125, sawed-off breakbeat stomp, fat breakbeat drums, filtered loops",
+    "big beat, male vocals, spoken word, aggressive mood",
+    "биг-бит: heavy sawed-off breakbeat stomp, настроение aggressive"
+   ],
+   "sources": [
+    "arch-7"
+   ],
+   "archive_tracks": 7,
+   "archive_favorites": 10
+  },
+  {
+   "family": "future bass",
+   "en": "future bass",
+   "ru": "фьюче-бас",
+   "batch": "A",
+   "aliases_en": [
+    "future bass"
+   ],
+   "aliases_ru": [
+    "фьюче-бас"
+   ],
+   "rhythm": [
+    "bouncy",
+    "half-time bounce groove",
+    "crisp trap hats, fat saw stabs"
+   ],
+   "production": [
+    "clean modern production",
+    "wide stereo mix"
+   ],
+   "atmosphere": [
+    "supersaw chord stacks slamming the drop",
+    "pitched vocal chops as the lead",
+    "crisp hats rolling over the half-time bounce",
+    "detuned chord swell into the drop",
+    "dry vocal close, chord stack wide behind",
+    "close bounce, distant pad wash"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "bright timbre"
+    ],
+    "power": [
+     "playful cheerful delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "euphoric"
+   },
+   "brackets_group": "club",
+   "bpm": "140–160 (half-time)",
+   "examples": [
+    "future bass, 140–160 (half-time), half-time bounce groove, crisp trap hats, fat saw stabs",
+    "future bass, female vocals, playful cheerful delivery, euphoric mood",
+    "фьюче-бас: bouncy half-time bounce groove, настроение euphoric"
+   ],
+   "sources": [
+    "arch-39"
+   ],
+   "archive_tracks": 39,
+   "archive_favorites": 33
+  },
+  {
+   "family": "breakbeat",
+   "en": "breakbeat",
+   "ru": "брейкбит",
+   "batch": "A",
+   "aliases_en": [
+    "breakbeat",
+    "breaks"
+   ],
+   "aliases_ru": [
+    "брейкбит"
+   ],
+   "rhythm": [
+    "broken",
+    "broken breakbeat",
+    "chopped breakbeat drums, fat bass"
+   ],
+   "production": [
+    "analog warmth",
+    "punchy midrange"
+   ],
+   "atmosphere": [
+    "chopped breaks rolling under a bass riff",
+    "filter sweeps between the breaks",
+    "big drum breaks answering the bass",
+    "party chants in the background",
+    "dry breaks close, wide filter sweep behind",
+    "close drums, distant bass riff"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "chest voice"
+    ],
+    "power": [
+     "spoken word"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "staying in the basement throughout, no falsetto and no high-pitched screaming ever",
+    "mood": "euphoric"
+   },
+   "brackets_group": "club",
+   "bpm": "125–140",
+   "examples": [
+    "breakbeat, 125–140, broken breakbeat, chopped breakbeat drums, fat bass",
+    "breakbeat, male vocals, spoken word, euphoric mood",
+    "брейкбит: broken broken breakbeat, настроение euphoric"
+   ],
+   "sources": [
+    "arch-198"
+   ],
+   "archive_tracks": 316,
+   "archive_favorites": 288
+  },
+  {
+   "family": "electro swing",
+   "en": "electro swing",
+   "ru": "электро-свинг",
+   "batch": "A",
+   "aliases_en": [
+    "electro swing"
+   ],
+   "aliases_ru": [
+    "электро-свинг"
+   ],
+   "rhythm": [
+    "bouncy",
+    "swinging electro groove",
+    "swing drums, walking bass, scratch fills"
+   ],
+   "production": [
+    "analog warmth",
+    "wide stereo mix"
+   ],
+   "atmosphere": [
+    "vintage swing loop chopped into the beat",
+    "scratch fills answering the horns",
+    "clarinet licks over electro bass",
+    "big-band stabs slamming the groove",
+    "dry vocal close, swing loop wide behind",
+    "close horns, distant vinyl loop"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "velvet tone"
+    ],
+    "power": [
+     "playful cheerful delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "playful"
+   },
+   "brackets_group": "club",
+   "bpm": "115–125",
+   "examples": [
+    "electro swing, 115–125, swinging electro groove, swing drums, walking bass, scratch fills",
+    "electro swing, female vocals, playful cheerful delivery, playful mood",
+    "электро-свинг: bouncy swinging electro groove, настроение playful"
+   ],
+   "sources": [
+    "arch-4"
+   ],
+   "archive_tracks": 4,
+   "archive_favorites": 3
+  },
+  {
+   "family": "idm",
+   "en": "IDM",
+   "ru": "ИДМ",
+   "batch": "B",
+   "aliases_en": [
+    "idm",
+    "intelligent dance music"
+   ],
+   "aliases_ru": [
+    "идм",
+    "ИДМ"
+   ],
+   "rhythm": [
+    "broken",
+    "glitched idm patterns",
+    "cut-up drum programming, granular edits"
+   ],
+   "production": [
+    "clean modern production",
+    "wide stereo mix"
+   ],
+   "atmosphere": [
+    "cut-up drum edits flipping the pattern",
+    "granular textures dissolving between beats",
+    "evolving synthetic melodies",
+    "unusual time signatures shifting the grid",
+    "close glitches, wide drones behind",
+    "dry edit, distant granular wash"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "breathy tone"
+    ],
+    "power": [
+     "intimate delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "dreamy"
+   },
+   "brackets_group": "mellow",
+   "bpm": "100–160",
+   "examples": [
+    "IDM, 100–160, glitched idm patterns, cut-up drum programming, granular edits",
+    "IDM, female vocals, intimate delivery, dreamy mood",
+    "ИДМ: broken glitched idm patterns, настроение dreamy"
+   ],
+   "sources": [
+    "arch-2"
+   ],
+   "archive_tracks": 2,
+   "archive_favorites": 3
+  },
+  {
+   "family": "glitch",
+   "en": "glitch",
+   "ru": "глитч",
+   "batch": "B",
+   "aliases_en": [
+    "glitch",
+    "glitch pop",
+    "glitch-hop"
+   ],
+   "aliases_ru": [
+    "глитч"
+   ],
+   "rhythm": [
+    "broken",
+    "stuttering glitch edits",
+    "glitched percussion, digital clicks"
+   ],
+   "production": [
+    "clean digital production",
+    "wide stereo mix"
+   ],
+   "atmosphere": [
+    "stutter edits slicing the beat",
+    "digital clicks and pops as percussion",
+    "bit-crushed textures under the melody",
+    "fragmented vocal chops repeating",
+    "close clicks, wide digital wash behind",
+    "dry stutter, distant bit-crush tail"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "thin vocals"
+    ],
+    "power": [
+     "detached delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "hypnotic"
+   },
+   "brackets_group": "club",
+   "bpm": "110–150",
+   "examples": [
+    "glitch, 110–150, stuttering glitch edits, glitched percussion, digital clicks",
+    "glitch, female vocals, detached delivery, hypnotic mood",
+    "глитч: broken stuttering glitch edits, настроение hypnotic"
+   ],
+   "sources": [
+    "arch-519"
+   ],
+   "archive_tracks": 523,
+   "archive_favorites": 602
+  },
+  {
+   "family": "vaporwave",
+   "en": "vaporwave",
+   "ru": "вэйпорвейв",
+   "batch": "B",
+   "aliases_en": [
+    "vaporwave"
+   ],
+   "aliases_ru": [
+    "вэйпорвейв"
+   ],
+   "rhythm": [
+    "slow",
+    "slowed chopped groove",
+    "slowed drum machine, soft kick"
+   ],
+   "production": [
+    "tape saturation",
+    "AM radio broadcast texture"
+   ],
+   "atmosphere": [
+    "slowed saxophone loops from another decade",
+    "mall ambience between the beats",
+    "chopped smooth-jazz chords",
+    "washed reverb over everything",
+    "distant slowed loop, close hiss in front",
+    "everything far behind a glassy veil"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "glassy timbre"
+    ],
+    "power": [
+     "detached delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "nostalgic"
+   },
+   "brackets_group": "mellow",
+   "bpm": "60–90 (slowed)",
+   "examples": [
+    "vaporwave, 60–90 (slowed), slowed chopped groove, slowed drum machine, soft kick",
+    "vaporwave, female vocals, detached delivery, nostalgic mood",
+    "вэйпорвейв: slow slowed chopped groove, настроение nostalgic"
+   ],
+   "sources": [
+    "arch-10"
+   ],
+   "archive_tracks": 10,
+   "archive_favorites": 4
+  },
+  {
+   "family": "chiptune",
+   "en": "chiptune",
+   "ru": "чиптюн",
+   "batch": "B",
+   "aliases_en": [
+    "chiptune",
+    "8-bit",
+    "chipmusic"
+   ],
+   "aliases_ru": [
+    "чиптюн",
+    "восьмибитная музыка"
+   ],
+   "rhythm": [
+    "fast",
+    "chippy pulse groove",
+    "8-bit drum machine, square-wave bleeps"
+   ],
+   "production": [
+    "crunchy bit-crushed mix",
+    "mono centre"
+   ],
+   "atmosphere": [
+    "square-wave lead carrying the melody",
+    "arpeggios cycling like an arcade",
+    "noise-channel percussion",
+    "bouncy 8-bit bassline under the lead",
+    "close bleeps, narrow arcade mix",
+    "dry lead, distant echo bleeps"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "bright timbre"
+    ],
+    "power": [
+     "playful cheerful delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "cheerful"
+   },
+   "brackets_group": "synth",
+   "bpm": "120–160",
+   "examples": [
+    "chiptune, 120–160, chippy pulse groove, 8-bit drum machine, square-wave bleeps",
+    "chiptune, female vocals, playful cheerful delivery, cheerful mood",
+    "чиптюн: fast chippy pulse groove, настроение cheerful"
+   ],
+   "sources": [
+    "arch-18"
+   ],
+   "archive_tracks": 25,
+   "archive_favorites": 35
+  },
+  {
+   "family": "dark ambient",
+   "en": "dark ambient",
+   "ru": "тёмный эмбиент",
+   "batch": "B",
+   "aliases_en": [
+    "dark ambient"
+   ],
+   "aliases_ru": [
+    "тёмный эмбиент"
+   ],
+   "rhythm": [
+    "beatless",
+    "drift without a drum kit",
+    "sub-bass drone"
+   ],
+   "production": [
+    "tape saturation",
+    "deep reverb space"
+   ],
+   "atmosphere": [
+    "sub-bass drones under everything",
+    "distant metallic echo",
+    "cavernous hall decay",
+    "eerie field recordings drifting by",
+    "everything far, nothing close",
+    "one close whisper against an endless hall"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "breathy tone"
+    ],
+    "power": [
+     "whispered delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "haunting"
+   },
+   "brackets_group": "mellow",
+   "bpm": "beatless",
+   "examples": [
+    "dark ambient, beatless, drift without a drum kit, sub-bass drone",
+    "dark ambient, female vocals, whispered delivery, haunting mood",
+    "тёмный эмбиент: beatless drift without a drum kit, настроение haunting"
+   ],
+   "sources": [
+    "arch-53"
+   ],
+   "archive_tracks": 53,
+   "archive_favorites": 27
+  },
+  {
+   "family": "drone",
+   "en": "drone",
+   "ru": "дрон",
+   "batch": "B",
+   "aliases_en": [
+    "drone",
+    "ambient drone",
+    "drone metal"
+   ],
+   "aliases_ru": [
+    "дрон"
+   ],
+   "rhythm": [
+    "beatless",
+    "drift without a drum kit",
+    "sustained sub drone"
+   ],
+   "production": [
+    "analog warmth",
+    "deep reverb space"
+   ],
+   "atmosphere": [
+    "one sustained drone for the whole track",
+    "harmonics slowly blooming",
+    "bowed metal textures",
+    "overtones shifting above the drone",
+    "one close harmonic, endless tail behind",
+    "everything suspended in a single room"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "breathy tone"
+    ],
+    "power": [
+     "laid-back delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "meditative"
+   },
+   "brackets_group": "mellow",
+   "bpm": "beatless",
+   "examples": [
+    "drone, beatless, drift without a drum kit, sustained sub drone",
+    "drone, female vocals, laid-back delivery, meditative mood",
+    "дрон: beatless drift without a drum kit, настроение meditative"
+   ],
+   "sources": [
+    "arch-202 (частично пересекается с ambient-текстами)"
+   ],
+   "archive_tracks": 202,
+   "archive_favorites": 215
+  },
+  {
+   "family": "chillwave",
+   "en": "chillwave",
+   "ru": "чиллвейв",
+   "batch": "B",
+   "aliases_en": [
+    "chillwave"
+   ],
+   "aliases_ru": [
+    "чиллвейв"
+   ],
+   "rhythm": [
+    "laid-back",
+    "soft steady groove",
+    "soft kick, hazy synth bass"
+   ],
+   "production": [
+    "analog warmth",
+    "tape saturation"
+   ],
+   "atmosphere": [
+    "hazy synth pads washing the verse",
+    "chorused guitar arpeggio",
+    "sun-worn drum machine",
+    "cassette-worn bassline",
+    "hazy vocal close, pads wide behind",
+    "close drums, distant wash of chorus"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "warm timbre"
+    ],
+    "power": [
+     "laid-back delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "chest register throughout, no falsetto",
+    "mood": "nostalgic"
+   },
+   "brackets_group": "mellow",
+   "bpm": "90–110",
+   "examples": [
+    "chillwave, 90–110, soft steady groove, soft kick, hazy synth bass",
+    "chillwave, male vocals, laid-back delivery, nostalgic mood",
+    "чиллвейв: laid-back soft steady groove, настроение nostalgic"
+   ],
+   "sources": [
+    "arch-113"
+   ],
+   "archive_tracks": 113,
+   "archive_favorites": 84
+  },
+  {
+   "family": "witch house",
+   "en": "witch house",
+   "ru": "вич-хаус",
+   "batch": "B",
+   "aliases_en": [
+    "witch house"
+   ],
+   "aliases_ru": [
+    "вич-хаус"
+   ],
+   "rhythm": [
+    "slow",
+    "slowed chopped trap groove",
+    "808 kick, slowed hats"
+   ],
+   "production": [
+    "deep reverb space",
+    "distorted gritty production"
+   ],
+   "atmosphere": [
+    "slowed pitch-warped vocal ghosts",
+    "808 rumble under chopped hats",
+    "occult synth drones",
+    "hiss and static between sections",
+    "close hiss, distant pitch-warped vocal",
+    "dry 808 close, haunted pad wash behind"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "thin vocals"
+    ],
+    "power": [
+     "detached delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "dark"
+   },
+   "brackets_group": "urban",
+   "bpm": "66–80 (slowed)",
+   "examples": [
+    "witch house, 66–80 (slowed), slowed chopped trap groove, 808 kick, slowed hats",
+    "witch house, female vocals, detached delivery, dark mood",
+    "вич-хаус: slow slowed chopped trap groove, настроение dark"
+   ],
+   "sources": [
+    "web: жанровая практика"
+   ],
+   "archive_tracks": 0,
+   "archive_favorites": 0
+  },
+  {
+   "family": "footwork",
+   "en": "footwork",
+   "ru": "футворк",
+   "batch": "B",
+   "aliases_en": [
+    "footwork",
+    "juke"
+   ],
+   "aliases_ru": [
+    "футворк"
+   ],
+   "rhythm": [
+    "fast",
+    "syncopated footwork juke pattern",
+    "juke hats, chopped vocal samples"
+   ],
+   "production": [
+    "clean modern production",
+    "punchy midrange"
+   ],
+   "atmosphere": [
+    "chopped vocal samples repeating like a mantra",
+    "juke hats rolling at 160",
+    "syncopated sub stabs",
+    "relentless repeat-and-flip editing",
+    "close chops, wide juke pattern behind",
+    "dry repeat, distant sub stab"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "bright timbre"
+    ],
+    "power": [
+     "playful cheerful delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "hypnotic"
+   },
+   "brackets_group": "urban",
+   "bpm": "155–165",
+   "examples": [
+    "footwork, 155–165, syncopated footwork juke pattern, juke hats, chopped vocal samples",
+    "footwork, female vocals, playful cheerful delivery, hypnotic mood",
+    "футворк: fast syncopated footwork juke pattern, настроение hypnotic"
+   ],
+   "sources": [
+    "arch-1"
+   ],
+   "archive_tracks": 5,
+   "archive_favorites": 5
+  },
+  {
+   "family": "moombahton",
+   "en": "moombahton",
+   "ru": "мумбатон",
+   "batch": "B",
+   "aliases_en": [
+    "moombahton"
+   ],
+   "aliases_ru": [
+    "мумбатон"
+   ],
+   "rhythm": [
+    "bouncy",
+    "dutty mid-tempo reggaeton bounce",
+    "dutty bass, reggaeton drums"
+   ],
+   "production": [
+    "clean modern production",
+    "wide stereo mix"
+   ],
+   "atmosphere": [
+    "dutty bass sliding under reggaeton drums",
+    "vocal chops pitched and chopped",
+    "big room builds into a mid-tempo drop",
+    "air horns answering the drop",
+    "dry drums close, dutty bass wide behind",
+    "close bounce, distant build swell"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "warm timbre"
+    ],
+    "power": [
+     "playful cheerful delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "chest register throughout, no falsetto",
+    "mood": "euphoric"
+   },
+   "brackets_group": "club",
+   "bpm": "105–110",
+   "examples": [
+    "moombahton, 105–110, dutty mid-tempo reggaeton bounce, dutty bass, reggaeton drums",
+    "moombahton, male vocals, playful cheerful delivery, euphoric mood",
+    "мумбатон: bouncy dutty mid-tempo reggaeton bounce, настроение euphoric"
+   ],
+   "sources": [
+    "web: жанровая практика (reggaeton bounce + big room build)"
+   ],
+   "archive_tracks": 0,
+   "archive_favorites": 0
+  },
+  {
+   "family": "psytrance",
+   "en": "psytrance",
+   "ru": "сай-транс",
+   "batch": "B",
+   "aliases_en": [
+    "psytrance",
+    "goa trance"
+   ],
+   "aliases_ru": [
+    "сай-транс"
+   ],
+   "rhythm": [
+    "hypnotic",
+    "rolling three-note bass groove",
+    "four-on-the-floor kick, acid squelch"
+   ],
+   "production": [
+    "clean modern production",
+    "wide stereo mix"
+   ],
+   "atmosphere": [
+    "rolling three-note bassline pulsing under the kick",
+    "acid squelches answering the bass",
+    "swirling effects rising between the drops",
+    "offbeat percussive loops stacking",
+    "dry kick close, swirls far behind",
+    "close bass roll, wide effect wash"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "thin vocals"
+    ],
+    "power": [
+     "detached delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "hypnotic"
+   },
+   "brackets_group": "club",
+   "bpm": "138–145",
+   "examples": [
+    "psytrance, 138–145, rolling three-note bass groove, four-on-the-floor kick, acid squelch",
+    "psytrance, female vocals, detached delivery, hypnotic mood",
+    "сай-транс: hypnotic rolling three-note bass groove, настроение hypnotic"
+   ],
+   "sources": [
+    "arch-3"
+   ],
+   "archive_tracks": 3,
+   "archive_favorites": 0
+  },
+  {
+   "family": "drill",
+   "en": "drill",
+   "ru": "дрилл",
+   "batch": "C",
+   "aliases_en": [
+    "drill",
+    "uk drill"
+   ],
+   "aliases_ru": [
+    "дрилл"
+   ],
+   "rhythm": [
+    "dark",
+    "sliding drill groove",
+    "sliding 808, skittering hats"
+   ],
+   "production": [
+    "clean modern production",
+    "punchy low end"
+   ],
+   "atmosphere": [
+    "sliding 808 moving between the notes",
+    "skittering hats doubling the flow",
+    "cold piano loop darkening the verse",
+    "masked gang chants answering the hook",
+    "dry vocal close, cold loop far behind",
+    "close flow, distant sliding 808"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "chest voice"
+    ],
+    "power": [
+     "confident spoken-word flow"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "staying in the basement throughout, no falsetto and no high-pitched screaming ever",
+    "mood": "dark"
+   },
+   "brackets_group": "urban",
+   "bpm": "140–145",
+   "examples": [
+    "drill, 140–145, sliding drill groove, sliding 808, skittering hats",
+    "drill, male vocals, confident spoken-word flow, dark mood",
+    "дрилл: dark sliding drill groove, настроение dark"
+   ],
+   "sources": [
+    "arch-34"
+   ],
+   "archive_tracks": 34,
+   "archive_favorites": 37
+  },
+  {
+   "family": "grime",
+   "en": "grime",
+   "ru": "грайм",
+   "batch": "C",
+   "aliases_en": [
+    "grime"
+   ],
+   "aliases_ru": [
+    "грайм"
+   ],
+   "rhythm": [
+    "fast",
+    "squashing 140 eski beat",
+    "square bass, icy snares"
+   ],
+   "production": [
+    "dry driving production",
+    "punchy midrange"
+   ],
+   "atmosphere": [
+    "square-wave bass squeezing under the flow",
+    "icy snare cracks on the 140 grid",
+    "eerie strings answering the bars",
+    "radio edit stutter on the hook",
+    "dry bars close, square bass far below",
+    "close flow, distant eski bleeps"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "chest voice"
+    ],
+    "power": [
+     "chanted delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "staying in the basement throughout, no falsetto and no high-pitched screaming ever",
+    "mood": "urban"
+   },
+   "brackets_group": "urban",
+   "bpm": "140",
+   "examples": [
+    "grime, 140, squashing 140 eski beat, square bass, icy snares",
+    "grime, male vocals, chanted delivery, urban mood",
+    "грайм: fast squashing 140 eski beat, настроение urban"
+   ],
+   "sources": [
+    "arch-11"
+   ],
+   "archive_tracks": 11,
+   "archive_favorites": 12
+  },
+  {
+   "family": "boom bap",
+   "en": "boom bap",
+   "ru": "бум-бэп",
+   "batch": "C",
+   "aliases_en": [
+    "boom bap"
+   ],
+   "aliases_ru": [
+    "бум-бэп"
+   ],
+   "rhythm": [
+    "laid-back",
+    "boom-bap groove",
+    "dusty kick and snare, vinyl hats"
+   ],
+   "production": [
+    "tape saturation",
+    "vinyl crackle"
+   ],
+   "atmosphere": [
+    "dusty chopped sample loop under the verse",
+    "vinyl crackle riding the snare",
+    "chopped jazz stab answering the kick",
+    "scratch fills between the bars",
+    "sample far back, drums close",
+    "close vocal, dusty loop behind"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "gravel texture"
+    ],
+    "power": [
+     "laid-back spoken-word flow"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "staying in the basement throughout, no falsetto and no high-pitched screaming ever",
+    "mood": "urban"
+   },
+   "brackets_group": "urban",
+   "bpm": "85–95",
+   "examples": [
+    "boom bap, 85–95, boom-bap groove, dusty kick and snare, vinyl hats",
+    "boom bap, male vocals, laid-back spoken-word flow, urban mood",
+    "бум-бэп: laid-back boom-bap groove, настроение urban"
+   ],
+   "sources": [
+    "arch-124"
+   ],
+   "archive_tracks": 99,
+   "archive_favorites": 76
+  },
+  {
+   "family": "dancehall",
+   "en": "dancehall",
+   "ru": "дэнсхолл",
+   "batch": "C",
+   "aliases_en": [
+    "dancehall"
+   ],
+   "aliases_ru": [
+    "дэнсхолл"
+   ],
+   "rhythm": [
+    "bouncy",
+    "digi riddim groove",
+    "digi drums, rolling bass"
+   ],
+   "production": [
+    "analog warmth",
+    "punchy low end"
+   ],
+   "atmosphere": [
+    "digital riddim answering the deejay",
+    "synth hooks sliding under the chant",
+    "hand percussion skanking the offbeat",
+    "bass rolling under the patois flow",
+    "close chant, riddim far behind",
+    "dry deejay, distant synth hook"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "rough texture"
+    ],
+    "power": [
+     "chanted delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "staying in the basement throughout, no falsetto and no high-pitched screaming ever",
+    "mood": "sensual"
+   },
+   "brackets_group": "urban",
+   "bpm": "95–105",
+   "examples": [
+    "dancehall, 95–105, digi riddim groove, digi drums, rolling bass",
+    "dancehall, male vocals, chanted delivery, sensual mood",
+    "дэнсхолл: bouncy digi riddim groove, настроение sensual"
+   ],
+   "sources": [
+    "arch-2"
+   ],
+   "archive_tracks": 2,
+   "archive_favorites": 0
+  },
+  {
+   "family": "reggae",
+   "en": "reggae",
+   "ru": "регги",
+   "batch": "C",
+   "aliases_en": [
+    "reggae",
+    "roots reggae"
+   ],
+   "aliases_ru": [
+    "регги"
+   ],
+   "rhythm": [
+    "laid-back",
+    "one-drop groove",
+    "one-drop drums, fat offbeat bass"
+   ],
+   "production": [
+    "analog warmth",
+    "tape saturation"
+   ],
+   "atmosphere": [
+    "skanking guitar on the offbeat",
+    "bass carrying the melody in the pocket",
+    "one-drop drums with a loose swing",
+    "spring reverb doubling the vocal",
+    "close vocal, band two steps back",
+    "dry skank, distant spring tail"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "warm timbre"
+    ],
+    "power": [
+     "laid-back delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "chest register throughout, no falsetto",
+    "mood": "warm"
+   },
+   "brackets_group": "groove",
+   "bpm": "70–85",
+   "examples": [
+    "reggae, 70–85, one-drop groove, one-drop drums, fat offbeat bass",
+    "reggae, male vocals, laid-back delivery, warm mood",
+    "регги: laid-back one-drop groove, настроение warm"
+   ],
+   "sources": [
+    "arch-38"
+   ],
+   "archive_tracks": 38,
+   "archive_favorites": 21
+  },
+  {
+   "family": "dub",
+   "en": "dub",
+   "ru": "даб",
+   "batch": "C",
+   "aliases_en": [
+    "dub"
+   ],
+   "aliases_ru": [
+    "даб"
+   ],
+   "rhythm": [
+    "slow",
+    "one-drop groove",
+    "fat bass, echoing one-drop drums"
+   ],
+   "production": [
+    "tape echo",
+    "deep reverb space"
+   ],
+   "atmosphere": [
+    "tape echoes swallowing the vocal line",
+    "spring reverb splashing the snare",
+    "bass and drums alone, everything else underwater",
+    "delayed chord stabs repeating into silence",
+    "close drums, echoes far behind",
+    "dry bass, distant drowning delay"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "warm timbre"
+    ],
+    "power": [
+     "laid-back delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "chest register throughout, no falsetto",
+    "mood": "hypnotic"
+   },
+   "brackets_group": "groove",
+   "bpm": "65–80",
+   "examples": [
+    "dub, 65–80, one-drop groove, fat bass, echoing one-drop drums",
+    "dub, male vocals, laid-back delivery, hypnotic mood",
+    "даб: slow one-drop groove, настроение hypnotic"
+   ],
+   "sources": [
+    "arch-103 (частично тексты про dub-эффекты)"
+   ],
+   "archive_tracks": 105,
+   "archive_favorites": 58
+  },
+  {
+   "family": "reggaeton",
+   "en": "reggaeton",
+   "ru": "регетон",
+   "batch": "C",
+   "aliases_en": [
+    "reggaeton"
+   ],
+   "aliases_ru": [
+    "регетон"
+   ],
+   "rhythm": [
+    "bouncy",
+    "dembow groove",
+    "dembow drums, punchy bass"
+   ],
+   "production": [
+    "clean modern production",
+    "punchy low end"
+   ],
+   "atmosphere": [
+    "dembow pattern driving the verse",
+    "pitched vocal hooks answering the dembow",
+    "synth brass stabs on the hook",
+    "sub bass padding the bounce",
+    "dry vocal close, dembow far behind",
+    "close hook, distant synth brass"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "warm timbre"
+    ],
+    "power": [
+     "playful cheerful delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "chest register throughout, no falsetto",
+    "mood": "sensual"
+   },
+   "brackets_group": "club",
+   "bpm": "90–100",
+   "examples": [
+    "reggaeton, 90–100, dembow groove, dembow drums, punchy bass",
+    "reggaeton, male vocals, playful cheerful delivery, sensual mood",
+    "регетон: bouncy dembow groove, настроение sensual"
+   ],
+   "sources": [
+    "arch-33"
+   ],
+   "archive_tracks": 33,
+   "archive_favorites": 21
+  },
+  {
+   "family": "afrobeat",
+   "en": "afrobeat",
+   "ru": "афробит",
+   "batch": "C",
+   "aliases_en": [
+    "afrobeat",
+    "afrobeats"
+   ],
+   "aliases_ru": [
+    "афробит"
+   ],
+   "rhythm": [
+    "organic",
+    "syncopated afrobeat groove",
+    "percussion battery, rolling bass"
+   ],
+   "production": [
+    "live room sound",
+    "analog warmth"
+   ],
+   "atmosphere": [
+    "highlife guitar picking over the pocket",
+    "talking drum answering the vocal",
+    "horn section riffing in unison",
+    "congas rolling under the groove",
+    "close vocal, band in one room behind",
+    "dry pocket, distant horns"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "warm timbre"
+    ],
+    "power": [
+     "laid-back delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "chest register throughout, no falsetto",
+    "mood": "euphoric"
+   },
+   "brackets_group": "groove",
+   "bpm": "100–110",
+   "examples": [
+    "afrobeat, 100–110, syncopated afrobeat groove, percussion battery, rolling bass",
+    "afrobeat, male vocals, laid-back delivery, euphoric mood",
+    "афробит: organic syncopated afrobeat groove, настроение euphoric"
+   ],
+   "sources": [
+    "arch-7"
+   ],
+   "archive_tracks": 7,
+   "archive_favorites": 5
+  },
+  {
+   "family": "amapiano",
+   "en": "amapiano",
+   "ru": "амапьяно",
+   "batch": "C",
+   "aliases_en": [
+    "amapiano"
+   ],
+   "aliases_ru": [
+    "амапьяно"
+   ],
+   "rhythm": [
+    "smooth",
+    "four-on-the-floor kick groove",
+    "log drum bass, rolling shakers"
+   ],
+   "production": [
+    "clean modern production",
+    "wide stereo mix"
+   ],
+   "atmosphere": [
+    "log drum bouncing the low end",
+    "rolling shakers as the breath of the groove",
+    "jazzy Rhodes chords over the kick",
+    "airy whistles answering the chords",
+    "close chords, log drum far below",
+    "dry kick, distant whistle line"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "warm timbre"
+    ],
+    "power": [
+     "laid-back delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "sensual"
+   },
+   "brackets_group": "club",
+   "bpm": "110–115",
+   "examples": [
+    "amapiano, 110–115, four-on-the-floor kick groove, log drum bass, rolling shakers",
+    "amapiano, female vocals, laid-back delivery, sensual mood",
+    "амапьяно: smooth four-on-the-floor kick groove, настроение sensual"
+   ],
+   "sources": [
+    "web: сигнатуры log drum + rolling shakers + jazzy Rhodes (ресерч сигнатур #45)"
+   ],
+   "archive_tracks": 0,
+   "archive_favorites": 0
+  },
+  {
+   "family": "samba",
+   "en": "samba",
+   "ru": "самба",
+   "batch": "C",
+   "aliases_en": [
+    "samba",
+    "batucada"
+   ],
+   "aliases_ru": [
+    "самба"
+   ],
+   "rhythm": [
+    "organic",
+    "samba batucada groove",
+    "surdos, tamborim, shakers"
+   ],
+   "production": [
+    "live room sound",
+    "analog warmth"
+   ],
+   "atmosphere": [
+    "batucada battery rolling under the melody",
+    "cavaquinho strumming the syncopation",
+    "surdo marking the two-beat pulse",
+    "crowd clapping the partido alto",
+    "close battery, melody in front",
+    "dry cavaquinho, distant street behind"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "warm timbre"
+    ],
+    "power": [
+     "powerful belting"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "euphoric"
+   },
+   "brackets_group": "groove",
+   "bpm": "100–120",
+   "examples": [
+    "samba, 100–120, samba batucada groove, surdos, tamborim, shakers",
+    "samba, female vocals, powerful belting, euphoric mood",
+    "самба: organic samba batucada groove, настроение euphoric"
+   ],
+   "sources": [
+    "arch-1"
+   ],
+   "archive_tracks": 1,
+   "archive_favorites": 1
+  },
+  {
+   "family": "bossa nova",
+   "en": "bossa nova",
+   "ru": "босса-нова",
+   "batch": "C",
+   "aliases_en": [
+    "bossa nova",
+    "bossa"
+   ],
+   "aliases_ru": [
+    "босса-нова"
+   ],
+   "rhythm": [
+    "gentle",
+    "bossa nova clave groove",
+    "nylon guitar, rim clicks, shaker"
+   ],
+   "production": [
+    "intimate room sound",
+    "analog warmth"
+   ],
+   "atmosphere": [
+    "nylon guitar carrying the harmony",
+    "brushed rim ticking the clave",
+    "soft bass walking under the chord",
+    "whispered breath close to the mic",
+    "vocal close, guitar one step back",
+    "close breath, distant room tone"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "breathy tone"
+    ],
+    "power": [
+     "intimate delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "sensual"
+   },
+   "brackets_group": "acoustic",
+   "bpm": "70–90",
+   "examples": [
+    "bossa nova, 70–90, bossa nova clave groove, nylon guitar, rim clicks, shaker",
+    "bossa nova, female vocals, intimate delivery, sensual mood",
+    "босса-нова: gentle bossa nova clave groove, настроение sensual"
+   ],
+   "sources": [
+    "arch-16"
+   ],
+   "archive_tracks": 16,
+   "archive_favorites": 15
+  },
+  {
+   "family": "salsa",
+   "en": "salsa",
+   "ru": "сальса",
+   "batch": "C",
+   "aliases_en": [
+    "salsa",
+    "timba"
+   ],
+   "aliases_ru": [
+    "сальса"
+   ],
+   "rhythm": [
+    "driving",
+    "salsa clave groove",
+    "congas, timbales, piano montuno"
+   ],
+   "production": [
+    "live room sound",
+    "punchy midrange"
+   ],
+   "atmosphere": [
+    "piano montuno cycling the clave",
+    "horn section shouting the coro",
+    "congas and timbales trading phrases",
+    "bass tumbao locking the pocket",
+    "close coro, montuno wide behind",
+    "dry vocal, distant timbale fill"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "warm timbre"
+    ],
+    "power": [
+     "powerful belting"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "chest register throughout, no falsetto",
+    "mood": "euphoric"
+   },
+   "brackets_group": "groove",
+   "bpm": "180–200 (уполовиненно 90–100)",
+   "examples": [
+    "salsa, 180–200 (уполовиненно 90–100), salsa clave groove, congas, timbales, piano montuno",
+    "salsa, male vocals, powerful belting, euphoric mood",
+    "сальса: driving salsa clave groove, настроение euphoric"
+   ],
+   "sources": [
+    "arch-2"
+   ],
+   "archive_tracks": 2,
+   "archive_favorites": 0
+  },
+  {
+   "family": "cumbia",
+   "en": "cumbia",
+   "ru": "кумбия",
+   "batch": "C",
+   "aliases_en": [
+    "cumbia"
+   ],
+   "aliases_ru": [
+    "кумбия"
+   ],
+   "rhythm": [
+    "bouncy",
+    "cumbia güira groove",
+    "güira, guacharaca, accordion"
+   ],
+   "production": [
+    "analog warmth",
+    "live room sound"
+   ],
+   "atmosphere": [
+    "accordion riffing over the gaita",
+    "güira ticking the dance rhythm",
+    "guacharaca scraping the offbeat",
+    "bass hopping on the one",
+    "close accordion, güira far behind",
+    "dry vocal, distant dance hall"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "warm timbre"
+    ],
+    "power": [
+     "playful cheerful delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "chest register throughout, no falsetto",
+    "mood": "playful"
+   },
+   "brackets_group": "groove",
+   "bpm": "90–100",
+   "examples": [
+    "cumbia, 90–100, cumbia güira groove, güira, guacharaca, accordion",
+    "cumbia, male vocals, playful cheerful delivery, playful mood",
+    "кумбия: bouncy cumbia güira groove, настроение playful"
+   ],
+   "sources": [
+    "web: жанровая практика"
+   ],
+   "archive_tracks": 0,
+   "archive_favorites": 0
+  },
+  {
+   "family": "latin",
+   "en": "latin pop",
+   "ru": "латино",
+   "batch": "C",
+   "aliases_en": [
+    "latin pop",
+    "latin"
+   ],
+   "aliases_ru": [
+    "латино"
+   ],
+   "rhythm": [
+    "bouncy",
+    "latin pop groove",
+    "reggaeton-tinged drums, nylon guitar"
+   ],
+   "production": [
+    "clean modern production",
+    "wide stereo mix"
+   ],
+   "atmosphere": [
+    "nylon guitar folding into the pop groove",
+    "hand percussion under the chorus",
+    "romantic chord swells",
+    "bass with a tumbao lilt",
+    "vocal close, percussion wide behind",
+    "close chorus, distant guitar line"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "warm timbre"
+    ],
+    "power": [
+     "confident delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "sensual"
+   },
+   "brackets_group": "groove",
+   "bpm": "95–105",
+   "examples": [
+    "latin pop, 95–105, latin pop groove, reggaeton-tinged drums, nylon guitar",
+    "latin pop, female vocals, confident delivery, sensual mood",
+    "латино: bouncy latin pop groove, настроение sensual"
+   ],
+   "sources": [
+    "arch-135 (широкий маркер latin)"
+   ],
+   "archive_tracks": 136,
+   "archive_favorites": 104
+  },
+  {
+   "family": "bhangra",
+   "en": "bhangra",
+   "ru": "бхангра",
+   "batch": "D",
+   "aliases_en": [
+    "bhangra"
+   ],
+   "aliases_ru": [
+    "бхангра"
+   ],
+   "rhythm": [
+    "bouncy",
+    "bhangra dhol groove",
+    "dhol, tumbi, dholki"
+   ],
+   "production": [
+    "clean modern production",
+    "punchy midrange"
+   ],
+   "atmosphere": [
+    "dhol hammering the celebration rhythm",
+    "tumbi plucking the hook",
+    "crowd call-and-response chants",
+    "modern bass under the folk loop",
+    "close dhol, chant wide behind",
+    "dry vocal, distant tumbi riff"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "warm timbre"
+    ],
+    "power": [
+     "chanted delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "chest register throughout, no falsetto",
+    "mood": "euphoric"
+   },
+   "brackets_group": "club",
+   "bpm": "140–150",
+   "examples": [
+    "bhangra, 140–150, bhangra dhol groove, dhol, tumbi, dholki",
+    "bhangra, male vocals, chanted delivery, euphoric mood",
+    "бхангра: bouncy bhangra dhol groove, настроение euphoric"
+   ],
+   "sources": [
+    "web: жанровая практика"
+   ],
+   "archive_tracks": 0,
+   "archive_favorites": 0
+  },
+  {
+   "family": "mariachi",
+   "en": "mariachi",
+   "ru": "мариачи",
+   "batch": "D",
+   "aliases_en": [
+    "mariachi"
+   ],
+   "aliases_ru": [
+    "мариачи"
+   ],
+   "rhythm": [
+    "organic",
+    "mariachi son rhythm",
+    "mariachi guitars, trumpets, guitarron"
+   ],
+   "production": [
+    "live room sound",
+    "analog warmth"
+   ],
+   "atmosphere": [
+    "trumpet answering the vocal",
+    "guitarron marking the pulse",
+    "violins sweeping between the lines",
+    "gritos riding the hook",
+    "close vocal, trumpets wide behind",
+    "dry guitar, distant violins"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "warm timbre"
+    ],
+    "power": [
+     "powerful belting"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "chest register throughout, no falsetto",
+    "mood": "emotional"
+   },
+   "brackets_group": "band",
+   "bpm": "110–130",
+   "examples": [
+    "mariachi, 110–130, mariachi son rhythm, mariachi guitars, trumpets, guitarron",
+    "mariachi, male vocals, powerful belting, emotional mood",
+    "мариачи: organic mariachi son rhythm, настроение emotional"
+   ],
+   "sources": [
+    "arch-4"
+   ],
+   "archive_tracks": 4,
+   "archive_favorites": 0
+  },
+  {
+   "family": "flamenco",
+   "en": "flamenco",
+   "ru": "фламенко",
+   "batch": "D",
+   "aliases_en": [
+    "flamenco"
+   ],
+   "aliases_ru": [
+    "фламенко"
+   ],
+   "rhythm": [
+    "organic",
+    "flamenco compas groove",
+    "flamenco guitar, cajon, palmas"
+   ],
+   "production": [
+    "intimate room sound",
+    "natural dynamics"
+   ],
+   "atmosphere": [
+    "rasgueado bursts answering the cante",
+    "cajon marking the compas",
+    "palmas clapping the twelve-count",
+    "falsetas rising between the verses",
+    "close voice, guitar one step back",
+    "dry palmas, distant room"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "rough texture"
+    ],
+    "power": [
+     "powerful belting"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "chest register throughout, no falsetto",
+    "mood": "emotional"
+   },
+   "brackets_group": "acoustic",
+   "bpm": "90–130 (12-дольный компас)",
+   "examples": [
+    "flamenco, 90–130 (12-дольный компас), flamenco compas groove, flamenco guitar, cajon, palmas",
+    "flamenco, male vocals, powerful belting, emotional mood",
+    "фламенко: organic flamenco compas groove, настроение emotional"
+   ],
+   "sources": [
+    "arch-9"
+   ],
+   "archive_tracks": 9,
+   "archive_favorites": 9
+  },
+  {
+   "family": "tango",
+   "en": "tango",
+   "ru": "танго",
+   "batch": "D",
+   "aliases_en": [
+    "tango",
+    "tango nuevo"
+   ],
+   "aliases_ru": [
+    "танго"
+   ],
+   "rhythm": [
+    "dramatic",
+    "tango habanera groove",
+    "bandoneon, piano, violin"
+   ],
+   "production": [
+    "intimate room sound",
+    "analog warmth"
+   ],
+   "atmosphere": [
+    "bandoneon sighing between the phrases",
+    "piano marking the habanera pulse",
+    "violin pizzicato under the melody",
+    "staccato stops before the phrase",
+    "close voice, bandoneon far behind",
+    "dry phrase, distant hall"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "warm timbre"
+    ],
+    "power": [
+     "full-voice delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "chest register throughout, no falsetto",
+    "mood": "melancholic"
+   },
+   "brackets_group": "acoustic",
+   "bpm": "60–70 (двудольное ощущение)",
+   "examples": [
+    "tango, 60–70 (двудольное ощущение), tango habanera groove, bandoneon, piano, violin",
+    "tango, male vocals, full-voice delivery, melancholic mood",
+    "танго: dramatic tango habanera groove, настроение melancholic"
+   ],
+   "sources": [
+    "web: жанровая практика"
+   ],
+   "archive_tracks": 0,
+   "archive_favorites": 0
+  },
+  {
+   "family": "celtic",
+   "en": "celtic folk",
+   "ru": "кельтская музыка",
+   "batch": "D",
+   "aliases_en": [
+    "celtic",
+    "irish folk",
+    "celtic folk"
+   ],
+   "aliases_ru": [
+    "кельтская музыка"
+   ],
+   "rhythm": [
+    "organic",
+    "celtic jig reel groove",
+    "bodhran, fiddle, tin whistle"
+   ],
+   "production": [
+    "live room sound",
+    "natural dynamics"
+   ],
+   "atmosphere": [
+    "fiddle reels spinning over the bodhran",
+    "tin whistle answering the vocal",
+    "uilleann drones under the melody",
+    "group chorus on the last verse",
+    "close vocal, reels wide behind",
+    "dry whistle, distant hall"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "warm timbre"
+    ],
+    "power": [
+     "plain intimate delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "nostalgic"
+   },
+   "brackets_group": "acoustic",
+   "bpm": "100–130",
+   "examples": [
+    "celtic folk, 100–130, celtic jig reel groove, bodhran, fiddle, tin whistle",
+    "celtic folk, female vocals, plain intimate delivery, nostalgic mood",
+    "кельтская музыка: organic celtic jig reel groove, настроение nostalgic"
+   ],
+   "sources": [
+    "arch-7"
+   ],
+   "archive_tracks": 7,
+   "archive_favorites": 8
+  },
+  {
+   "family": "klezmer",
+   "en": "klezmer",
+   "ru": "клезмер",
+   "batch": "D",
+   "aliases_en": [
+    "klezmer"
+   ],
+   "aliases_ru": [
+    "клезмер"
+   ],
+   "rhythm": [
+    "bouncy",
+    "klezmer bulgar groove",
+    "clarinet, violin, tsimbl"
+   ],
+   "production": [
+    "live room sound",
+    "analog warmth"
+   ],
+   "atmosphere": [
+    "clarinet weeping then dancing",
+    "tsimbl shimmering under the melody",
+    "tuba oom-pah marking the beat",
+    "rapid freylakhs runs on the violin",
+    "close clarinet, band in one room",
+    "dry melody, distant tuba oom-pah"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "warm timbre"
+    ],
+    "power": [
+     "playful cheerful delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "chest register throughout, no falsetto",
+    "mood": "playful"
+   },
+   "brackets_group": "acoustic",
+   "bpm": "120–160",
+   "examples": [
+    "klezmer, 120–160, klezmer bulgar groove, clarinet, violin, tsimbl",
+    "klezmer, male vocals, playful cheerful delivery, playful mood",
+    "клезмер: bouncy klezmer bulgar groove, настроение playful"
+   ],
+   "sources": [
+    "web: жанровая практика"
+   ],
+   "archive_tracks": 0,
+   "archive_favorites": 0
+  },
+  {
+   "family": "fado",
+   "en": "fado",
+   "ru": "фаду",
+   "batch": "D",
+   "aliases_en": [
+    "fado"
+   ],
+   "aliases_ru": [
+    "фаду"
+   ],
+   "rhythm": [
+    "slow",
+    "fado slow sway",
+    "Portuguese guitar, viola chords"
+   ],
+   "production": [
+    "intimate room sound",
+    "analog warmth"
+   ],
+   "atmosphere": [
+    "Portuguese guitar tremolo under the voice",
+    "viola bowing slow chords",
+    "saudade held in long tones",
+    "room falling silent between the verses",
+    "voice close, twelve-string far behind",
+    "dry long tone, distant room"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "warm timbre"
+    ],
+    "power": [
+     "full-voice delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "melancholic"
+   },
+   "brackets_group": "acoustic",
+   "bpm": "60–75",
+   "examples": [
+    "fado, 60–75, fado slow sway, Portuguese guitar, viola chords",
+    "fado, female vocals, full-voice delivery, melancholic mood",
+    "фаду: slow fado slow sway, настроение melancholic"
+   ],
+   "sources": [
+    "arch-4"
+   ],
+   "archive_tracks": 4,
+   "archive_favorites": 9
+  },
+  {
+   "family": "gypsy jazz",
+   "en": "gypsy jazz",
+   "ru": "цыганский джаз",
+   "batch": "D",
+   "aliases_en": [
+    "gypsy jazz",
+    "jazz manouche"
+   ],
+   "aliases_ru": [
+    "цыганский джаз",
+    "джаз-мануш"
+   ],
+   "rhythm": [
+    "bouncy",
+    "manouche pompe swing",
+    "acoustic guitars, upright bass"
+   ],
+   "production": [
+    "live room sound",
+    "analog warmth"
+   ],
+   "atmosphere": [
+    "la pompe strumming driving the swing",
+    "violin trading with the lead guitar",
+    "unplugged acoustic solo runs",
+    "clarinet gliding over the riff",
+    "close lead guitar, pompe far behind",
+    "dry solo, distant room"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "warm timbre"
+    ],
+    "power": [
+     "playful cheerful delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "chest register throughout, no falsetto",
+    "mood": "playful"
+   },
+   "brackets_group": "acoustic",
+   "bpm": "120–180",
+   "examples": [
+    "gypsy jazz, 120–180, manouche pompe swing, acoustic guitars, upright bass",
+    "gypsy jazz, male vocals, playful cheerful delivery, playful mood",
+    "цыганский джаз: bouncy manouche pompe swing, настроение playful"
+   ],
+   "sources": [
+    "arch-4"
+   ],
+   "archive_tracks": 4,
+   "archive_favorites": 2
+  },
+  {
+   "family": "ska",
+   "en": "ska",
+   "ru": "ска",
+   "batch": "D",
+   "aliases_en": [
+    "ska",
+    "ska punk"
+   ],
+   "aliases_ru": [
+    "ска"
+   ],
+   "rhythm": [
+    "bouncy",
+    "ska skank upbeat",
+    "offbeat guitar skank, walking bass, horns"
+   ],
+   "production": [
+    "analog warmth",
+    "live room sound"
+   ],
+   "atmosphere": [
+    "offbeat skank chopping the upbeat",
+    "horn section hitting the riff",
+    "walking bass bouncing under the skank",
+    "organ bubble on the backbeat",
+    "close horns, skank wide behind",
+    "dry vocal, distant organ bubble"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "rough texture"
+    ],
+    "power": [
+     "shouted delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "chest register throughout, no falsetto",
+    "mood": "playful"
+   },
+   "brackets_group": "groove",
+   "bpm": "140–170",
+   "examples": [
+    "ska, 140–170, ska skank upbeat, offbeat guitar skank, walking bass, horns",
+    "ska, male vocals, shouted delivery, playful mood",
+    "ска: bouncy ska skank upbeat, настроение playful"
+   ],
+   "sources": [
+    "arch-3"
+   ],
+   "archive_tracks": 17,
+   "archive_favorites": 12
+  },
+  {
+   "family": "rocksteady",
+   "en": "rocksteady",
+   "ru": "рокстеди",
+   "batch": "D",
+   "aliases_en": [
+    "rocksteady"
+   ],
+   "aliases_ru": [
+    "рокстеди"
+   ],
+   "rhythm": [
+    "slow",
+    "rocksteady slow skank",
+    "offbeat skank, fat bass"
+   ],
+   "production": [
+    "analog warmth",
+    "live room sound"
+   ],
+   "atmosphere": [
+    "bass carrying the melody",
+    "slow skank on the offbeat",
+    "horns answering lightly",
+    "piano bubble behind the vocal",
+    "close vocal, skank far behind",
+    "dry bass, distant spring tail"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "warm timbre"
+    ],
+    "power": [
+     "laid-back delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "chest register throughout, no falsetto",
+    "mood": "warm"
+   },
+   "brackets_group": "groove",
+   "bpm": "75–85",
+   "examples": [
+    "rocksteady, 75–85, rocksteady slow skank, offbeat skank, fat bass",
+    "rocksteady, male vocals, laid-back delivery, warm mood",
+    "рокстеди: slow rocksteady slow skank, настроение warm"
+   ],
+   "sources": [
+    "web: жанровая практика"
+   ],
+   "archive_tracks": 0,
+   "archive_favorites": 0
+  },
+  {
+   "family": "bluegrass",
+   "en": "bluegrass",
+   "ru": "блюграсс",
+   "batch": "D",
+   "aliases_en": [
+    "bluegrass"
+   ],
+   "aliases_ru": [
+    "блюграсс"
+   ],
+   "rhythm": [
+    "driving",
+    "bluegrass banjo roll groove",
+    "banjo, fiddle, mandolin, upright bass"
+   ],
+   "production": [
+    "live room sound",
+    "natural dynamics"
+   ],
+   "atmosphere": [
+    "banjo rolling through the break",
+    "fiddle and mandolin trading phrases",
+    "high harmony stacked on the chorus",
+    "upright bass thumping the two and four",
+    "close vocal, band one room",
+    "dry break, distant fiddle run"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "warm timbre"
+    ],
+    "power": [
+     "full-voice delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "chest register throughout, no falsetto",
+    "mood": "warm"
+   },
+   "brackets_group": "acoustic",
+   "bpm": "120–160",
+   "examples": [
+    "bluegrass, 120–160, bluegrass banjo roll groove, banjo, fiddle, mandolin, upright bass",
+    "bluegrass, male vocals, full-voice delivery, warm mood",
+    "блюграсс: driving bluegrass banjo roll groove, настроение warm"
+   ],
+   "sources": [
+    "web: жанровая практика"
+   ],
+   "archive_tracks": 0,
+   "archive_favorites": 0
+  },
+  {
+   "family": "country",
+   "en": "country",
+   "ru": "кантри",
+   "batch": "D",
+   "aliases_en": [
+    "country",
+    "country pop"
+   ],
+   "aliases_ru": [
+    "кантри"
+   ],
+   "rhythm": [
+    "organic",
+    "country train beat",
+    "twangy telecaster, acoustic strum, shuffling drums"
+   ],
+   "production": [
+    "analog warmth",
+    "live room sound"
+   ],
+   "atmosphere": [
+    "telecaster twanging between the lines",
+    "pedal steel sighing under the chorus",
+    "train-beat shuffle keeping time",
+    "fiddle answering the hook",
+    "close vocal, band two steps back",
+    "dry twang, distant pedal steel"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "warm timbre"
+    ],
+    "power": [
+     "plain intimate delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "chest register throughout, no falsetto",
+    "mood": "warm"
+   },
+   "brackets_group": "acoustic",
+   "bpm": "90–120",
+   "examples": [
+    "country, 90–120, country train beat, twangy telecaster, acoustic strum, shuffling drums",
+    "country, male vocals, plain intimate delivery, warm mood",
+    "кантри: organic country train beat, настроение warm"
+   ],
+   "sources": [
+    "arch-8"
+   ],
+   "archive_tracks": 8,
+   "archive_favorites": 5
+  },
+  {
+   "family": "americana",
+   "en": "americana",
+   "ru": "американа",
+   "batch": "D",
+   "aliases_en": [
+    "americana",
+    "alt-country",
+    "roots rock"
+   ],
+   "aliases_ru": [
+    "американа"
+   ],
+   "rhythm": [
+    "organic",
+    "americana roots sway",
+    "acoustic guitar, brushed drums, upright bass"
+   ],
+   "production": [
+    "analog warmth",
+    "natural dynamics"
+   ],
+   "atmosphere": [
+    "brushed drums keeping the sway",
+    "lap steel drifting under the verse",
+    "harmony duo on the chorus",
+    "mandolin filling between the lines",
+    "close voice, band one room",
+    "dry verse, distant lap steel"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "gravel texture"
+    ],
+    "power": [
+     "plain intimate delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "chest register throughout, no falsetto",
+    "mood": "melancholic"
+   },
+   "brackets_group": "acoustic",
+   "bpm": "80–110",
+   "examples": [
+    "americana, 80–110, americana roots sway, acoustic guitar, brushed drums, upright bass",
+    "americana, male vocals, plain intimate delivery, melancholic mood",
+    "американа: organic americana roots sway, настроение melancholic"
+   ],
+   "sources": [
+    "arch-3"
+   ],
+   "archive_tracks": 3,
+   "archive_favorites": 8
+  },
+  {
+   "family": "neo soul",
+   "en": "neo soul",
+   "ru": "нео-соул",
+   "batch": "E",
+   "aliases_en": [
+    "neo soul"
+   ],
+   "aliases_ru": [
+    "нео-соул"
+   ],
+   "rhythm": [
+    "smooth",
+    "neo soul pocket groove",
+    "live drums, Fender Rhodes, fingerstyle bass"
+   ],
+   "production": [
+    "analog warmth",
+    "silky top end"
+   ],
+   "atmosphere": [
+    "Rhodes chords breathing behind the vocal",
+    "fingerstyle bass answering the pocket",
+    "muted guitar licks in the gaps",
+    "stacked harmonies drifting on the hook",
+    "vocal close, Rhodes far behind",
+    "close pocket, distant harmonies"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "velvet tone"
+    ],
+    "power": [
+     "soft intimate delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "sensual"
+   },
+   "brackets_group": "groove",
+   "bpm": "75–95",
+   "examples": [
+    "neo soul, 75–95, neo soul pocket groove, live drums, Fender Rhodes, fingerstyle bass",
+    "neo soul, female vocals, soft intimate delivery, sensual mood",
+    "нео-соул: smooth neo soul pocket groove, настроение sensual"
+   ],
+   "sources": [
+    "arch-25"
+   ],
+   "archive_tracks": 0,
+   "archive_favorites": 0
+  },
+  {
+   "family": "gospel",
+   "en": "gospel",
+   "ru": "госпел",
+   "batch": "E",
+   "aliases_en": [
+    "gospel",
+    "gospel choir"
+   ],
+   "aliases_ru": [
+    "госпел"
+   ],
+   "rhythm": [
+    "organic",
+    "gospel choir lift",
+    "piano, organ, hand claps"
+   ],
+   "production": [
+    "live room sound",
+    "natural dynamics"
+   ],
+   "atmosphere": [
+    "full choir answering the lead",
+    "organ swelling under the amen",
+    "handclaps doubling the tambourine",
+    "piano walking into the vamp",
+    "lead close, choir wide behind",
+    "close piano, distant church hall"
+   ],
+   "vocal": {
+    "who": [
+     "choir"
+    ],
+    "timbre": [
+     "warm timbre"
+    ],
+    "power": [
+     "powerful belting"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no growl, choral register throughout",
+    "mood": "emotional"
+   },
+   "brackets_group": "band",
+   "bpm": "80–120",
+   "examples": [
+    "gospel, 80–120, gospel choir lift, piano, organ, hand claps",
+    "gospel, choir, powerful belting, emotional mood",
+    "госпел: organic gospel choir lift, настроение emotional"
+   ],
+   "sources": [
+    "arch-15"
+   ],
+   "archive_tracks": 15,
+   "archive_favorites": 13
+  },
+  {
+   "family": "blues",
+   "en": "blues",
+   "ru": "блюз",
+   "batch": "E",
+   "aliases_en": [
+    "blues",
+    "delta blues",
+    "chicago blues"
+   ],
+   "aliases_ru": [
+    "блюз"
+   ],
+   "rhythm": [
+    "loose",
+    "blues shuffle",
+    "electric guitar, walking bass, drums"
+   ],
+   "production": [
+    "analog warmth",
+    "live room sound"
+   ],
+   "atmosphere": [
+    "guitar answering each vocal line",
+    "shuffle riding the ride cymbal",
+    "harmonica crying between the bars",
+    "solo bending into the last chorus",
+    "voice close, band one room",
+    "dry vocal, distant harp"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "hoarse rasp"
+    ],
+    "power": [
+     "crooned delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "chest register throughout, no falsetto",
+    "mood": "melancholic"
+   },
+   "brackets_group": "band",
+   "bpm": "70–100",
+   "examples": [
+    "blues, 70–100, blues shuffle, electric guitar, walking bass, drums",
+    "blues, male vocals, crooned delivery, melancholic mood",
+    "блюз: loose blues shuffle, настроение melancholic"
+   ],
+   "sources": [
+    "arch-37"
+   ],
+   "archive_tracks": 37,
+   "archive_favorites": 15
+  },
+  {
+   "family": "jazz fusion",
+   "en": "jazz fusion",
+   "ru": "джаз-фьюжн",
+   "batch": "E",
+   "aliases_en": [
+    "jazz fusion",
+    "fusion"
+   ],
+   "aliases_ru": [
+    "джаз-фьюжн"
+   ],
+   "rhythm": [
+    "driving",
+    "fusion odd-meter groove",
+    "electric piano, synth bass, dynamic drums"
+   ],
+   "production": [
+    "clean modern production",
+    "analog warmth"
+   ],
+   "atmosphere": [
+    "synth bass locking the odd meter",
+    "electric piano comping behind the solo",
+    "drums trading with the guitar",
+    "synth lead screaming over the changes",
+    "close solo, keys wide behind",
+    "dry drums, distant chord comp"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "smooth timbre"
+    ],
+    "power": [
+     "laid-back delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "hypnotic"
+   },
+   "brackets_group": "band",
+   "bpm": "100–130",
+   "examples": [
+    "jazz fusion, 100–130, fusion odd-meter groove, electric piano, synth bass, dynamic drums",
+    "jazz fusion, female vocals, laid-back delivery, hypnotic mood",
+    "джаз-фьюжн: driving fusion odd-meter groove, настроение hypnotic"
+   ],
+   "sources": [
+    "arch-48"
+   ],
+   "archive_tracks": 689,
+   "archive_favorites": 497
+  },
+  {
+   "family": "swing",
+   "en": "swing",
+   "ru": "свинг",
+   "batch": "E",
+   "aliases_en": [
+    "swing",
+    "vocal jazz"
+   ],
+   "aliases_ru": [
+    "свинг"
+   ],
+   "rhythm": [
+    "bouncy",
+    "swing ride groove",
+    "ride cymbal, walking bass, brushed snare"
+   ],
+   "production": [
+    "live room sound",
+    "analog warmth"
+   ],
+   "atmosphere": [
+    "big band riffing behind the vocal",
+    "ride swinging the whole track",
+    "sax section answering the line",
+    "drum kicks on the break",
+    "vocal close, band two steps back",
+    "dry vocal, distant brass riff"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "velvet tone"
+    ],
+    "power": [
+     "playful cheerful delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "chest register throughout, no falsetto",
+    "mood": "playful"
+   },
+   "brackets_group": "groove",
+   "bpm": "120–180",
+   "examples": [
+    "swing, 120–180, swing ride groove, ride cymbal, walking bass, brushed snare",
+    "swing, male vocals, playful cheerful delivery, playful mood",
+    "свинг: bouncy swing ride groove, настроение playful"
+   ],
+   "sources": [
+    "arch-191 (частично слово swing в текстах)"
+   ],
+   "archive_tracks": 199,
+   "archive_favorites": 174
+  },
+  {
+   "family": "big band",
+   "en": "big band",
+   "ru": "биг-бэнд",
+   "batch": "E",
+   "aliases_en": [
+    "big band"
+   ],
+   "aliases_ru": [
+    "биг-бэнд"
+   ],
+   "rhythm": [
+    "driving",
+    "big band shout chorus",
+    "horn section, walking bass, drum kicks"
+   ],
+   "production": [
+    "live room sound",
+    "analog warmth"
+   ],
+   "atmosphere": [
+    "full shout chorus lifting the hook",
+    "sax soli trading with the trumpets",
+    "bass walking through the changes",
+    "drum bombs dropping on the turnarounds",
+    "vocal in front, brass wide behind",
+    "close vocal, distant sax soli"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "velvet tone"
+    ],
+    "power": [
+     "powerful belting"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "euphoric"
+   },
+   "brackets_group": "groove",
+   "bpm": "120–180",
+   "examples": [
+    "big band, 120–180, big band shout chorus, horn section, walking bass, drum kicks",
+    "big band, female vocals, powerful belting, euphoric mood",
+    "биг-бэнд: driving big band shout chorus, настроение euphoric"
+   ],
+   "sources": [
+    "arch-8"
+   ],
+   "archive_tracks": 8,
+   "archive_favorites": 3
+  },
+  {
+   "family": "ragtime",
+   "en": "ragtime",
+   "ru": "рэгтайм",
+   "batch": "E",
+   "aliases_en": [
+    "ragtime"
+   ],
+   "aliases_ru": [
+    "рэгтайм"
+   ],
+   "rhythm": [
+    "bouncy",
+    "ragtime stride groove",
+    "syncopated piano, banjo"
+   ],
+   "production": [
+    "analog warmth",
+    "live room sound"
+   ],
+   "atmosphere": [
+    "left-hand oom-pah under right-hand syncopation",
+    "stride runs taking the melody",
+    "banjo echoing the piano phrases",
+    "final chord held in the room",
+    "close piano, dry room",
+    "dry melody, distant banjo"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "bright timbre"
+    ],
+    "power": [
+     "playful cheerful delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "cheerful"
+   },
+   "brackets_group": "acoustic",
+   "bpm": "110–140",
+   "examples": [
+    "ragtime, 110–140, ragtime stride groove, syncopated piano, banjo",
+    "ragtime, female vocals, playful cheerful delivery, cheerful mood",
+    "рэгтайм: bouncy ragtime stride groove, настроение cheerful"
+   ],
+   "sources": [
+    "arch-17"
+   ],
+   "archive_tracks": 17,
+   "archive_favorites": 14
+  },
+  {
+   "family": "doo wop",
+   "en": "doo wop",
+   "ru": "ду-воп",
+   "batch": "E",
+   "aliases_en": [
+    "doo wop"
+   ],
+   "aliases_ru": [
+    "ду-воп"
+   ],
+   "rhythm": [
+    "slow",
+    "doo wop ballad sway",
+    "electric bass, sax, brushed drums"
+   ],
+   "production": [
+    "analog warmth",
+    "tape saturation"
+   ],
+   "atmosphere": [
+    "group harmonies answering the lead",
+    "sax howling in the bridge",
+    "hand pats on the two and four",
+    "street-corner room around the voices",
+    "lead close, harmonies wide behind",
+    "close voices, distant sax"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "velvet tone"
+    ],
+    "power": [
+     "crooned delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "chest register throughout, no falsetto",
+    "mood": "nostalgic"
+   },
+   "brackets_group": "groove",
+   "bpm": "70–90",
+   "examples": [
+    "doo wop, 70–90, doo wop ballad sway, electric bass, sax, brushed drums",
+    "doo wop, male vocals, crooned delivery, nostalgic mood",
+    "ду-воп: slow doo wop ballad sway, настроение nostalgic"
+   ],
+   "sources": [
+    "arch-3"
+   ],
+   "archive_tracks": 0,
+   "archive_favorites": 0
+  },
+  {
+   "family": "motown",
+   "en": "motown",
+   "ru": "мотаун",
+   "batch": "E",
+   "aliases_en": [
+    "motown",
+    "northern soul"
+   ],
+   "aliases_ru": [
+    "мотаун"
+   ],
+   "rhythm": [
+    "tight",
+    "motown backbeat groove",
+    "live drums, tambourine, walking bass"
+   ],
+   "production": [
+    "analog warmth",
+    "tape saturation"
+   ],
+   "atmosphere": [
+    "tambourine doubling the backbeat",
+    "bassline walking its own melody",
+    "horn stabs hitting the turnaround",
+    "handclaps riding the chorus",
+    "vocal close, band two steps back",
+    "dry chorus, distant horn stab"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "warm timbre"
+    ],
+    "power": [
+     "powerful belting"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "euphoric"
+   },
+   "brackets_group": "groove",
+   "bpm": "100–125",
+   "examples": [
+    "motown, 100–125, motown backbeat groove, live drums, tambourine, walking bass",
+    "motown, female vocals, powerful belting, euphoric mood",
+    "мотаун: tight motown backbeat groove, настроение euphoric"
+   ],
+   "sources": [
+    "arch-2"
+   ],
+   "archive_tracks": 2,
+   "archive_favorites": 0
+  },
+  {
+   "family": "smooth jazz",
+   "en": "smooth jazz",
+   "ru": "смус-джаз",
+   "batch": "E",
+   "aliases_en": [
+    "smooth jazz"
+   ],
+   "aliases_ru": [
+    "смус-джаз"
+   ],
+   "rhythm": [
+    "smooth",
+    "smooth jazz pocket groove",
+    "Fender Rhodes, soft drums, sax lead"
+   ],
+   "production": [
+    "clean modern production",
+    "silky top end"
+   ],
+   "atmosphere": [
+    "sax lead gliding over the pocket",
+    "Rhodes comping soft behind",
+    "fretless bass sliding under",
+    "soft hi-hat ticking the groove",
+    "close sax, keys far behind",
+    "dry pocket, distant pad wash"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "smooth timbre"
+    ],
+    "power": [
+     "laid-back delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "sensual"
+   },
+   "brackets_group": "acoustic",
+   "bpm": "90–105",
+   "examples": [
+    "smooth jazz, 90–105, smooth jazz pocket groove, Fender Rhodes, soft drums, sax lead",
+    "smooth jazz, female vocals, laid-back delivery, sensual mood",
+    "смус-джаз: smooth smooth jazz pocket groove, настроение sensual"
+   ],
+   "sources": [
+    "arch-10"
+   ],
+   "archive_tracks": 10,
+   "archive_favorites": 7
+  },
+  {
+   "family": "blues rock",
+   "en": "blues rock",
+   "ru": "блюз-рок",
+   "batch": "E",
+   "aliases_en": [
+    "blues rock"
+   ],
+   "aliases_ru": [
+    "блюз-рок"
+   ],
+   "rhythm": [
+    "heavy",
+    "blues rock stomp shuffle",
+    "cranked guitars, live drums"
+   ],
+   "production": [
+    "live room sound",
+    "punchy midrange"
+   ],
+   "atmosphere": [
+    "riff trading with a slide guitar",
+    "drums stomping the shuffle",
+    "solo climbing over the last chorus",
+    "bass walking under the stomp",
+    "guitars wide, vocal upfront",
+    "close stomp, distant room mics"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "hoarse rasp"
+    ],
+    "power": [
+     "raspy aggressive delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "staying in the basement throughout, no falsetto and no high-pitched screaming ever",
+    "mood": "aggressive"
+   },
+   "brackets_group": "band",
+   "bpm": "90–125",
+   "examples": [
+    "blues rock, 90–125, blues rock stomp shuffle, cranked guitars, live drums",
+    "blues rock, male vocals, raspy aggressive delivery, aggressive mood",
+    "блюз-рок: heavy blues rock stomp shuffle, настроение aggressive"
+   ],
+   "sources": [
+    "arch-2"
+   ],
+   "archive_tracks": 2,
+   "archive_favorites": 0
+  },
+  {
+   "family": "folk rock",
+   "en": "folk rock",
+   "ru": "фолк-рок",
+   "batch": "E",
+   "aliases_en": [
+    "folk rock"
+   ],
+   "aliases_ru": [
+    "фолк-рок"
+   ],
+   "rhythm": [
+    "live",
+    "folk rock strum groove",
+    "acoustic strum, live drums, bass"
+   ],
+   "production": [
+    "live room sound",
+    "analog warmth"
+   ],
+   "atmosphere": [
+    "twelve-string strum driving the verse",
+    "harmonies opening on the chorus",
+    "jangle guitar answering the vocal",
+    "drums arriving on the second verse",
+    "close vocal, band one room",
+    "dry verse, distant jangle"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "warm timbre"
+    ],
+    "power": [
+     "full-voice delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "chest register throughout, no falsetto",
+    "mood": "warm"
+   },
+   "brackets_group": "band",
+   "bpm": "100–125",
+   "examples": [
+    "folk rock, 100–125, folk rock strum groove, acoustic strum, live drums, bass",
+    "folk rock, male vocals, full-voice delivery, warm mood",
+    "фолк-рок: live folk rock strum groove, настроение warm"
+   ],
+   "sources": [
+    "arch-19"
+   ],
+   "archive_tracks": 10,
+   "archive_favorites": 2
+  },
+  {
+   "family": "indie folk",
+   "en": "indie folk",
+   "ru": "инди-фолк",
+   "batch": "E",
+   "aliases_en": [
+    "indie folk"
+   ],
+   "aliases_ru": [
+    "инди-фолк"
+   ],
+   "rhythm": [
+    "organic",
+    "indie folk gentle sway",
+    "fingerpicked guitar, soft percussion"
+   ],
+   "production": [
+    "intimate room sound",
+    "natural dynamics"
+   ],
+   "atmosphere": [
+    "fingerpicking carrying the verse",
+    "group vocals swaying on the chorus",
+    "banjo shading the lines",
+    "soft percussion entering late",
+    "voice close, group far behind",
+    "dry verse, distant room tone"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "warm timbre"
+    ],
+    "power": [
+     "intimate delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "chest register throughout, no falsetto",
+    "mood": "melancholic"
+   },
+   "brackets_group": "acoustic",
+   "bpm": "75–105",
+   "examples": [
+    "indie folk, 75–105, indie folk gentle sway, fingerpicked guitar, soft percussion",
+    "indie folk, male vocals, intimate delivery, melancholic mood",
+    "инди-фолк: organic indie folk gentle sway, настроение melancholic"
+   ],
+   "sources": [
+    "arch-15"
+   ],
+   "archive_tracks": 11,
+   "archive_favorites": 6
+  },
+  {
+   "family": "punk",
+   "en": "punk",
+   "ru": "панк",
+   "batch": "F",
+   "aliases_en": [
+    "punk",
+    "punk rock"
+   ],
+   "aliases_ru": [
+    "панк"
+   ],
+   "rhythm": [
+    "fast",
+    "stripped punk gallop",
+    "three-piece kit, buzzsaw guitars"
+   ],
+   "production": [
+    "live room sound",
+    "raw lo-fi production"
+   ],
+   "atmosphere": [
+    "buzzsaw power chords on the downbeat",
+    "drums racing two steps ahead",
+    "gang vocals on the chorus",
+    "hook repeated until it breaks",
+    "everything close in one room",
+    "close shout, distant garage behind"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "rough texture"
+    ],
+    "power": [
+     "shouted delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "staying in the basement throughout, no falsetto and no high-pitched screaming ever",
+    "mood": "aggressive"
+   },
+   "brackets_group": "band",
+   "bpm": "160–190",
+   "examples": [
+    "punk, 160–190, stripped punk gallop, three-piece kit, buzzsaw guitars",
+    "punk, male vocals, shouted delivery, aggressive mood",
+    "панк: fast stripped punk gallop, настроение aggressive"
+   ],
+   "sources": [
+    "arch-137"
+   ],
+   "archive_tracks": 138,
+   "archive_favorites": 87
+  },
+  {
+   "family": "post-punk",
+   "en": "post-punk",
+   "ru": "пост-панк",
+   "batch": "F",
+   "aliases_en": [
+    "post-punk"
+   ],
+   "aliases_ru": [
+    "пост-панк"
+   ],
+   "rhythm": [
+    "driving",
+    "motorik post-punk pulse",
+    "bass-led groove, chorused guitars"
+   ],
+   "production": [
+    "dry close-mic production",
+    "cold reverb space"
+   ],
+   "atmosphere": [
+    "bassline carrying the melody",
+    "chorused guitar scratch on the offbeat",
+    "cold synth accents between the verses",
+    "drums driving under the baritone",
+    "dry vocal close, cold room behind",
+    "close bass, distant chorus wash"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "register": [
+     "gritty baritone"
+    ],
+    "power": [
+     "detached delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "staying in the basement throughout, no falsetto and no high-pitched screaming ever",
+    "mood": "dark"
+   },
+   "brackets_group": "band",
+   "bpm": "130–155",
+   "examples": [
+    "post-punk, 130–155, motorik post-punk pulse, bass-led groove, chorused guitars",
+    "post-punk, male vocals, detached delivery, dark mood",
+    "пост-панк: driving motorik post-punk pulse, настроение dark"
+   ],
+   "sources": [
+    "web: жанровая практика"
+   ],
+   "archive_tracks": 77,
+   "archive_favorites": 52
+  },
+  {
+   "family": "hardcore punk",
+   "en": "hardcore punk",
+   "ru": "хардкор-панк",
+   "batch": "F",
+   "aliases_en": [
+    "hardcore punk",
+    "hardcore",
+    "d-beat"
+   ],
+   "aliases_ru": [
+    "хардкор-панк"
+   ],
+   "rhythm": [
+    "fast",
+    "d-beat hardcore pound",
+    "d-beat drums, distorted guitars"
+   ],
+   "production": [
+    "raw lo-fi production",
+    "punchy midrange"
+   ],
+   "atmosphere": [
+    "d-beat pounding under shouted verses",
+    "breakdown hitting half-speed",
+    "gang shout on the last line",
+    "two-note riff until the end",
+    "everything close and raw",
+    "close pound, distant garage"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "rough texture"
+    ],
+    "power": [
+     "shouted delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "staying in the basement throughout, no falsetto and no high-pitched screaming ever",
+    "mood": "aggressive"
+   },
+   "brackets_group": "band",
+   "bpm": "170–200",
+   "examples": [
+    "hardcore punk, 170–200, d-beat hardcore pound, d-beat drums, distorted guitars",
+    "hardcore punk, male vocals, shouted delivery, aggressive mood",
+    "хардкор-панк: fast d-beat hardcore pound, настроение aggressive"
+   ],
+   "sources": [
+    "arch-1"
+   ],
+   "archive_tracks": 82,
+   "archive_favorites": 91
+  },
+  {
+   "family": "pop punk",
+   "en": "pop punk",
+   "ru": "поп-панк",
+   "batch": "F",
+   "aliases_en": [
+    "pop punk"
+   ],
+   "aliases_ru": [
+    "поп-панк"
+   ],
+   "rhythm": [
+    "fast",
+    "pop punk drive",
+    "double-time drums, power chords"
+   ],
+   "production": [
+    "clean modern production",
+    "punchy midrange"
+   ],
+   "atmosphere": [
+    "power chords counting the track in",
+    "hook landing on the downbeat",
+    "woah-oh gang backing on the chorus",
+    "double-time bridge into the last chorus",
+    "close vocal, band one room",
+    "dry verse, distant gang vocals"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "nasal timbre"
+    ],
+    "power": [
+     "full-voice delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "staying in the basement throughout, no falsetto and no high-pitched screaming ever",
+    "mood": "euphoric"
+   },
+   "brackets_group": "band",
+   "bpm": "160–190",
+   "examples": [
+    "pop punk, 160–190, pop punk drive, double-time drums, power chords",
+    "pop punk, male vocals, full-voice delivery, euphoric mood",
+    "поп-панк: fast pop punk drive, настроение euphoric"
+   ],
+   "sources": [
+    "arch-5"
+   ],
+   "archive_tracks": 3,
+   "archive_favorites": 0
+  },
+  {
+   "family": "grunge",
+   "en": "grunge",
+   "ru": "гранж",
+   "batch": "F",
+   "aliases_en": [
+    "grunge"
+   ],
+   "aliases_ru": [
+    "гранж"
+   ],
+   "rhythm": [
+    "heavy",
+    "grunge sludge swing",
+    "detuned guitars, loose drums"
+   ],
+   "production": [
+    "live room sound",
+    "raw lo-fi production"
+   ],
+   "atmosphere": [
+    "quiet verse flipping loud into the chorus",
+    "detuned riff sagging under the room",
+    "feedback ringing after the stop",
+    "drums dragging behind the beat",
+    "guitars wide, vocal upfront",
+    "close drums, distant room mics"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "gravel texture"
+    ],
+    "power": [
+     "raspy aggressive delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "staying in the basement throughout, no falsetto and no high-pitched screaming ever",
+    "mood": "melancholic"
+   },
+   "brackets_group": "band",
+   "bpm": "100–125",
+   "examples": [
+    "grunge, 100–125, grunge sludge swing, detuned guitars, loose drums",
+    "grunge, male vocals, raspy aggressive delivery, melancholic mood",
+    "гранж: heavy grunge sludge swing, настроение melancholic"
+   ],
+   "sources": [
+    "arch-49"
+   ],
+   "archive_tracks": 49,
+   "archive_favorites": 56
+  },
+  {
+   "family": "britpop",
+   "en": "britpop",
+   "ru": "бритпоп",
+   "batch": "F",
+   "aliases_en": [
+    "britpop"
+   ],
+   "aliases_ru": [
+    "бритпоп"
+   ],
+   "rhythm": [
+    "driving",
+    "britpop jangle drive",
+    "jangly guitars, live drums"
+   ],
+   "production": [
+    "analog warmth",
+    "live room sound"
+   ],
+   "atmosphere": [
+    "jangle chords opening the track",
+    "brass or keys accenting the chorus",
+    "big vowels held on the hook",
+    "octave guitars doubling the last chorus",
+    "vocal upfront, guitars wide behind",
+    "close vocal, distant jangle wash"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "warm timbre"
+    ],
+    "power": [
+     "confident delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "chest register throughout, no falsetto",
+    "mood": "nostalgic"
+   },
+   "brackets_group": "band",
+   "bpm": "110–130",
+   "examples": [
+    "britpop, 110–130, britpop jangle drive, jangly guitars, live drums",
+    "britpop, male vocals, confident delivery, nostalgic mood",
+    "бритпоп: driving britpop jangle drive, настроение nostalgic"
+   ],
+   "sources": [
+    "arch-2"
+   ],
+   "archive_tracks": 2,
+   "archive_favorites": 1
+  },
+  {
+   "family": "garage rock",
+   "en": "garage rock",
+   "ru": "гаражный рок",
+   "batch": "F",
+   "aliases_en": [
+    "garage rock",
+    "garage punk"
+   ],
+   "aliases_ru": [
+    "гаражный рок"
+   ],
+   "rhythm": [
+    "raw",
+    "garage stomp pound",
+    "rattling drums, fuzzy guitar"
+   ],
+   "production": [
+    "raw lo-fi production",
+    "live room sound"
+   ],
+   "atmosphere": [
+    "fuzzy riff on the one",
+    "organ poking between the bars",
+    "tambourine rattling the stomp",
+    "everyone in one room",
+    "everything close and raw",
+    "close stomp, distant organ"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "hoarse rasp"
+    ],
+    "power": [
+     "shouted delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "staying in the basement throughout, no falsetto and no high-pitched screaming ever",
+    "mood": "aggressive"
+   },
+   "brackets_group": "band",
+   "bpm": "130–160",
+   "examples": [
+    "garage rock, 130–160, garage stomp pound, rattling drums, fuzzy guitar",
+    "garage rock, male vocals, shouted delivery, aggressive mood",
+    "гаражный рок: raw garage stomp pound, настроение aggressive"
+   ],
+   "sources": [
+    "arch-5"
+   ],
+   "archive_tracks": 8,
+   "archive_favorites": 4
+  },
+  {
+   "family": "surf rock",
+   "en": "surf rock",
+   "ru": "сёрф-рок",
+   "batch": "F",
+   "aliases_en": [
+    "surf rock",
+    "surfar"
+   ],
+   "aliases_ru": [
+    "сёрф-рок"
+   ],
+   "rhythm": [
+    "twangy",
+    "surf double-pick groove",
+    "reverb-drenched twang guitar, tom-driven drums"
+   ],
+   "production": [
+    "analog warmth",
+    "live room sound"
+   ],
+   "atmosphere": [
+    "twang double-picking the riff",
+    "wet reverb dripping off the lead",
+    "tom runs dragging the beat",
+    "sharp stabs stopping the groove",
+    "close twang, wet room behind",
+    "dry stabs, distant tom run"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "chest voice"
+    ],
+    "power": [
+     "playful cheerful delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "chest register throughout, no falsetto",
+    "mood": "playful"
+   },
+   "brackets_group": "band",
+   "bpm": "140–170",
+   "examples": [
+    "surf rock, 140–170, surf double-pick groove, reverb-drenched twang guitar, tom-driven drums",
+    "surf rock, male vocals, playful cheerful delivery, playful mood",
+    "сёрф-рок: twangy surf double-pick groove, настроение playful"
+   ],
+   "sources": [
+    "web: жанровая практика"
+   ],
+   "archive_tracks": 0,
+   "archive_favorites": 0
+  },
+  {
+   "family": "progressive rock",
+   "en": "progressive rock",
+   "ru": "прог-рок",
+   "batch": "F",
+   "aliases_en": [
+    "progressive rock",
+    "prog rock",
+    "prog"
+   ],
+   "aliases_ru": [
+    "прог-рок"
+   ],
+   "rhythm": [
+    "unhurried",
+    "prog shifting-meter journey",
+    "dynamic drums, mellotron, bass leads"
+   ],
+   "production": [
+    "analog warmth",
+    "natural dynamics"
+   ],
+   "atmosphere": [
+    "meter shifting every section",
+    "mellotron pads opening the bridge",
+    "guitar solo riding over the suite",
+    "organ swelling before the finale",
+    "close vocal, hall far behind",
+    "dry solo, distant mellotron wash"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "warm timbre"
+    ],
+    "power": [
+     "full-voice delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "chest register throughout, no falsetto",
+    "mood": "anthemic"
+   },
+   "brackets_group": "score",
+   "bpm": "60–150 (по секциям)",
+   "examples": [
+    "progressive rock, 60–150 (по секциям), prog shifting-meter journey, dynamic drums, mellotron, bass leads",
+    "progressive rock, male vocals, full-voice delivery, anthemic mood",
+    "прог-рок: unhurried prog shifting-meter journey, настроение anthemic"
+   ],
+   "sources": [
+    "arch-2"
+   ],
+   "archive_tracks": 85,
+   "archive_favorites": 125
+  },
+  {
+   "family": "hard rock",
+   "en": "hard rock",
+   "ru": "хард-рок",
+   "batch": "F",
+   "aliases_en": [
+    "hard rock"
+   ],
+   "aliases_ru": [
+    "хард-рок"
+   ],
+   "rhythm": [
+    "heavy",
+    "hard rock stomp riff",
+    "crunched guitars, stomping drums"
+   ],
+   "production": [
+    "live room sound",
+    "punchy midrange"
+   ],
+   "atmosphere": [
+    "riff counting the track in",
+    "chorus lifting an octave",
+    "solo answering the second chorus",
+    "drums cracking on the backbeat",
+    "guitars wide, vocal upfront",
+    "close stomp, distant room"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "gravel texture"
+    ],
+    "power": [
+     "raspy aggressive delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "staying in the basement throughout, no falsetto and no high-pitched screaming ever",
+    "mood": "aggressive"
+   },
+   "brackets_group": "band",
+   "bpm": "110–140",
+   "examples": [
+    "hard rock, 110–140, hard rock stomp riff, crunched guitars, stomping drums",
+    "hard rock, male vocals, raspy aggressive delivery, aggressive mood",
+    "хард-рок: heavy hard rock stomp riff, настроение aggressive"
+   ],
+   "sources": [
+    "arch-18"
+   ],
+   "archive_tracks": 18,
+   "archive_favorites": 5
+  },
+  {
+   "family": "stoner rock",
+   "en": "stoner rock",
+   "ru": "стоунер-рок",
+   "batch": "F",
+   "aliases_en": [
+    "stoner rock",
+    "desert rock"
+   ],
+   "aliases_ru": [
+    "стоунер-рок"
+   ],
+   "rhythm": [
+    "heavy",
+    "stoner fuzz slog",
+    "fuzz guitar and bass, slow drums"
+   ],
+   "production": [
+    "analog warmth",
+    "live room sound"
+   ],
+   "atmosphere": [
+    "fuzz riff repeating like a ritual",
+    "drums laid back behind the downbeat",
+    "organ haze behind the amp wall",
+    "jam stretch before the last riff",
+    "amps wide, vocal in the middle",
+    "close fuzz, distant organ haze"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "gravel texture"
+    ],
+    "power": [
+     "laid-back delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "staying in the basement throughout, no falsetto and no high-pitched screaming ever",
+    "mood": "dark"
+   },
+   "brackets_group": "band",
+   "bpm": "70–100",
+   "examples": [
+    "stoner rock, 70–100, stoner fuzz slog, fuzz guitar and bass, slow drums",
+    "stoner rock, male vocals, laid-back delivery, dark mood",
+    "стоунер-рок: heavy stoner fuzz slog, настроение dark"
+   ],
+   "sources": [
+    "web: жанровая практика"
+   ],
+   "archive_tracks": 5,
+   "archive_favorites": 4
+  },
+  {
+   "family": "gothic rock",
+   "en": "gothic rock",
+   "ru": "готик-рок",
+   "batch": "F",
+   "aliases_en": [
+    "gothic rock",
+    "goth"
+   ],
+   "aliases_ru": [
+    "готик-рок"
+   ],
+   "rhythm": [
+    "cold",
+    "gothic rock pulse",
+    "chorused guitars, tom-heavy kit"
+   ],
+   "production": [
+    "cold reverb space",
+    "dry close-mic production"
+   ],
+   "atmosphere": [
+    "flanged guitar sheen over the tom pulse",
+    "bassline hanging below the baritone",
+    "cold synth lines between the verses",
+    "reverb swallowing the chorus",
+    "dry baritone close, cold hall behind",
+    "close pulse, distant flange wash"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "register": [
+     "male baritone"
+    ],
+    "power": [
+     "detached delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "staying in the basement throughout, no falsetto and no high-pitched screaming ever",
+    "mood": "dark"
+   },
+   "brackets_group": "band",
+   "bpm": "110–135",
+   "examples": [
+    "gothic rock, 110–135, gothic rock pulse, chorused guitars, tom-heavy kit",
+    "gothic rock, male vocals, detached delivery, dark mood",
+    "готик-рок: cold gothic rock pulse, настроение dark"
+   ],
+   "sources": [
+    "arch-4"
+   ],
+   "archive_tracks": 30,
+   "archive_favorites": 22
+  },
+  {
+   "family": "new wave",
+   "en": "new wave",
+   "ru": "нью-вейв",
+   "batch": "F",
+   "aliases_en": [
+    "new wave"
+   ],
+   "aliases_ru": [
+    "нью-вейв"
+   ],
+   "rhythm": [
+    "clean",
+    "new wave nervous pulse",
+    "drum machine, jangle guitars, synth"
+   ],
+   "production": [
+    "clean modern production",
+    "dry close-mic production"
+   ],
+   "atmosphere": [
+    "drum machine clicking the nervous pulse",
+    "jangle guitar on the offbeat",
+    "synth hook answering the verse",
+    "choppy rhythm stopping before the chorus",
+    "dry vocal close, synth wide behind",
+    "close pulse, distant hook"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "nasal timbre"
+    ],
+    "power": [
+     "detached delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "chest register throughout, no falsetto",
+    "mood": "nostalgic"
+   },
+   "brackets_group": "band",
+   "bpm": "115–145",
+   "examples": [
+    "new wave, 115–145, new wave nervous pulse, drum machine, jangle guitars, synth",
+    "new wave, male vocals, detached delivery, nostalgic mood",
+    "нью-вейв: clean new wave nervous pulse, настроение nostalgic"
+   ],
+   "sources": [
+    "arch-16"
+   ],
+   "archive_tracks": 16,
+   "archive_favorites": 5
+  },
+  {
+   "family": "post-rock",
+   "en": "post-rock",
+   "ru": "пост-рок",
+   "batch": "F",
+   "aliases_en": [
+    "post-rock"
+   ],
+   "aliases_ru": [
+    "пост-рок"
+   ],
+   "rhythm": [
+    "slow",
+    "post-rock slow build crescendo",
+    "tremolo guitars, gradual drums"
+   ],
+   "production": [
+    "wide hall mix",
+    "natural dynamics"
+   ],
+   "atmosphere": [
+    "quiet arpeggio looping until the drums enter",
+    "crescendo stacking layer over layer",
+    "tremolo wash cresting at the peak",
+    "sudden silence before the final theme",
+    "close arpeggio, hall far behind",
+    "dry loop, distant crescendo"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "breathy tone"
+    ],
+    "power": [
+     "laid-back delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "cinematic"
+   },
+   "brackets_group": "score",
+   "bpm": "70–110",
+   "examples": [
+    "post-rock, 70–110, post-rock slow build crescendo, tremolo guitars, gradual drums",
+    "post-rock, female vocals, laid-back delivery, cinematic mood",
+    "пост-рок: slow post-rock slow build crescendo, настроение cinematic"
+   ],
+   "sources": [
+    "web: жанровая практика"
+   ],
+   "archive_tracks": 134,
+   "archive_favorites": 106
+  },
+  {
+   "family": "shoegaze",
+   "en": "shoegaze",
+   "ru": "шугейз",
+   "batch": "F",
+   "aliases_en": [
+    "shoegaze",
+    "nu gaze"
+   ],
+   "aliases_ru": [
+    "шугейз"
+   ],
+   "rhythm": [
+    "laid-back",
+    "shoegaze wash drift",
+    "soft drums under a wall of guitars"
+   ],
+   "production": [
+    "reverb-drenched mix",
+    "soft focus production"
+   ],
+   "atmosphere": [
+    "guitar wall hiding the melody",
+    "pedal swells folding into the vocal",
+    "soft drums buried in the wash",
+    "noise peak dissolving into the verse",
+    "dry vocal floating over a distant band",
+    "guitars far back, voice half-buried"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "breathy tone"
+    ],
+    "power": [
+     "fragile intimate delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "dreamy"
+   },
+   "brackets_group": "mellow",
+   "bpm": "100–125",
+   "examples": [
+    "shoegaze, 100–125, shoegaze wash drift, soft drums under a wall of guitars",
+    "shoegaze, female vocals, fragile intimate delivery, dreamy mood",
+    "шугейз: laid-back shoegaze wash drift, настроение dreamy"
+   ],
+   "sources": [
+    "arch-80 (раньше алиасился в dream pop — выделить отдельным семейством)"
+   ],
+   "archive_tracks": 80,
+   "archive_favorites": 44
+  },
+  {
+   "family": "power metal",
+   "en": "power metal",
+   "ru": "пауэр-метал",
+   "batch": "G",
+   "aliases_en": [
+    "power metal"
+   ],
+   "aliases_ru": [
+    "пауэр-метал"
+   ],
+   "rhythm": [
+    "fast",
+    "galloping double-kick power metal drive",
+    "double-kick drums, palm-muted gallop guitars"
+   ],
+   "production": [
+    "live room sound",
+    "punchy midrange"
+   ],
+   "atmosphere": [
+    "gallop riffing under the heroic vocal",
+    "keyboard fanfares answering the guitars",
+    "double-kick rolling through the chorus",
+    "epic choir pad behind the last chorus",
+    "guitars wide, vocal upfront in the middle",
+    "close drums, distant epic choir"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "register": [
+     "heroic chesty tenor"
+    ],
+    "timbre": [
+     "bright timbre"
+    ],
+    "power": [
+     "powerful belting"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "chest register throughout, no falsetto",
+    "mood": "heroic"
+   },
+   "brackets_group": "band",
+   "bpm": "140–160",
+   "examples": [
+    "power metal, 140–160, galloping double-kick power metal drive, double-kick drums, palm-muted gallop guitars",
+    "power metal, male vocals, powerful belting, heroic mood",
+    "пауэр-метал: fast galloping double-kick power metal drive, настроение heroic"
+   ],
+   "sources": [
+    "arch-1"
+   ],
+   "archive_tracks": 1,
+   "archive_favorites": 0
+  },
+  {
+   "family": "death metal",
+   "en": "death metal",
+   "ru": "дэт-метал",
+   "batch": "G",
+   "aliases_en": [
+    "death metal",
+    "melodic death metal"
+   ],
+   "aliases_ru": [
+    "дэт-метал"
+   ],
+   "rhythm": [
+    "heavy",
+    "blasting death metal assault",
+    "blast beats, low-tuned rhythm guitars"
+   ],
+   "production": [
+    "dense heavy production",
+    "punchy midrange"
+   ],
+   "atmosphere": [
+    "tremolo riffing under the growl",
+    "blast beats pounding the verses",
+    "guttural growl carrying the verse",
+    "slam breakdown stopping the blast",
+    "growl upfront, guitars wide behind",
+    "close blast, distant tremolo wash"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "register": [
+     "gritty baritone"
+    ],
+    "timbre": [
+     "rough texture"
+    ],
+    "power": [
+     "gritty aggressive delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "staying in the basement throughout, no falsetto and no high-pitched screaming ever",
+    "mood": "aggressive"
+   },
+   "brackets_group": "band",
+   "bpm": "150–190",
+   "examples": [
+    "death metal, 150–190, blasting death metal assault, blast beats, low-tuned rhythm guitars",
+    "death metal, male vocals, gritty aggressive delivery, aggressive mood",
+    "дэт-метал: heavy blasting death metal assault, настроение aggressive"
+   ],
+   "sources": [
+    "arch-1"
+   ],
+   "archive_tracks": 1,
+   "archive_favorites": 0
+  },
+  {
+   "family": "black metal",
+   "en": "black metal",
+   "ru": "блэк-метал",
+   "batch": "G",
+   "aliases_en": [
+    "black metal",
+    "atmospheric black metal"
+   ],
+   "aliases_ru": [
+    "блэк-метал"
+   ],
+   "rhythm": [
+    "fast",
+    "tremolo-ridden black metal blast",
+    "blast beats, buzzing tremolo guitars"
+   ],
+   "production": [
+    "cold raw production",
+    "cold reverb space"
+   ],
+   "atmosphere": [
+    "tremolo buzz wall carrying the verse",
+    "shrill screamed lines over the blast",
+    "cold synth pad opening the atmosphere",
+    "cavernous room around the kit",
+    "shriek upfront, buzz wall wide behind",
+    "close blast, distant cold synth"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "rough texture"
+    ],
+    "power": [
+     "shouted delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "staying in the basement throughout, no falsetto and no high-pitched screaming ever",
+    "mood": "dark"
+   },
+   "brackets_group": "band",
+   "bpm": "140–190",
+   "examples": [
+    "black metal, 140–190, tremolo-ridden black metal blast, blast beats, buzzing tremolo guitars",
+    "black metal, male vocals, shouted delivery, dark mood",
+    "блэк-метал: fast tremolo-ridden black metal blast, настроение dark"
+   ],
+   "sources": [
+    "web: жанровая практика"
+   ],
+   "archive_tracks": 0,
+   "archive_favorites": 0
+  },
+  {
+   "family": "symphonic metal",
+   "en": "symphonic metal",
+   "ru": "симфоник-метал",
+   "batch": "G",
+   "aliases_en": [
+    "symphonic metal"
+   ],
+   "aliases_ru": [
+    "симфоник-метал"
+   ],
+   "rhythm": [
+    "heavy",
+    "orchestral metal drive",
+    "double-kick drums, low-tuned guitars, orchestra"
+   ],
+   "production": [
+    "wide cinematic mix",
+    "punchy midrange"
+   ],
+   "atmosphere": [
+    "orchestra swelling behind the riff",
+    "operatic lead rising over the chorus",
+    "choir answering the hook",
+    "guitar solo trading with the strings",
+    "lead upfront, orchestra wide behind",
+    "close riff, distant choir hall"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "register": [
+     "soprano"
+    ],
+    "timbre": [
+     "bright timbre"
+    ],
+    "power": [
+     "powerful belting"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "anthemic"
+   },
+   "brackets_group": "band",
+   "bpm": "120–150",
+   "examples": [
+    "symphonic metal, 120–150, orchestral metal drive, double-kick drums, low-tuned guitars, orchestra",
+    "symphonic metal, female vocals, powerful belting, anthemic mood",
+    "симфоник-метал: heavy orchestral metal drive, настроение anthemic"
+   ],
+   "sources": [
+    "arch-4"
+   ],
+   "archive_tracks": 4,
+   "archive_favorites": 1
+  },
+  {
+   "family": "folk metal",
+   "en": "folk metal",
+   "ru": "фолк-метал",
+   "batch": "G",
+   "aliases_en": [
+    "folk metal",
+    "viking metal"
+   ],
+   "aliases_ru": [
+    "фолк-метал"
+   ],
+   "rhythm": [
+    "heavy",
+    "stomping folk metal gallop",
+    "double-kick drums, rhythm guitars, folk instruments"
+   ],
+   "production": [
+    "live room sound",
+    "punchy midrange"
+   ],
+   "atmosphere": [
+    "bagpipe or fiddle riffing over the gallop",
+    "chanted drinking chorus",
+    "acoustic folk break before the blast",
+    "war drums doubling the kick",
+    "chant upfront, band wide behind",
+    "close gallop, distant folk riff"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "gravel texture"
+    ],
+    "power": [
+     "chanted delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "staying in the basement throughout, no falsetto and no high-pitched screaming ever",
+    "mood": "euphoric"
+   },
+   "brackets_group": "band",
+   "bpm": "130–160",
+   "examples": [
+    "folk metal, 130–160, stomping folk metal gallop, double-kick drums, rhythm guitars, folk instruments",
+    "folk metal, male vocals, chanted delivery, euphoric mood",
+    "фолк-метал: heavy stomping folk metal gallop, настроение euphoric"
+   ],
+   "sources": [
+    "arch-1"
+   ],
+   "archive_tracks": 1,
+   "archive_favorites": 0
+  },
+  {
+   "family": "metalcore",
+   "en": "metalcore",
+   "ru": "металкор",
+   "batch": "G",
+   "aliases_en": [
+    "metalcore",
+    "deathcore"
+   ],
+   "aliases_ru": [
+    "металкор"
+   ],
+   "rhythm": [
+    "heavy",
+    "metalcore breakdown drive",
+    "double-kick drums, drop-tuned guitars"
+   ],
+   "production": [
+    "clean modern production",
+    "punchy midrange"
+   ],
+   "atmosphere": [
+    "screamed verse flipping into a sung chorus",
+    "breakdown chugging at half-speed",
+    "pinch-harmonic squeals answering the riff",
+    "gang shout on the bridge",
+    "scream upfront, wall wide behind",
+    "close breakdown, distant clean chorus"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "register": [
+     "gritty baritone"
+    ],
+    "timbre": [
+     "rough texture"
+    ],
+    "power": [
+     "shouted delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "staying in the basement throughout, no falsetto and no high-pitched screaming ever",
+    "mood": "aggressive"
+   },
+   "brackets_group": "band",
+   "bpm": "140–180",
+   "examples": [
+    "metalcore, 140–180, metalcore breakdown drive, double-kick drums, drop-tuned guitars",
+    "metalcore, male vocals, shouted delivery, aggressive mood",
+    "металкор: heavy metalcore breakdown drive, настроение aggressive"
+   ],
+   "sources": [
+    "arch-3"
+   ],
+   "archive_tracks": 3,
+   "archive_favorites": 2
+  },
+  {
+   "family": "nu metal",
+   "en": "nu metal",
+   "ru": "ню-метал",
+   "batch": "G",
+   "aliases_en": [
+    "nu metal",
+    "nü metal"
+   ],
+   "aliases_ru": [
+    "ню-метал"
+   ],
+   "rhythm": [
+    "heavy",
+    "nu metal syncopated sludge",
+    "drop-tuned 7-string riffs, hip-hop drums"
+   ],
+   "production": [
+    "dense heavy production",
+    "punchy midrange"
+   ],
+   "atmosphere": [
+    "syncopated low riff answering the flow",
+    "rapped verse into a sung hook",
+    "DJ scratches between the sections",
+    "quiet echo break before the last chorus",
+    "flow upfront, riff wide behind",
+    "close chug, distant echo break"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "gravel texture"
+    ],
+    "power": [
+     "chanted delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "staying in the basement throughout, no falsetto and no high-pitched screaming ever",
+    "mood": "aggressive"
+   },
+   "brackets_group": "urban",
+   "bpm": "90–115",
+   "examples": [
+    "nu metal, 90–115, nu metal syncopated sludge, drop-tuned 7-string riffs, hip-hop drums",
+    "nu metal, male vocals, chanted delivery, aggressive mood",
+    "ню-метал: heavy nu metal syncopated sludge, настроение aggressive"
+   ],
+   "sources": [
+    "arch-51"
+   ],
+   "archive_tracks": 0,
+   "archive_favorites": 0
+  },
+  {
+   "family": "funk rock",
+   "en": "funk rock",
+   "ru": "фанк-рок",
+   "batch": "G",
+   "aliases_en": [
+    "funk rock"
+   ],
+   "aliases_ru": [
+    "фанк-рок"
+   ],
+   "rhythm": [
+    "tight",
+    "syncopated funk rock groove",
+    "tight drums, slapping bass, wah guitar"
+   ],
+   "production": [
+    "live room sound",
+    "punchy low end"
+   ],
+   "atmosphere": [
+    "slap bass popping under the verse",
+    "wah guitar answering the vocal",
+    "staccato riff locking to the kick",
+    "horn stab on the turnaround",
+    "everything close and dry",
+    "close drums, one distant room mic"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "chest voice"
+    ],
+    "power": [
+     "laid-back delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "chest register throughout, no falsetto",
+    "mood": "playful"
+   },
+   "brackets_group": "groove",
+   "bpm": "95–115",
+   "examples": [
+    "funk rock, 95–115, syncopated funk rock groove, tight drums, slapping bass, wah guitar",
+    "funk rock, male vocals, laid-back delivery, playful mood",
+    "фанк-рок: tight syncopated funk rock groove, настроение playful"
+   ],
+   "sources": [
+    "arch-15"
+   ],
+   "archive_tracks": 4,
+   "archive_favorites": 0
+  },
+  {
+   "family": "rap metal",
+   "en": "rap metal",
+   "ru": "рэп-метал",
+   "batch": "G",
+   "aliases_en": [
+    "rap metal",
+    "rap rock"
+   ],
+   "aliases_ru": [
+    "рэп-метал"
+   ],
+   "rhythm": [
+    "heavy",
+    "rap metal stomp groove",
+    "drop-tuned riffs, hip-hop drums"
+   ],
+   "production": [
+    "dense heavy production",
+    "punchy midrange"
+   ],
+   "atmosphere": [
+    "riff slamming under the rap flow",
+    "half-time stomp before the hook",
+    "turntable cut answering the verse",
+    "crowd shout doubling the hook",
+    "flow upfront, riff wide behind",
+    "close stomp, distant cut"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "chest voice"
+    ],
+    "power": [
+     "confident spoken-word flow"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "staying in the basement throughout, no falsetto and no high-pitched screaming ever",
+    "mood": "aggressive"
+   },
+   "brackets_group": "urban",
+   "bpm": "95–115",
+   "examples": [
+    "rap metal, 95–115, rap metal stomp groove, drop-tuned riffs, hip-hop drums",
+    "rap metal, male vocals, confident spoken-word flow, aggressive mood",
+    "рэп-метал: heavy rap metal stomp groove, настроение aggressive"
+   ],
+   "sources": [
+    "arch-28"
+   ],
+   "archive_tracks": 5,
+   "archive_favorites": 5
+  },
+  {
+   "family": "disco",
+   "en": "disco",
+   "ru": "диско",
+   "batch": "H",
+   "aliases_en": [
+    "disco"
+   ],
+   "aliases_ru": [
+    "диско"
+   ],
+   "rhythm": [
+    "tight",
+    "disco four-on-the-floor groove",
+    "orchestral drums, open hi-hats, funk bass"
+   ],
+   "production": [
+    "analog warmth",
+    "wide stereo mix"
+   ],
+   "atmosphere": [
+    "string section answering the vocal",
+    "octave chicken-pick guitar",
+    "open hi-hat pumping the four",
+    "orchestral drum break into the chorus",
+    "vocal close, strings wide behind",
+    "close groove, distant string sweep"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "bright timbre"
+    ],
+    "power": [
+     "confident delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "euphoric"
+   },
+   "brackets_group": "groove",
+   "bpm": "115–125",
+   "examples": [
+    "disco, 115–125, disco four-on-the-floor groove, orchestral drums, open hi-hats, funk bass",
+    "disco, female vocals, confident delivery, euphoric mood",
+    "диско: tight disco four-on-the-floor groove, настроение euphoric"
+   ],
+   "sources": [
+    "arch-138"
+   ],
+   "archive_tracks": 138,
+   "archive_favorites": 78
+  },
+  {
+   "family": "nu-disco",
+   "en": "nu-disco",
+   "ru": "ну-диско",
+   "batch": "H",
+   "aliases_en": [
+    "nu-disco",
+    "nudisco"
+   ],
+   "aliases_ru": [
+    "ну-диско"
+   ],
+   "rhythm": [
+    "bouncy",
+    "filtered disco loop groove",
+    "analog drums, filtered funk bass"
+   ],
+   "production": [
+    "analog warmth",
+    "wide stereo mix"
+   ],
+   "atmosphere": [
+    "filtered loop opening over the groove",
+    "chopped strings repeating the riff",
+    "claps on the two and four",
+    "bassline bouncing under the filter",
+    "dry kick close, filter sweep far behind",
+    "close groove, distant chopped strings"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "velvet tone"
+    ],
+    "power": [
+     "laid-back delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "euphoric"
+   },
+   "brackets_group": "club",
+   "bpm": "110–120",
+   "examples": [
+    "nu-disco, 110–120, filtered disco loop groove, analog drums, filtered funk bass",
+    "nu-disco, female vocals, laid-back delivery, euphoric mood",
+    "ну-диско: bouncy filtered disco loop groove, настроение euphoric"
+   ],
+   "sources": [
+    "web: жанровая практика"
+   ],
+   "archive_tracks": 4,
+   "archive_favorites": 2
+  },
+  {
+   "family": "italo disco",
+   "en": "italo disco",
+   "ru": "итало-диско",
+   "batch": "H",
+   "aliases_en": [
+    "italo disco",
+    "italo dance"
+   ],
+   "aliases_ru": [
+    "итало-диско"
+   ],
+   "rhythm": [
+    "driving",
+    "italo drum machine groove",
+    "drum machine, synth bass"
+   ],
+   "production": [
+    "analog warmth",
+    "wide stereo mix"
+   ],
+   "atmosphere": [
+    "cold synth arpeggio under the hook",
+    "drum machine cracking the beat",
+    "synth brass answering the vocal",
+    "spacey pads behind the chorus",
+    "dry vocal close, arpeggio wide behind",
+    "close beat, distant space pad"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "bright timbre"
+    ],
+    "power": [
+     "playful cheerful delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "euphoric"
+   },
+   "brackets_group": "club",
+   "bpm": "115–125",
+   "examples": [
+    "italo disco, 115–125, italo drum machine groove, drum machine, synth bass",
+    "italo disco, female vocals, playful cheerful delivery, euphoric mood",
+    "итало-диско: driving italo drum machine groove, настроение euphoric"
+   ],
+   "sources": [
+    "web: жанровая практика"
+   ],
+   "archive_tracks": 0,
+   "archive_favorites": 0
+  },
+  {
+   "family": "french house",
+   "en": "french house",
+   "ru": "френч-хаус",
+   "batch": "H",
+   "aliases_en": [
+    "french house",
+    "filter house",
+    "french touch"
+   ],
+   "aliases_ru": [
+    "френч-хаус"
+   ],
+   "rhythm": [
+    "driving",
+    "four-on-the-floor kick groove",
+    "four-on-the-floor kick, filtered disco loops"
+   ],
+   "production": [
+    "analog warmth",
+    "wide stereo mix"
+   ],
+   "atmosphere": [
+    "sidechained compression pumping the chords",
+    "disco loop chopped and filtered",
+    "phaser sweeping the hats",
+    "filtered break into the drop",
+    "dry kick close, filtered loop wide behind",
+    "close groove, distant sweep"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "smooth timbre"
+    ],
+    "power": [
+     "laid-back delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "euphoric"
+   },
+   "brackets_group": "club",
+   "bpm": "120–128",
+   "examples": [
+    "french house, 120–128, four-on-the-floor kick groove, four-on-the-floor kick, filtered disco loops",
+    "french house, female vocals, laid-back delivery, euphoric mood",
+    "френч-хаус: driving four-on-the-floor kick groove, настроение euphoric"
+   ],
+   "sources": [
+    "arch-18"
+   ],
+   "archive_tracks": 31,
+   "archive_favorites": 52
+  },
+  {
+   "family": "city pop",
+   "en": "city pop",
+   "ru": "сити-поп",
+   "batch": "H",
+   "aliases_en": [
+    "city pop"
+   ],
+   "aliases_ru": [
+    "сити-поп"
+   ],
+   "rhythm": [
+    "bouncy",
+    "city pop soft funk groove",
+    "live drums, slap bass, FM electric piano"
+   ],
+   "production": [
+    "analog warmth",
+    "wide stereo mix"
+   ],
+   "atmosphere": [
+    "glassy FM electric piano over the verse",
+    "slap bass popping under the chorus",
+    "horn licks answering the hook",
+    "chorused guitar arpeggio behind",
+    "vocal close, horns wide behind",
+    "close keys, distant horn lick"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "glassy timbre"
+    ],
+    "power": [
+     "confident delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "nostalgic"
+   },
+   "brackets_group": "groove",
+   "bpm": "100–115",
+   "examples": [
+    "city pop, 100–115, city pop soft funk groove, live drums, slap bass, FM electric piano",
+    "city pop, female vocals, confident delivery, nostalgic mood",
+    "сити-поп: bouncy city pop soft funk groove, настроение nostalgic"
+   ],
+   "sources": [
+    "web: сигнатуры DX7/Juno, slap bass, фанк-рожки (ресерч сигнатур #45)"
+   ],
+   "archive_tracks": 0,
+   "archive_favorites": 0
+  },
+  {
+   "family": "k-pop",
+   "en": "k-pop",
+   "ru": "к-поп",
+   "batch": "H",
+   "aliases_en": [
+    "k-pop",
+    "kpop"
+   ],
+   "aliases_ru": [
+    "к-поп"
+   ],
+   "rhythm": [
+    "clean",
+    "hybrid pop groove",
+    "trap hats under pop drums"
+   ],
+   "production": [
+    "clean modern production",
+    "wide stereo mix"
+   ],
+   "atmosphere": [
+    "rap verse flipping into a sung chorus",
+    "massive stacked hook vocals",
+    "half-time breakdown before the last chorus",
+    "synth brass stab answering the hook",
+    "hook upfront, synths wide behind",
+    "close vocal, distant synth stack"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "bright timbre"
+    ],
+    "power": [
+     "playful cheerful delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "euphoric"
+   },
+   "brackets_group": "band",
+   "bpm": "100–125",
+   "examples": [
+    "k-pop, 100–125, hybrid pop groove, trap hats under pop drums",
+    "k-pop, female vocals, playful cheerful delivery, euphoric mood",
+    "к-поп: clean hybrid pop groove, настроение euphoric"
+   ],
+   "sources": [
+    "web: жанровая практика"
+   ],
+   "archive_tracks": 62,
+   "archive_favorites": 63
+  },
+  {
+   "family": "hyperpop",
+   "en": "hyperpop",
+   "ru": "хайперпоп",
+   "batch": "H",
+   "aliases_en": [
+    "hyperpop",
+    "bubblegum bass"
+   ],
+   "aliases_ru": [
+    "хайперпоп"
+   ],
+   "rhythm": [
+    "bouncy",
+    "maximalist hyperpop bounce",
+    "clipped drums, distorted 808"
+   ],
+   "production": [
+    "maximalist brickwall production",
+    "bit-crushed mix"
+   ],
+   "atmosphere": [
+    "pitched-up vocal jumping octaves",
+    "clipped drums slamming the beat",
+    "brash detuned synth riffs",
+    "abrupt switch-up between sections",
+    "vocal jammed in front of the wall",
+    "close clipping, distant glitch tail"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "bright timbre"
+    ],
+    "power": [
+     "playful cheerful delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "euphoric"
+   },
+   "brackets_group": "club",
+   "bpm": "130–160",
+   "examples": [
+    "hyperpop, 130–160, maximalist hyperpop bounce, clipped drums, distorted 808",
+    "hyperpop, female vocals, playful cheerful delivery, euphoric mood",
+    "хайперпоп: bouncy maximalist hyperpop bounce, настроение euphoric"
+   ],
+   "sources": [
+    "arch-32",
+    "web: сигнатуры pitched-up processed vocals, clipped drums, brash detuned synths (ресерч сигнатур #45)"
+   ],
+   "archive_tracks": 32,
+   "archive_favorites": 54
+  },
+  {
+   "family": "j-pop",
+   "en": "j-pop",
+   "ru": "джей-поп",
+   "batch": "H",
+   "aliases_en": [
+    "j-pop",
+    "jpop"
+   ],
+   "aliases_ru": [
+    "джей-поп"
+   ],
+   "rhythm": [
+    "driving",
+    "bright rock-pop drive",
+    "live drums, clean guitar, synth strings"
+   ],
+   "production": [
+    "clean modern production",
+    "wide stereo mix"
+   ],
+   "atmosphere": [
+    "fast syllable delivery riding the beat",
+    "synth strings swelling the chorus",
+    "clean guitar riff under the hook",
+    "key change into the last chorus",
+    "vocal upfront, strings wide behind",
+    "close vocal, distant string swell"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "bright timbre"
+    ],
+    "power": [
+     "playful cheerful delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "euphoric"
+   },
+   "brackets_group": "band",
+   "bpm": "120–150",
+   "examples": [
+    "j-pop, 120–150, bright rock-pop drive, live drums, clean guitar, synth strings",
+    "j-pop, female vocals, playful cheerful delivery, euphoric mood",
+    "джей-поп: driving bright rock-pop drive, настроение euphoric"
+   ],
+   "sources": [
+    "web: жанровая практика"
+   ],
+   "archive_tracks": 16,
+   "archive_favorites": 11
+  },
+  {
+   "family": "new jack swing",
+   "en": "new jack swing",
+   "ru": "нью-джек-свинг",
+   "batch": "H",
+   "aliases_en": [
+    "new jack swing",
+    "swingbeat"
+   ],
+   "aliases_ru": [
+    "нью-джек-свинг"
+   ],
+   "rhythm": [
+    "bouncy",
+    "swingbeat groove",
+    "drum machine, swinging hats, synthetic horns"
+   ],
+   "production": [
+    "clean late-80s production",
+    "punchy midrange"
+   ],
+   "atmosphere": [
+    "swung drum machine driving the beat",
+    "synthetic horn stabs on the turnaround",
+    "rap verse answering the sung hook",
+    "full-stop break before the chorus",
+    "hook upfront, stabs wide behind",
+    "close beat, distant horn stab"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "smooth timbre"
+    ],
+    "power": [
+     "playful cheerful delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "chest register throughout, no falsetto",
+    "mood": "sensual"
+   },
+   "brackets_group": "urban",
+   "bpm": "100–115",
+   "examples": [
+    "new jack swing, 100–115, swingbeat groove, drum machine, swinging hats, synthetic horns",
+    "new jack swing, male vocals, playful cheerful delivery, sensual mood",
+    "нью-джек-свинг: bouncy swingbeat groove, настроение sensual"
+   ],
+   "sources": [
+    "web: жанровая практика"
+   ],
+   "archive_tracks": 0,
+   "archive_favorites": 0
+  },
+  {
+   "family": "miami bass",
+   "en": "miami bass",
+   "ru": "майами-бас",
+   "batch": "H",
+   "aliases_en": [
+    "miami bass",
+    "booty bass"
+   ],
+   "aliases_ru": [
+    "майами-бас"
+   ],
+   "rhythm": [
+    "bouncy",
+    "808 miami bass groove",
+    "808 kick, dirty rap hats"
+   ],
+   "production": [
+    "analog warmth",
+    "punchy low end"
+   ],
+   "atmosphere": [
+    "booming 808 carrying the groove",
+    "chanting hook over the beat",
+    "scratch fills between the bars",
+    "claps on the two and four",
+    "808 close and huge, chant in front",
+    "close 808, distant scratch"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "chest voice"
+    ],
+    "power": [
+     "spoken word"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "staying in the basement throughout, no falsetto and no high-pitched screaming ever",
+    "mood": "urban"
+   },
+   "brackets_group": "urban",
+   "bpm": "115–130",
+   "examples": [
+    "miami bass, 115–130, 808 miami bass groove, 808 kick, dirty rap hats",
+    "miami bass, male vocals, spoken word, urban mood",
+    "майами-бас: bouncy 808 miami bass groove, настроение urban"
+   ],
+   "sources": [
+    "arch-2"
+   ],
+   "archive_tracks": 2,
+   "archive_favorites": 0
+  },
+  {
+   "family": "freestyle",
+   "en": "freestyle",
+   "ru": "фристайл",
+   "batch": "H",
+   "aliases_en": [
+    "freestyle",
+    "latin freestyle"
+   ],
+   "aliases_ru": [
+    "фристайл"
+   ],
+   "rhythm": [
+    "driving",
+    "latin club machine groove",
+    "drum machine, piano stabs"
+   ],
+   "production": [
+    "clean 80s club production",
+    "wide stereo mix"
+   ],
+   "atmosphere": [
+    "tinny drum machine rolling the beat",
+    "piano stabs answering the vocal",
+    "heartbreak hook over the machine beat",
+    "sweet synth pad behind the chorus",
+    "vocal upfront, piano wide behind",
+    "close vocal, distant pad wash"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "bright timbre"
+    ],
+    "power": [
+     "powerful belting"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "emotional"
+   },
+   "brackets_group": "club",
+   "bpm": "105–115",
+   "examples": [
+    "freestyle, 105–115, latin club machine groove, drum machine, piano stabs",
+    "freestyle, female vocals, powerful belting, emotional mood",
+    "фристайл: driving latin club machine groove, настроение emotional"
+   ],
+   "sources": [
+    "arch-17"
+   ],
+   "archive_tracks": 17,
+   "archive_favorites": 0
+  },
+  {
+   "family": "europop",
+   "en": "europop",
+   "ru": "европоп",
+   "batch": "H",
+   "aliases_en": [
+    "europop",
+    "euro-pop"
+   ],
+   "aliases_ru": [
+    "европоп"
+   ],
+   "rhythm": [
+    "driving",
+    "four-on-the-floor pop groove",
+    "synth bass, drum machine"
+   ],
+   "production": [
+    "clean 90s dance production",
+    "wide stereo mix"
+   ],
+   "atmosphere": [
+    "synth hook repeating the title line",
+    "drum machine keeping the four",
+    "male rap bridge answering the chorus",
+    "rave piano break before the last chorus",
+    "vocal upfront, synth hook wide behind",
+    "close vocal, distant rave piano"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "bright timbre"
+    ],
+    "power": [
+     "playful cheerful delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "euphoric"
+   },
+   "brackets_group": "club",
+   "bpm": "120–130",
+   "examples": [
+    "europop, 120–130, four-on-the-floor pop groove, synth bass, drum machine",
+    "europop, female vocals, playful cheerful delivery, euphoric mood",
+    "европоп: driving four-on-the-floor pop groove, настроение euphoric"
+   ],
+   "sources": [
+    "arch-6"
+   ],
+   "archive_tracks": 9,
+   "archive_favorites": 1
+  },
+  {
+   "family": "russian pop",
+   "en": "russian pop",
+   "ru": "русская поп-музыка",
+   "batch": "H",
+   "aliases_en": [
+    "russian pop"
+   ],
+   "aliases_ru": [
+    "русская попса",
+    "русская эстрада",
+    "русская поп-музыка"
+   ],
+   "rhythm": [
+    "clean",
+    "modern pop groove",
+    "pop drums, synth bass"
+   ],
+   "production": [
+    "clean modern production",
+    "wide stereo mix"
+   ],
+   "atmosphere": [
+    "radio-polished lead vocal",
+    "synth pad under the chorus",
+    "drop-chorus with vocal chops",
+    "guitar lick accenting the hook",
+    "vocal upfront, pads wide behind",
+    "close vocal, distant drop wash"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "warm timbre"
+    ],
+    "power": [
+     "confident delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "euphoric"
+   },
+   "brackets_group": "band",
+   "bpm": "95–115",
+   "examples": [
+    "russian pop, 95–115, modern pop groove, pop drums, synth bass",
+    "russian pop, female vocals, confident delivery, euphoric mood",
+    "русская поп-музыка: clean modern pop groove, настроение euphoric"
+   ],
+   "sources": [
+    "arch-47"
+   ],
+   "archive_tracks": 47,
+   "archive_favorites": 33
+  },
+  {
+   "family": "classical",
+   "en": "classical",
+   "ru": "классическая музыка",
+   "batch": "I",
+   "aliases_en": [
+    "classical",
+    "orchestral classical"
+   ],
+   "aliases_ru": [
+    "классика",
+    "классическая музыка"
+   ],
+   "rhythm": [
+    "slow",
+    "orchestral pulse",
+    "timpani and low strings"
+   ],
+   "production": [
+    "wide hall mix",
+    "natural dynamics"
+   ],
+   "atmosphere": [
+    "string section carrying the theme",
+    "woodwinds answering the strings",
+    "timpani rolling under the crescendo",
+    "soloist rising above the ensemble",
+    "close soloist, hall far behind",
+    "strings far back, percussion close"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "register": [
+     "soprano"
+    ],
+    "timbre": [
+     "warm timbre"
+    ],
+    "power": [
+     "stately delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "cinematic"
+   },
+   "brackets_group": "score",
+   "bpm": "60–140",
+   "examples": [
+    "classical, 60–140, orchestral pulse, timpani and low strings",
+    "classical, female vocals, stately delivery, cinematic mood",
+    "классическая музыка: slow orchestral pulse, настроение cinematic"
+   ],
+   "sources": [
+    "arch-239 (частично слово classical в общих текстах)"
+   ],
+   "archive_tracks": 239,
+   "archive_favorites": 168
+  },
+  {
+   "family": "baroque",
+   "en": "baroque",
+   "ru": "барокко",
+   "batch": "I",
+   "aliases_en": [
+    "baroque"
+   ],
+   "aliases_ru": [
+    "барокко"
+   ],
+   "rhythm": [
+    "driving",
+    "baroque terraced pulse",
+    "harpsichord, strings, recorder"
+   ],
+   "production": [
+    "intimate room sound",
+    "natural dynamics"
+   ],
+   "atmosphere": [
+    "harpsichord driving the continuo",
+    "counterpoint weaving the voices",
+    "terraced dynamics flipping the section",
+    "fugal entry on the theme",
+    "close ensemble, dry room",
+    "close harpsichord, distant strings"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "register": [
+     "soprano"
+    ],
+    "timbre": [
+     "bright timbre"
+    ],
+    "power": [
+     "stately delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "cinematic"
+   },
+   "brackets_group": "score",
+   "bpm": "80–130",
+   "examples": [
+    "baroque, 80–130, baroque terraced pulse, harpsichord, strings, recorder",
+    "baroque, female vocals, stately delivery, cinematic mood",
+    "барокко: driving baroque terraced pulse, настроение cinematic"
+   ],
+   "sources": [
+    "arch-14"
+   ],
+   "archive_tracks": 14,
+   "archive_favorites": 10
+  },
+  {
+   "family": "opera",
+   "en": "opera",
+   "ru": "опера",
+   "batch": "I",
+   "aliases_en": [
+    "opera",
+    "aria"
+   ],
+   "aliases_ru": [
+    "опера",
+    "ария"
+   ],
+   "rhythm": [
+    "dramatic",
+    "aria grand pulse",
+    "orchestra, harp"
+   ],
+   "production": [
+    "wide hall mix",
+    "natural dynamics"
+   ],
+   "atmosphere": [
+    "aria rising over the orchestra",
+    "orchestra swelling under the phrase",
+    "recitative dropped to speech before the aria",
+    "coloratura runs on the finale",
+    "voice on top, orchestra far behind",
+    "close voice, distant hall"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "register": [
+     "soprano"
+    ],
+    "power": [
+     "powerful belting"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "emotional"
+   },
+   "brackets_group": "score",
+   "bpm": "60–120",
+   "examples": [
+    "opera, 60–120, aria grand pulse, orchestra, harp",
+    "opera, female vocals, powerful belting, emotional mood",
+    "опера: dramatic aria grand pulse, настроение emotional"
+   ],
+   "sources": [
+    "arch-43"
+   ],
+   "archive_tracks": 83,
+   "archive_favorites": 63
+  },
+  {
+   "family": "gregorian",
+   "en": "gregorian chant",
+   "ru": "григорианский хорал",
+   "batch": "I",
+   "aliases_en": [
+    "gregorian",
+    "gregorian chant",
+    "plainchant"
+   ],
+   "aliases_ru": [
+    "григорианский хорал"
+   ],
+   "rhythm": [
+    "slow",
+    "chant unison flow",
+    "unaccompanied voices, drone"
+   ],
+   "production": [
+    "deep reverb space",
+    "natural dynamics"
+   ],
+   "atmosphere": [
+    "voices in unison over a drone",
+    "modal lines floating without a beat",
+    "cathedral tail holding each phrase",
+    "plainchant answering in octaves",
+    "voices close, endless cathedral tail",
+    "everything suspended in stone"
+   ],
+   "vocal": {
+    "who": [
+     "choir"
+    ],
+    "timbre": [
+     "warm timbre"
+    ],
+    "power": [
+     "stately delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no growl, choral register throughout",
+    "mood": "meditative"
+   },
+   "brackets_group": "score",
+   "bpm": "beatless",
+   "examples": [
+    "gregorian chant, beatless, chant unison flow, unaccompanied voices, drone",
+    "gregorian chant, choir, stately delivery, meditative mood",
+    "григорианский хорал: slow chant unison flow, настроение meditative"
+   ],
+   "sources": [
+    "arch-15"
+   ],
+   "archive_tracks": 15,
+   "archive_favorites": 20
+  },
+  {
+   "family": "waltz",
+   "en": "waltz",
+   "ru": "вальс",
+   "batch": "I",
+   "aliases_en": [
+    "waltz"
+   ],
+   "aliases_ru": [
+    "вальс"
+   ],
+   "rhythm": [
+    "gentle",
+    "three-beat waltz sway",
+    "piano, strings, brushes"
+   ],
+   "production": [
+    "intimate room sound",
+    "natural dynamics"
+   ],
+   "atmosphere": [
+    "oom-pah-pah under the melody",
+    "strings swaying the second theme",
+    "accordion or piano taking the lead",
+    "rubato bending the beat before the turn",
+    "melody close, room one step back",
+    "close piano, distant hall"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "warm timbre"
+    ],
+    "power": [
+     "intimate delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "nostalgic"
+   },
+   "brackets_group": "acoustic",
+   "bpm": "150–180 (три доли)",
+   "examples": [
+    "waltz, 150–180 (три доли), three-beat waltz sway, piano, strings, brushes",
+    "waltz, female vocals, intimate delivery, nostalgic mood",
+    "вальс: gentle three-beat waltz sway, настроение nostalgic"
+   ],
+   "sources": [
+    "arch-41"
+   ],
+   "archive_tracks": 41,
+   "archive_favorites": 41
+  },
+  {
+   "family": "march",
+   "en": "march",
+   "ru": "марш",
+   "batch": "I",
+   "aliases_en": [
+    "march",
+    "military march"
+   ],
+   "aliases_ru": [
+    "марш"
+   ],
+   "rhythm": [
+    "steady",
+    "two-beat striding pulse",
+    "snare drum, brass, cymbals"
+   ],
+   "production": [
+    "live room sound",
+    "natural dynamics"
+   ],
+   "atmosphere": [
+    "snare line rolling under the brass",
+    "brass chord on the strong beat",
+    "counter-melody on the trio section",
+    "cymbal crash on the downbeat",
+    "brass upfront, snare wide behind",
+    "close brass, distant parade field"
+   ],
+   "vocal": {
+    "who": [
+     "male vocals"
+    ],
+    "timbre": [
+     "chest voice"
+    ],
+    "power": [
+     "full-voice delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "chest register throughout, no falsetto",
+    "mood": "heroic"
+   },
+   "brackets_group": "score",
+   "bpm": "110–125",
+   "examples": [
+    "march, 110–125, two-beat striding pulse, snare drum, brass, cymbals",
+    "march, male vocals, full-voice delivery, heroic mood",
+    "марш: steady two-beat striding pulse, настроение heroic"
+   ],
+   "sources": [
+    "arch-8"
+   ],
+   "archive_tracks": 12,
+   "archive_favorites": 1
+  },
+  {
+   "family": "musical theatre",
+   "en": "musical theatre",
+   "ru": "мюзикл",
+   "batch": "I",
+   "aliases_en": [
+    "musical theatre",
+    "showtune",
+    "broadway"
+   ],
+   "aliases_ru": [
+    "мюзикл"
+   ],
+   "rhythm": [
+    "dramatic",
+    "ensemble theatrical pulse",
+    "pit orchestra, piano"
+   ],
+   "production": [
+    "intimate room sound",
+    "wide hall mix"
+   ],
+   "atmosphere": [
+    "verse spoken into song",
+    "orchestra swelling behind the reprise",
+    "ensemble answering the lead",
+    "key lift on the finale",
+    "lead upfront, orchestra wide behind",
+    "close voice, distant pit orchestra"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "bright timbre"
+    ],
+    "power": [
+     "powerful belting"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "emotional"
+   },
+   "brackets_group": "score",
+   "bpm": "70–140",
+   "examples": [
+    "musical theatre, 70–140, ensemble theatrical pulse, pit orchestra, piano",
+    "musical theatre, female vocals, powerful belting, emotional mood",
+    "мюзикл: dramatic ensemble theatrical pulse, настроение emotional"
+   ],
+   "sources": [
+    "web: жанровая практика"
+   ],
+   "archive_tracks": 0,
+   "archive_favorites": 0
+  },
+  {
+   "family": "cabaret",
+   "en": "cabaret",
+   "ru": "кабаре",
+   "batch": "I",
+   "aliases_en": [
+    "cabaret"
+   ],
+   "aliases_ru": [
+    "кабаре"
+   ],
+   "rhythm": [
+    "slow",
+    "cabaret vamp sway",
+    "piano, upright bass, brushed drums"
+   ],
+   "production": [
+    "analog warmth",
+    "intimate room sound"
+   ],
+   "atmosphere": [
+    "vamp repeating under the verse",
+    "piano fills answering the line",
+    "wink-and-smile pauses before the punchline",
+    "brush sweep into the chorus",
+    "voice close, band one room",
+    "close piano, distant applause room"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "velvet tone"
+    ],
+    "power": [
+     "crooned delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "sensual"
+   },
+   "brackets_group": "acoustic",
+   "bpm": "80–110",
+   "examples": [
+    "cabaret, 80–110, cabaret vamp sway, piano, upright bass, brushed drums",
+    "cabaret, female vocals, crooned delivery, sensual mood",
+    "кабаре: slow cabaret vamp sway, настроение sensual"
+   ],
+   "sources": [
+    "arch-20"
+   ],
+   "archive_tracks": 28,
+   "archive_favorites": 17
+  },
+  {
+   "family": "lounge",
+   "en": "lounge",
+   "ru": "лаундж",
+   "batch": "I",
+   "aliases_en": [
+    "lounge",
+    "exotica"
+   ],
+   "aliases_ru": [
+    "лаундж"
+   ],
+   "rhythm": [
+    "smooth",
+    "exotica sway groove",
+    "vibraphone, nylon guitar, soft bongos"
+   ],
+   "production": [
+    "analog warmth",
+    "wide stereo mix"
+   ],
+   "atmosphere": [
+    "vibraphone rolling the melody",
+    "soft bongos ticking the sway",
+    "string pad floating behind",
+    "wordless vocalise answering the theme",
+    "vibes close, pad far behind",
+    "close theme, distant tiki room"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "velvet tone"
+    ],
+    "power": [
+     "laid-back delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "sensual"
+   },
+   "brackets_group": "mellow",
+   "bpm": "85–105",
+   "examples": [
+    "lounge, 85–105, exotica sway groove, vibraphone, nylon guitar, soft bongos",
+    "lounge, female vocals, laid-back delivery, sensual mood",
+    "лаундж: smooth exotica sway groove, настроение sensual"
+   ],
+   "sources": [
+    "arch-52"
+   ],
+   "archive_tracks": 52,
+   "archive_favorites": 87
+  },
+  {
+   "family": "easy listening",
+   "en": "easy listening",
+   "ru": "эстрадный лёгкий жанр",
+   "batch": "I",
+   "aliases_en": [
+    "easy listening"
+   ],
+   "aliases_ru": [
+    "лёгкая музыка",
+    "эстрада",
+    "эстрадный лёгкий жанр"
+   ],
+   "rhythm": [
+    "gentle",
+    "string sway groove",
+    "strings, soft drums, piano"
+   ],
+   "production": [
+    "analog warmth",
+    "wide stereo mix"
+   ],
+   "atmosphere": [
+    "string section sweeping the melody",
+    "soft drums barely tapping",
+    "harp glissando between phrases",
+    "wordless vocalise over the bridge",
+    "melody close, strings wide behind",
+    "close vocal, distant harp gliss"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "warm timbre"
+    ],
+    "power": [
+     "laid-back delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "warm"
+   },
+   "brackets_group": "mellow",
+   "bpm": "80–100",
+   "examples": [
+    "easy listening, 80–100, string sway groove, strings, soft drums, piano",
+    "easy listening, female vocals, laid-back delivery, warm mood",
+    "эстрадный лёгкий жанр: gentle string sway groove, настроение warm"
+   ],
+   "sources": [
+    "web: жанровая практика"
+   ],
+   "archive_tracks": 0,
+   "archive_favorites": 0
+  },
+  {
+   "family": "lullaby",
+   "en": "lullaby",
+   "ru": "колыбельная",
+   "batch": "I",
+   "aliases_en": [
+    "lullaby"
+   ],
+   "aliases_ru": [
+    "колыбельная"
+   ],
+   "rhythm": [
+    "gentle",
+    "rocking three-beat sway",
+    "music box, soft piano"
+   ],
+   "production": [
+    "intimate room sound",
+    "natural dynamics"
+   ],
+   "atmosphere": [
+    "music box opening the theme",
+    "harp or celesta twinkling",
+    "voice barely above the accompaniment",
+    "fade to a single sustained chord",
+    "voice close, room silent behind",
+    "close breath, distant music box"
+   ],
+   "vocal": {
+    "who": [
+     "female vocals"
+    ],
+    "timbre": [
+     "breathy tone"
+    ],
+    "power": [
+     "whispered delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "dreamy"
+   },
+   "brackets_group": "mellow",
+   "bpm": "55–70",
+   "examples": [
+    "lullaby, 55–70, rocking three-beat sway, music box, soft piano",
+    "lullaby, female vocals, whispered delivery, dreamy mood",
+    "колыбельная: gentle rocking three-beat sway, настроение dreamy"
+   ],
+   "sources": [
+    "arch-10"
+   ],
+   "archive_tracks": 10,
+   "archive_favorites": 5
+  },
+  {
+   "family": "children music",
+   "en": "children music",
+   "ru": "детская музыка",
+   "batch": "I",
+   "aliases_en": [
+    "children music",
+    "kids song",
+    "nursery rhyme"
+   ],
+   "aliases_ru": [
+    "детская песня",
+    "детская музыка"
+   ],
+   "rhythm": [
+    "bouncy",
+    "sing-along bounce",
+    "ukulele, hand claps, xylophone"
+   ],
+   "production": [
+    "dry close-mic production",
+    "natural dynamics"
+   ],
+   "atmosphere": [
+    "xylophone bouncing the melody",
+    "sing-along chorus repeated twice",
+    "claps on every second beat",
+    "playful sound-effect accents",
+    "voice close, claps wide behind",
+    "close ukulele, distant claps"
+   ],
+   "vocal": {
+    "who": [
+     "child-like vocals"
+    ],
+    "timbre": [
+     "bright timbre"
+    ],
+    "power": [
+     "playful cheerful delivery"
+    ],
+    "technique": [],
+    "character": [],
+    "processing": [],
+    "guard": "no male growl, staying in her register",
+    "mood": "cheerful"
+   },
+   "brackets_group": "band",
+   "bpm": "100–130",
+   "examples": [
+    "children music, 100–130, sing-along bounce, ukulele, hand claps, xylophone",
+    "children music, child-like vocals, playful cheerful delivery, cheerful mood",
+    "детская музыка: bouncy sing-along bounce, настроение cheerful"
+   ],
+   "sources": [
+    "arch-3"
+   ],
+   "archive_tracks": 4,
+   "archive_favorites": 2
+  }
+ ]
+}
