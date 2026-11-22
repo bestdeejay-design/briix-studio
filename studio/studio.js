@@ -103,9 +103,18 @@
       throw new BusError(code, message, response.status);
     }
     if (response.status === 429 || response.status === 503) {
-      const error = response.status === 429
+      // Инцидент 21.11 (#36): 429 умеет отдавать не только bff (честная очередь
+      // с конвертом {error:{code:'queue_full'}}), но и фронт хоста при деградации —
+      // тело пустое или HTML. «Очередь заполнена» говорим только когда это
+      // подтвердил сам bff; фронтовой 429 честно зовём перегрузкой сервера.
+      let payload = null;
+      try { payload = await response.json(); } catch { /* фронт: тело не JSON */ }
+      const bffQueue = response.status === 429 && payload?.error?.code === 'queue_full';
+      const error = bffQueue
         ? new BusError('queue_full', 'Очередь сервера заполнена.', 429)
-        : new BusError('unavailable', 'Сервер или бэкенд недоступен.', 503);
+        : new BusError(response.status === 429 ? 'server_busy' : 'unavailable',
+          response.status === 429 ? 'Сервер перегружен или временно недоступен. Попробуйте ещё раз через минуту.' : 'Сервер или бэкенд недоступен.',
+          response.status);
       error.retryAfter = response.headers.get('Retry-After');
       throw error;
     }
@@ -1190,6 +1199,7 @@
     if (error.code === 'network') return 'Нет соединения';
     if (error.code === 'unauthorized') return 'Ключ';
     if (error.code === 'queue_full' || error.code === 'unavailable') return 'Сервер занят';
+    if (error.code === 'server_busy') return 'Сервер перегружен';
     if (error.code === 'job_gone' || error.code === 'expired') return 'Файл устарел';
     if (error.code === 'timeout') return 'Долго нет ответа';
     if (error.code === 'bad_response' || error.code === 'empty_stream') return 'Сервер ответил странно';
