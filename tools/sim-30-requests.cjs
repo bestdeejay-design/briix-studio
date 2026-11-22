@@ -213,36 +213,36 @@ const SCENARIOS = [
   { id: '01-ru-synthwave', path: 'simple', name: 'RU-идея synthwave → EN-лирика по дефолту',
     idea: 'тёмный synthwave про ночную трассу',
     expect: { family: 'synthwave', language: 'en', moodLine: 'nostalgic', warnings: [] } },
-  { id: '02-ru-explicit-ru', path: 'simple', name: 'RU-идея «на русском» → RU-лирика',
+  { id: '02-ru-explicit-ru', path: 'simple', name: 'RU-идея «на русском» → RU-лирика (Н1: жанр из перевода)',
     idea: 'грустная песня на русском про осень и дожди',
-    expect: { language: 'ru', warnings: [] } },
-  { id: '03-ru-fast-desync', path: 'simple', name: 'джангл 170 BPM + «на русском» → десинк-гарда',
+    expect: { family: 'ballad', moodLine: 'emotional', language: 'ru', warnings: [] } },
+  { id: '03-ru-fast-desync', path: 'simple', name: 'джангл 170 BPM + «на русском» → десинк-гарда (Н2: drum and bass)',
     idea: 'быстрый джангл 170 BPM, песню на русском',
-    expect: { language: 'ru', warnings: ['desync'] } },
+    expect: { family: 'drum and bass', moodLine: 'euphoric', language: 'ru', warnings: ['desync'] } },
   { id: '04-en-techno', path: 'simple', name: 'EN-идея melodic techno (без перевода)',
     idea: 'melodic techno, 125 BPM, hypnotic pads',
     expect: { family: 'techno', language: 'en', warnings: [] } },
   { id: '05-no-genre', path: 'simple', name: 'RU-идея без жанра (кот на подоконнике)',
     idea: 'песня про кота, который спит на подоконнике',
     expect: { language: 'en', warnings: [] } },
-  { id: '06-eurodance-artist', path: 'simple', name: '«в стиле Руки Вверх» + мужской голос (евродэнц вне 23 семейств)',
+  { id: '06-eurodance-artist', path: 'simple', name: '«в стиле Руки Вверх» + мужской голос (Н2: eurodance из RU-стема)',
     idea: 'весёлый евродэнс в стиле Руки Вверх, мужской голос, 150 BPM',
-    expect: { language: 'en', warnings: ['artist-lyrics'] } },
+    expect: { family: 'eurodance', moodLine: 'euphoric', language: 'en', warnings: ['artist-lyrics'] } },
   { id: '07-french', path: 'simple', name: '«на французском» → FR-лирика, без params.language',
     idea: 'песня на французском про Париж и дождь',
     expect: { language: null, lyricsTag: 'French lyrics', warnings: [] } },
-  { id: '08-metallica', path: 'simple', name: '«как у Metallica» — имя артиста в идее',
+  { id: '08-metallica', path: 'simple', name: '«как у Metallica» — имя в идее (Н1+Н2: heavy metal из перевода)',
     idea: 'тяжёлый трек как у Metallica',
-    expect: { language: 'en', warnings: [] } },
+    expect: { family: 'heavy metal', moodLine: 'aggressive', language: 'en', warnings: [] } },
   { id: '09-trap-male', path: 'simple', name: 'RU-идея трэп + «мужской голос»',
     idea: 'трэп 140 BPM про ночной город, мужской голос',
     expect: { family: 'trap', language: 'en', warnings: [] } },
   { id: '10-girl-pop', path: 'simple', name: '«девичий поп» → женский профиль',
     idea: 'девичий поп, грустный, 100 BPM',
     expect: { family: 'pop', language: 'en', warnings: [] } },
-  { id: '11-cinematic', path: 'simple', name: 'эпичная киномузыка (хор, семейство cinematic)',
+  { id: '11-cinematic', path: 'simple', name: 'эпичная киномузыка (Н2: RU-стем киномузык → cinematic)',
     idea: 'эпичная киномузыка для финальной битвы',
-    expect: { family: 'cinematic', language: 'en', warnings: [] } },
+    expect: { family: 'cinematic', moodLine: 'cinematic', language: 'en', warnings: [] } },
   { id: '12-markdown-mess', path: 'simple', name: 'markdown-мусор в идее (sanitize)',
     idea: '**"Мощный динамичный трек с басом"**, 90 BPM, техно',
     expect: { language: 'en', warnings: [] } },
@@ -261,14 +261,14 @@ const SCENARIOS = [
     idea: 'dream pop, 90 BPM, female vocals',
     lyrics: '[Intro]\n[Verse 1]\nSilver morning through the curtain lace\nQuiet coffee, letters I don\'t send\n[Pre-Chorus]\nAnd the day begins to hum\n[Chorus]\nSlow light, hold me in the haze\nSlow light, endless summer days\n[Verse 2]\nSilver morning through the curtain lace\nQuiet coffee, letters I don\'t send\n[Chorus]\nSlow light, hold me in the haze\nSlow light, endless summer days\n[Bridge]\nFade the city, fade the noise\n[Final Chorus]\nSlow light, hold me in the haze\nSlow light, endless summer days\n[Outro]',
     expect: { family: 'dream pop', language: 'en', promptUntouched: true, warnings: [] } },
-  { id: '17-adv-ru-fast', path: 'advanced', name: 'RU-лирика на 170 BPM → десинк-гарда',
+  { id: '17-adv-ru-fast', path: 'advanced', name: 'RU-лирика на 170 BPM → десинк-гарда (Н2: брейкбиты вместо generic)',
     idea: 'джангл, 170 BPM, быстрая сетка',
     lyrics: '[Verse 1]\nГород спит и фонари гаснут\n[Chorus]\nА я не сплю\n[Verse 2]\nГород спит и фонари гаснут\n[Chorus]\nА я не сплю',
-    expect: { language: 'ru', warnings: ['desync'] } },
-  { id: '18-adv-ru-ballad', path: 'advanced', name: 'та же RU-лирика на 80 BPM → гарда молчит',
+    expect: { family: 'drum and bass', language: 'ru', warnings: ['desync'] } },
+  { id: '18-adv-ru-ballad', path: 'advanced', name: 'та же RU-лирика на 80 BPM → гарда молчит (Н1: ballad из перевода)',
     idea: 'лирическая баллада, 80 BPM',
     lyrics: '[Verse 1]\nГород спит и фонари гаснут\n[Chorus]\nА я не сплю\n[Verse 2]\nГород спит и фонари гаснут\n[Chorus]\nА я не сплю',
-    expect: { language: 'ru', warnings: [] } },
+    expect: { family: 'ballad', language: 'ru', warnings: [] } },
   { id: '19-adv-hook-drift', path: 'advanced', name: 'разные припевы → предупреждение хука',
     idea: 'dream pop, 100 BPM',
     lyrics: '[Verse 1]\nстрока один\n[Chorus]\nПрипев с ветром\n[Verse 2]\nстрока один\n[Chorus]\nПрипев с дождём',
@@ -289,14 +289,14 @@ const SCENARIOS = [
     idea: 'trip-hop, 95 BPM',
     lyrics: '[Verse 1]\nТени на стенах старого дома\nCity lights are humming low\n[Chorus]\nНочь держит меня\nCity lights are humming low\n[Verse 2]\nТени на стенах старого дома\nCity lights are humming low\n[Chorus]\nНочь держит меня\nCity lights are humming low',
     expect: { family: 'trip-hop', language: 'ru', promptUntouched: true, warnings: [] } },
-  { id: '24-adv-artist-lyrics', path: 'advanced', name: '«в стиле Кино» + слово «кино» в лирике → проверка утечки имени',
+  { id: '24-adv-artist-lyrics', path: 'advanced', name: '«в стиле Кино» + слово «кино» в лирике (Н3: title без дыры посередине)',
     idea: 'рок в стиле Кино, 120 BPM',
     lyrics: '[Verse 1]\nМы смотрели кино до утра\n[Chorus]\nНочные окна\n[Verse 2]\nМы смотрели кино до утра\n[Chorus]\nНочные окна',
-    expect: { language: 'ru', warnings: ['artist-lyrics'] } },
-  { id: '25-adv-metal-ru', path: 'advanced', name: '«брутальный металл» (металл вне 23 семейств) + рык',
+    expect: { family: 'rock', language: 'ru', title: 'Ночные окна', warnings: ['artist-lyrics'] } },
+  { id: '25-adv-metal-ru', path: 'advanced', name: '«брутальный металл» + рык (Н2: heavy metal из RU-стема)',
     idea: 'брутальный металл, рык, 145 BPM',
     lyrics: '[Verse 1]\nСталь и пепел на моём пути\n[Chorus]\nЯрость рвётся наружу\n[Verse 2]\nСталь и пепел на моём пути\n[Chorus]\nЯрость рвётся наружу',
-    expect: { language: 'ru', warnings: [] } },
+    expect: { family: 'heavy metal', language: 'ru', warnings: [] } },
   // ===== Чат-наставник → черновик → генерация =================================
   { id: '26-mentor-dreampop', path: 'mentor', name: 'наставник: дрим-поп черновик → Принять → Сгенерировать',
     chat: 'хочу мечтательный дрим-поп про звёзды',
@@ -478,14 +478,18 @@ const ASCII = s => !/[^\x00-\x7F]/.test(s);
       // ложные срабатывания
       if (!warns.length && /Мелодичность лирики|Структура лирики|Припевы различаются|Имя исполнителя в тексте/.test(noticeText))
         rec.notes.push('предупреждение вне ожиданий: ' + noticeText.slice(0, 160));
-      // семейство и слои
+      // семейство, слои и атмосфера (Н1/Н2 #51): ожидания стали строгими —
+      // семейный голос/настроение больше не могут молча потеряться.
       if (sc.expect.family) {
         const famOk = (rec.badges.join(' ') + ' ' + post.prompt).toLowerCase().includes(sc.expect.family)
           || (rec.songwriterPrompt?.atmosphere || '').toLowerCase().includes(sc.expect.family);
-        if (!famOk) rec.notes.push('семейство ' + sc.expect.family + ' не видно в сборке');
+        if (!famOk) fail('семейство ' + sc.expect.family + ' не видно в сборке (бейджи: ' + rec.badges.join(' | ') + ')');
       }
-      if (sc.expect.moodLine && rec.songwriterPrompt && !(rec.songwriterPrompt.atmosphere || '').includes(sc.expect.moodLine))
-        rec.notes.push('атмосфера автору песен: ' + rec.songwriterPrompt.atmosphere + ' (ожидали ' + sc.expect.moodLine + ')');
+      if (sc.expect.moodLine !== undefined && rec.songwriterPrompt
+        && !(rec.songwriterPrompt.atmosphere || '').includes(sc.expect.moodLine))
+        fail('атмосфера автору песен: ' + (rec.songwriterPrompt.atmosphere || 'null') + ' (ожидали ' + sc.expect.moodLine + ')');
+      if (sc.expect.title && par.title !== sc.expect.title)
+        fail('title: ' + JSON.stringify(par.title) + ' (ожидали ' + JSON.stringify(sc.expect.title) + ')');
       if (sc.expect.promptUntouched && post.prompt !== sc.idea) fail('авторский ASCII-промт переписан: ' + post.prompt.slice(0, 80));
       if (sc.expect.brainPending) {
         if (!badges.some(b => /Промт собран мозгом/.test(b))) fail('нет плашки слоёв мозга (brainPending-путь)');

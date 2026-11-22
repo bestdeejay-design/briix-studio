@@ -38,7 +38,7 @@ vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../studio/producer-brai
 const guardSrc = studioSrc.match(/\/\/ >>> chat-draft-guard[^\n]*\n([\s\S]*?)\/\/ <<< chat-draft-guard/);
 assert.ok(guardSrc, 'маркеры chat-draft-guard в studio.js на месте');
 vm.runInNewContext(guardSrc[1], scope);
-const { guardMusicDraft, extractArtistRefs } = scope;
+const { guardMusicDraft, extractArtistRefs, stripArtistNameAtEdges, rebuildTitleWithoutNames } = scope;
 
 // Ссылки на артиста извлекаются из идеи.
 const refsEq = (idea, expected, msg) => assert.equal(JSON.stringify(extractArtistRefs(idea)), JSON.stringify(expected), msg);
@@ -95,5 +95,31 @@ assert.match(g.draft.lyrics, /Hands up/, 'текст не переписывае
 // Чистая лирика без имён — предупреждений нет (ложных срабатываний не плодим).
 const h = guardMusicDraft({ title: 'Осень', prompt: 'eurodance', lyrics: '[Verse]\nпросто строка', style: 'edm' }, 'песня про осень');
 assert.equal(h.warnings.length, 0, 'чистая лирика — без предупреждений');
+
+// 7) Н3 (симуляция #51): имя из названия не вырезается из середины фразы —
+//    «Мы смотрели кино до утра» больше не превращается в битое «Мы смотрели
+//    до утра»; название пересобирается из чистой строки лирики.
+assert.equal(stripArtistNameAtEdges('Мы смотрели кино до утра', ['Кино']), '',
+  'имя в середине → пустой остаток (сигнал пересборки), не битая фраза');
+assert.equal(stripArtistNameAtEdges('Кино — ночная песня', ['Кино']), '— ночная песня'.replace('— ', ''),
+  'имя на краю → честный срез края'); // → 'ночная песня'
+assert.equal(stripArtistNameAtEdges('Руки Вверх Style Party', ['Руки Вверх']), 'Style Party',
+  'псевдоним на краю срезается, содержательная часть названия остаётся');
+assert.equal(stripArtistNameAtEdges('Песня про кино', ['Кино']), 'Песня',
+  'свисающий предлог после среза тоже уходит');
+assert.equal(stripArtistNameAtEdges('Песня про осень', ['Кино']), 'Песня про осень',
+  'чистое название не трогается');
+assert.equal(rebuildTitleWithoutNames('Мы смотрели кино до утра',
+  { names: ['Кино'], lyrics: '[Verse 1]\nМы смотрели кино до утра\n[Chorus]\nНочные окна', idea: 'рок в стиле Кино, 120 BPM', style: 'rock' }),
+  'Ночные окна', 'пересборка: первая чистая строка лирики вместо дыры посередине');
+assert.equal(rebuildTitleWithoutNames('Моя песня про кино и дождь',
+  { names: ['Кино'], lyrics: '', idea: 'рок в стиле Кино, 120 BPM', style: 'rock' }),
+  'Рок 120 BPM', 'пересборка: тема идеи без фразы-ссылки');
+assert.equal(rebuildTitleWithoutNames('навсегда Portishead в сердце',
+  { names: ['Portishead'], lyrics: '', idea: 'трек в духе Portishead', style: 'trip-hop' }),
+  'Trip-Hop', 'пересборка: фолбэк на семейство стиля');
+assert.equal(rebuildTitleWithoutNames('навсегда Portishead в сердце',
+  { names: ['Portishead'], lyrics: '', idea: 'трек в духе Portishead', style: null }),
+  '', 'пересборка не удалась — вызывающий ставит свой fallback');
 
 console.log('check-chat-draft: OK');

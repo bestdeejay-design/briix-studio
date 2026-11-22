@@ -7,10 +7,13 @@
   // (ключи STYLE_ATMOSPHERE в studio/music-brain.js). Резолвер отдаёт семейство,
   // а не имя артиста: имена не попадают ни в prompt, ни в лирику.
   // Паритет списков проверяется тестом (tools/check-music-brain.cjs).
+  // Н2 (симуляция #51): +heavy metal/eurodance/drum and bass — профили §2
+  // справки vocal-profile-vocabulary.md (Metallica, Руки Вверх, джангл).
   const STYLE_FAMILIES = [
     'psychedelic soul', 'soul', 'funk', 'dream pop', 'pop', 'rock', 'techno', 'tech house',
     'house', 'trap', 'rap', 'hip-hop', 'lo-fi', 'ambient', 'cinematic', 'orchestral',
-    'jazz', 'ballad', 'edm', 'synthwave', 'trip-hop', 'r&b', 'folk'
+    'jazz', 'ballad', 'edm', 'synthwave', 'trip-hop', 'r&b', 'folk',
+    'heavy metal', 'eurodance', 'drum and bass'
   ];
   function normalizeStyle(value) {
     const key = String(value == null ? '' : value).toLowerCase().trim().replace(/\s+/g, ' ');

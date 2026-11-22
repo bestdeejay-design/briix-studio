@@ -42,13 +42,13 @@
   },
   {
     "id": "02-ru-explicit-ru",
-    "name": "RU-идея «на русском» → RU-лирика",
+    "name": "RU-идея «на русском» → RU-лирика (Н1: жанр из перевода)",
     "path": "simple",
     "ok": true,
     "problems": [],
     "notes": [],
     "post": {
-      "prompt": "sad acoustic ballad, autumn mood, soft piano, warm male vocals, 80 BPM, clean tone, dry upfront vocal, Russian lyrics, steady drum groove (kick + snare), rain atmosphere, analog warmth, front-to-back depth, near and far layers, melancholic, lyrics about rain",
+      "prompt": "sad acoustic ballad, autumn mood, soft piano, warm male vocals, 80 BPM, mature male vocals, warm timbre, intimate soft delivery, melodic pop phrasing, close-mic dry vocal, chest register throughout, no falsetto, Russian lyrics, slow sparse ballad groove (soft kick + brushes), rain atmosphere, intimate close-mic production, analog reverb, long plate behind the piano, intimate close-mic vocal, vocal close, strings far behind, melancholic, lyrics about rain",
       "params": {
         "model": "ace-step-flash",
         "title": "Листья падают на мокрый асфальт",
@@ -57,18 +57,18 @@
         "lyrics": "[Intro: fingerpicked guitar, warm and close]\n[Verse 1]\nЛистья падают на мокрый асфальт\nТёплый свет из окон поздний час\n[Pre-Chorus: brushes swelling, piano rising]\nЯ иду сквозь тишину\n[Chorus]\nОсень в моих глазах\nДождь на моих плечах\n[Verse 2: drums drop out, bass and piano only]\nЛистья падают на мокрый асфальт\nТёплый свет из окон поздний час\n[Chorus]\nОсень в моих глазах\nДождь на моих плечах\n[Bridge: wide stereo echo, distant strings answer]\nТише, тише, лето спит\n[Final Chorus: strings soar, bigger harmonies]\nОсень в моих глазах\nДождь на моих плечах\n[Outro: guitar slows to a whispered end]"
       }
     },
-    "promptLen": 258,
+    "promptLen": 458,
     "notices": [],
     "draftWarnings": [],
     "badges": [
-      "Промт собран мозгом: 5 слоёв.",
-      "Голос: нейтральный профиль",
+      "Промт собран мозгом: 6 слоёв.",
+      "Голос из стиля: ballad",
       "Аранжировка размечена: 6 секций"
     ],
     "pageErrors": [],
     "songwriterPrompt": {
       "language": "ru",
-      "atmosphere": null
+      "atmosphere": "emotional (ballad)"
     },
     "translated": "грустная песня на русском про осень и дожди",
     "brackets": {
@@ -83,22 +83,22 @@
   },
   {
     "id": "03-ru-fast-desync",
-    "name": "джангл 170 BPM + «на русском» → десинк-гарда",
+    "name": "джангл 170 BPM + «на русском» → десинк-гарда (Н2: drum and bass)",
     "path": "simple",
     "ok": true,
     "problems": [],
     "notes": [],
     "post": {
-      "prompt": "jungle, 170 BPM, fast chopped breakbeats, deep sub bass, male vocals, clean tone, dry upfront vocal, Russian lyrics, fast steady drum groove (kick + snare), analog warmth, dry foreground, wide room behind, atmospheric",
+      "prompt": "jungle, 170 BPM, fast chopped breakbeats, deep sub bass, soulful female vocals, bright timbre, confident delivery, melodic pop phrasing, dry upfront vocal, no male growl, staying in her register, Russian lyrics, drum and bass, fast chopped breakbeats (chopped breakbeats, deep sub-bass), clean modern production, punchy low end, chopped breakbeats rolling over a sub-bass line, dub delay stabs answered by the break, break up close, sub-bass far below, euphoric",
       "params": {
         "model": "ace-step-flash",
         "title": "Город спит и фонари гаснут",
         "artist": "tester",
         "language": "ru",
-        "lyrics": "[Intro: drums only build, atmosphere entering]\n[Verse 1]\nГород спит и фонари гаснут\nБыстрый пульс неоновых снов\n[Pre-Chorus: slow build, riser swell]\nНочь несёт меня\n[Chorus]\nБыстрее света я лечу\nБыстрее света я молчу\n[Verse 2: breakdown to a whisper]\nГород спит и фонари гаснут\nБыстрый пульс неоновых снов\n[Chorus]\nБыстрее света я лечу\nБыстрее света я молчу\n[Bridge: cathedral reverb tail]\nСтоп, дыхание, стоп\n[Final Chorus: full-band lift, gang vocals]\nБыстрее света я лечу\nБыстрее света я молчу\n[Outro: beat fades, echo tail remains]"
+        "lyrics": "[Intro: filter slowly opening over kick]\n[Verse 1]\nГород спит и фонари гаснут\nБыстрый пульс неоновых снов\n[Pre-Chorus: hi-hats doubling, tension rising]\nНочь несёт меня\n[Chorus]\nБыстрее света я лечу\nБыстрее света я молчу\n[Verse 2: breakdown to pads and clap echoes]\nГород спит и фонари гаснут\nБыстрый пульс неоновых снов\n[Chorus]\nБыстрее света я лечу\nБыстрее света я молчу\n[Bridge: tape saturation, warm hiss]\nСтоп, дыхание, стоп\n[Final Chorus: double-time hats, bigger bass]\nБыстрее света я лечу\nБыстрее света я молчу\n[Outro: elements peel away, filter closing]"
       }
     },
-    "promptLen": 217,
+    "promptLen": 461,
     "notices": [
       {
         "title": "Мелодичность лирики",
@@ -107,23 +107,23 @@
     ],
     "draftWarnings": [],
     "badges": [
-      "Промт собран мозгом: 5 слоёв.",
-      "Голос: нейтральный профиль",
+      "Промт собран мозгом: 6 слоёв.",
+      "Голос из стиля: drum and bass",
       "Аранжировка размечена: 6 секций"
     ],
     "pageErrors": [],
     "songwriterPrompt": {
       "language": "ru",
-      "atmosphere": null
+      "atmosphere": "euphoric (drum and bass)"
     },
     "translated": "быстрый джангл 170 BPM, песню на русском",
     "brackets": {
       "count": 6,
       "sample": [
-        "[Intro: drums only build, atmosphere entering]",
-        "[Pre-Chorus: slow build, riser swell]",
-        "[Verse 2: breakdown to a whisper]",
-        "[Bridge: cathedral reverb tail]"
+        "[Intro: filter slowly opening over kick]",
+        "[Pre-Chorus: hi-hats doubling, tension rising]",
+        "[Verse 2: breakdown to pads and clap echoes]",
+        "[Bridge: tape saturation, warm hiss]"
       ]
     }
   },
@@ -176,7 +176,7 @@
     "problems": [],
     "notes": [],
     "post": {
-      "prompt": "warm cozy pop song about a sleeping cat, soft acoustic guitar, gentle female vocals, 90 BPM, clean tone, dry upfront vocal, English lyrics, steady drum groove (kick + snare), analog warmth, dry foreground, wide room behind, atmospheric",
+      "prompt": "warm cozy pop song about a sleeping cat, soft acoustic guitar, gentle female vocals, 90 BPM, young female vocals, soprano, bright timbre, confident delivery, melodic pop phrasing, radio-polished, no male growl, staying in her register, English lyrics, clean steady pop groove (kick + snare, claps), clean modern production, wide stereo mix, short plate on the snare, dry upfront vocal, close drums, pads far behind, euphoric",
       "params": {
         "model": "ace-step-flash",
         "title": "Sunlight spills across the windowsill",
@@ -185,18 +185,18 @@
         "lyrics": "[Intro: clean guitar riff, kick counting in]\n[Verse 1]\nSunlight spills across the windowsill\nFur like honey, paws are twitching slow\n[Pre-Chorus: guitars opening up, slow build]\nLittle dreams of chasing string\n[Chorus]\nSleepy cat, drift away\nSleepy cat, stay all day\n[Verse 2: stripped to piano and vocal]\nSunlight spills across the windowsill\nFur like honey, paws are twitching slow\n[Chorus]\nSleepy cat, drift away\nSleepy cat, stay all day\n[Bridge: tape saturation, warm room hiss]\nPurr a little softer now\n[Final Chorus: full-band lift, gang vocals]\nSleepy cat, drift away\nSleepy cat, stay all day\n[Outro: acoustic strum to silence]"
       }
     },
-    "promptLen": 235,
+    "promptLen": 424,
     "notices": [],
     "draftWarnings": [],
     "badges": [
-      "Промт собран мозгом: 5 слоёв.",
-      "Голос: нейтральный профиль",
+      "Промт собран мозгом: 6 слоёв.",
+      "Голос из стиля: pop",
       "Аранжировка размечена: 6 секций"
     ],
     "pageErrors": [],
     "songwriterPrompt": {
       "language": "en",
-      "atmosphere": null
+      "atmosphere": "euphoric (pop)"
     },
     "translated": "песня про кота, который спит на подоконнике",
     "brackets": {
@@ -211,47 +211,47 @@
   },
   {
     "id": "06-eurodance-artist",
-    "name": "«в стиле Руки Вверх» + мужской голос (евродэнц вне 23 семейств)",
+    "name": "«в стиле Руки Вверх» + мужской голос (Н2: eurodance из RU-стема)",
     "path": "simple",
     "ok": true,
     "problems": [],
     "notes": [],
     "post": {
-      "prompt": "energetic eurodance, 90s euro-pop, catchy male vocals, 150 BPM, clean tone, cheerful, dry upfront vocal, chest voice, register never rises, English lyrics, steady drum groove (kick + snare), analog warmth, close drums, distant reverb wash, atmospheric",
+      "prompt": "energetic eurodance, 90s euro-pop, catchy male vocals, 150 BPM, bright boyish tenor, 90s euro-pop timbre, playful cheerful delivery, melodic pop phrasing, dry upfront vocal, chest voice, register never rises, chest register throughout, no falsetto, English lyrics, driving four-on-the-floor kick groove (punchy kick + claps, offbeat rave bass), clean 90s dance production, wide stereo mix, hoover rave lead in the drop, gated drum machine, dry kick close, pad wash far behind, euphoric",
       "params": {
         "model": "ace-step-flash",
         "title": "Neon disco flashing in my eyes",
         "artist": "tester",
         "language": "en",
-        "lyrics": "[Intro: clean guitar riff, kick counting in]\n[Verse 1]\nNeon disco flashing in my eyes\nSummer heat is calling us outside\n[Pre-Chorus: floor tom build, cymbal swell]\nTurn the volume up tonight\n[Chorus]\nDance with me until the sunrise\nDance with me, we touch the sky\n[Verse 2: drums drop out, bass and guitar only]\nNeon disco flashing in my eyes\nSummer heat is calling us outside\n[Chorus]\nDance with me until the sunrise\nDance with me, we touch the sky\n[Bridge: cathedral reverb on the last line]\nHands up high, the night is ours\n[Final Chorus: key change up, wider harmonies]\nDance with me until the sunrise\nDance with me, we touch the sky\n[Outro: acoustic strum to silence]"
+        "lyrics": "[Intro: filter slowly opening over kick]\n[Verse 1]\nNeon disco flashing in my eyes\nSummer heat is calling us outside\n[Pre-Chorus: hi-hats doubling, tension rising]\nTurn the volume up tonight\n[Chorus]\nDance with me until the sunrise\nDance with me, we touch the sky\n[Verse 2: drums drop out, bass only groove]\nNeon disco flashing in my eyes\nSummer heat is calling us outside\n[Chorus]\nDance with me until the sunrise\nDance with me, we touch the sky\n[Bridge: big room reverb on claps]\nHands up high, the night is ours\n[Final Chorus: double-time hats, bigger bass]\nDance with me until the sunrise\nDance with me, we touch the sky\n[Outro: beat runs out, reverb tail only]"
       }
     },
-    "promptLen": 251,
+    "promptLen": 485,
     "notices": [
       {
         "title": "Имя исполнителя в тексте песни",
-        "text": "Имя (Руки Вверх) звучит в лирике — модель может принять его за отсылку к исполнителю. Проверьте текст: имена не должны попадать в лирику."
+        "text": "В лирике есть слово, совпавшее с именем исполнителя (Руки Вверх) — возможно, это обычное слово, а не отсылка. Если всё же это отсылка («в стиле», «как у»), её лучше убрать: имена не должны попадать в лирику."
       }
     ],
     "draftWarnings": [],
     "badges": [
-      "Промт собран мозгом: 5 слоёв.",
+      "Промт собран мозгом: 6 слоёв.",
       "Голос задан характеристиками: 2 признака (свой выбор)",
       "Аранжировка размечена: 6 секций"
     ],
     "pageErrors": [],
     "songwriterPrompt": {
       "language": "en",
-      "atmosphere": null
+      "atmosphere": "euphoric (eurodance)"
     },
     "translated": "весёлый евродэнс в стиле Руки Вверх, мужской голос, 150 BPM",
     "brackets": {
       "count": 6,
       "sample": [
-        "[Intro: clean guitar riff, kick counting in]",
-        "[Pre-Chorus: floor tom build, cymbal swell]",
-        "[Verse 2: drums drop out, bass and guitar only]",
-        "[Bridge: cathedral reverb on the last line]"
+        "[Intro: filter slowly opening over kick]",
+        "[Pre-Chorus: hi-hats doubling, tension rising]",
+        "[Verse 2: drums drop out, bass only groove]",
+        "[Bridge: big room reverb on claps]"
       ]
     }
   },
@@ -263,33 +263,33 @@
     "problems": [],
     "notes": [],
     "post": {
-      "prompt": "french pop chanson, parisian rainy mood, accordion, warm female vocals, clean tone, dry upfront vocal, French lyrics, steady drum groove (kick + snare), rain atmosphere, analog warmth, front-to-back depth, near and far layers, atmospheric, lyrics about rain",
+      "prompt": "french pop chanson, parisian rainy mood, accordion, warm female vocals, young female vocals, soprano, bright timbre, confident delivery, melodic pop phrasing, radio-polished, no male growl, staying in her register, French lyrics, clean steady pop groove (kick + snare, claps), rain atmosphere, clean modern production, wide stereo mix, wide synth pads behind the chorus, sidechained pads breathing, close drums, pads far behind, euphoric, lyrics about rain",
       "params": {
         "model": "ace-step-flash",
         "title": "Les lampes de Paris s’allument doucement",
         "artist": "tester",
-        "lyrics": "[Intro: drums only build into the riff]\n[Verse 1]\nLes lampes de Paris s’allument doucement\nLa pluie dessine des reflets d’argent\n[Pre-Chorus: floor tom build, cymbal swell]\nEt je marche sans fin\n[Chorus]\nParis sous la pluie\nMon cœur oublie la nuit\n[Verse 2: breakdown to a whisper, then tension]\nLes lampes de Paris s’allument doucement\nLa pluie dessine des reflets d’argent\n[Chorus]\nParis sous la pluie\nMon cœur oublie la nuit\n[Bridge: cathedral reverb on the last line]\nReste encore un moment\n[Final Chorus: bigger harmonies, double tempo drums]\nParis sous la pluie\nMon cœur oublie la nuit\n[Outro: acoustic strum to silence]"
+        "lyrics": "[Intro: drums only build into the riff]\n[Verse 1]\nLes lampes de Paris s’allument doucement\nLa pluie dessine des reflets d’argent\n[Pre-Chorus: guitars opening up, slow build]\nEt je marche sans fin\n[Chorus]\nParis sous la pluie\nMon cœur oublie la nuit\n[Verse 2: breakdown to a whisper, then tension]\nLes lampes de Paris s’allument doucement\nLa pluie dessine des reflets d’argent\n[Chorus]\nParis sous la pluie\nMon cœur oublie la nuit\n[Bridge: cathedral reverb on the last line]\nReste encore un moment\n[Final Chorus: bigger harmonies, double tempo drums]\nParis sous la pluie\nMon cœur oublie la nuit\n[Outro: acoustic strum to silence]"
       }
     },
-    "promptLen": 257,
+    "promptLen": 456,
     "notices": [],
     "draftWarnings": [],
     "badges": [
-      "Промт собран мозгом: 5 слоёв.",
-      "Голос: нейтральный профиль",
+      "Промт собран мозгом: 6 слоёв.",
+      "Голос из стиля: pop",
       "Аранжировка размечена: 6 секций"
     ],
     "pageErrors": [],
     "songwriterPrompt": {
       "language": "fr",
-      "atmosphere": null
+      "atmosphere": "euphoric (pop)"
     },
     "translated": "песня на французском про Париж и дождь",
     "brackets": {
       "count": 6,
       "sample": [
         "[Intro: drums only build into the riff]",
-        "[Pre-Chorus: floor tom build, cymbal swell]",
+        "[Pre-Chorus: guitars opening up, slow build]",
         "[Verse 2: breakdown to a whisper, then tension]",
         "[Bridge: cathedral reverb on the last line]"
       ]
@@ -297,42 +297,42 @@
   },
   {
     "id": "08-metallica",
-    "name": "«как у Metallica» — имя артиста в идее",
+    "name": "«как у Metallica» — имя в идее (Н1+Н2: heavy metal из перевода)",
     "path": "simple",
     "ok": true,
     "problems": [],
     "notes": [],
     "post": {
-      "prompt": "heavy thrash metal, aggressive guitars, 140 BPM, powerful male vocals, clean tone, dry upfront vocal, English lyrics, steady drum groove (kick + snare), analog warmth, dry foreground, wide room behind, atmospheric",
+      "prompt": "heavy thrash metal, aggressive guitars, 140 BPM, powerful male vocals, gritty baritone, thick midrange timbre, raspy aggressive delivery, sung verses shouted into a full-throated chorus, menacing, punchy upfront vocal, staying in the basement throughout, no falsetto and no high-pitched screaming ever, English lyrics, heavy metal, heavy driving metal groove (kick + snare, double-kick runs), live room sound, punchy midrange, doubled rhythm guitars panned hard left and right, close dry drums with cranked room mics, distant room mics behind",
       "params": {
         "model": "ace-step-flash",
         "title": "Iron thunder rolling through my chest",
         "artist": "tester",
         "language": "en",
-        "lyrics": "[Intro: drums only build, atmosphere entering]\n[Verse 1]\nIron thunder rolling through my chest\nBlack horizon swallowing the light\n[Pre-Chorus: slow build, riser swell]\nNo retreat, no remorse\n[Chorus]\nRide the storm, break the chain\nRide the storm, through the pain\n[Verse 2: drums drop out, sparse bass]\nIron thunder rolling through my chest\nBlack horizon swallowing the light\n[Chorus]\nRide the storm, break the chain\nRide the storm, through the pain\n[Bridge: cathedral reverb tail]\nLouder than the raging sky\n[Final Chorus: key change up, wider harmonies]\nRide the storm, break the chain\nRide the storm, through the pain\n[Outro: elements dissolve to silence]"
+        "lyrics": "[Intro: drums only build into the riff]\n[Verse 1]\nIron thunder rolling through my chest\nBlack horizon swallowing the light\n[Pre-Chorus: floor tom build, cymbal swell]\nNo retreat, no remorse\n[Chorus]\nRide the storm, break the chain\nRide the storm, through the pain\n[Verse 2: breakdown to a whisper, then tension]\nIron thunder rolling through my chest\nBlack horizon swallowing the light\n[Chorus]\nRide the storm, break the chain\nRide the storm, through the pain\n[Bridge: tape saturation, warm room hiss]\nLouder than the raging sky\n[Final Chorus: full-band lift, gang vocals]\nRide the storm, break the chain\nRide the storm, through the pain\n[Outro: riff slows, feedback fading]"
       }
     },
-    "promptLen": 213,
+    "promptLen": 542,
     "notices": [],
     "draftWarnings": [],
     "badges": [
-      "Промт собран мозгом: 5 слоёв.",
-      "Голос: нейтральный профиль",
+      "Промт собран мозгом: 6 слоёв.",
+      "Голос из стиля: heavy metal",
       "Аранжировка размечена: 6 секций"
     ],
     "pageErrors": [],
     "songwriterPrompt": {
       "language": "en",
-      "atmosphere": null
+      "atmosphere": "aggressive (heavy metal)"
     },
     "translated": "тяжёлый трек как у Metallica",
     "brackets": {
       "count": 6,
       "sample": [
-        "[Intro: drums only build, atmosphere entering]",
-        "[Pre-Chorus: slow build, riser swell]",
-        "[Verse 2: drums drop out, sparse bass]",
-        "[Bridge: cathedral reverb tail]"
+        "[Intro: drums only build into the riff]",
+        "[Pre-Chorus: floor tom build, cymbal swell]",
+        "[Verse 2: breakdown to a whisper, then tension]",
+        "[Bridge: tape saturation, warm room hiss]"
       ]
     }
   },
@@ -420,39 +420,39 @@
   },
   {
     "id": "11-cinematic",
-    "name": "эпичная киномузыка (хор, семейство cinematic)",
+    "name": "эпичная киномузыка (Н2: RU-стем киномузык → cinematic)",
     "path": "simple",
     "ok": true,
     "problems": [],
     "notes": [],
     "post": {
-      "prompt": "epic cinematic orchestral score, final battle, choir, timpani, 90 BPM, male vocals, clean tone, dry upfront vocal, English lyrics, steady drum beat (kick + snare), analog warmth, close drums, distant reverb wash, atmospheric",
+      "prompt": "epic cinematic orchestral score, final battle, choir, timpani, 90 BPM, warm timbre, stately delivery, wide reverb vocal, no growl, choral register throughout, English lyrics, slow drum beat (low toms + soft cymbals), wide cinematic mix, deep reverb space, wide low strings, deep hall tail, close lead, distant orchestra",
       "params": {
         "model": "ace-step-flash",
         "title": "Ashes falling on the broken ground",
         "artist": "tester",
         "language": "en",
-        "lyrics": "[Intro: solo piano over a string pad]\n[Verse 1]\nAshes falling on the broken ground\nFinal drums across the burning sky\n[Pre-Chorus: crescendo build, brass entering]\nStand and face the end\n[Chorus]\nRise, we rise, the last of all\nRise, we rise, before we fall\n[Verse 2: ensemble drops to solo cello]\nAshes falling on the broken ground\nFinal drums across the burning sky\n[Chorus]\nRise, we rise, the last of all\nRise, we rise, before we fall\n[Bridge: sudden stop, one heartbeat pulse]\nOne more breath before the dawn\n[Final Chorus: full orchestra, cymbals, key change up]\nRise, we rise, the last of all\nRise, we rise, before we fall\n[Outro: final chord decays to silence]"
+        "lyrics": "[Intro: distant choir, hall ambience only]\n[Verse 1]\nAshes falling on the broken ground\nFinal drums across the burning sky\n[Pre-Chorus: crescendo build, brass entering]\nStand and face the end\n[Chorus]\nRise, we rise, the last of all\nRise, we rise, before we fall\n[Verse 2: ensemble drops to solo cello]\nAshes falling on the broken ground\nFinal drums across the burning sky\n[Chorus]\nRise, we rise, the last of all\nRise, we rise, before we fall\n[Bridge: sudden stop, one heartbeat pulse]\nOne more breath before the dawn\n[Final Chorus: full orchestra, cymbals, key change up]\nRise, we rise, the last of all\nRise, we rise, before we fall\n[Outro: orchestra fades to strings alone]"
       }
     },
-    "promptLen": 224,
+    "promptLen": 319,
     "notices": [],
     "draftWarnings": [],
     "badges": [
-      "Промт собран мозгом: 5 слоёв.",
-      "Голос: нейтральный профиль",
+      "Промт собран мозгом: 6 слоёв.",
+      "Голос из стиля: cinematic",
       "Аранжировка размечена: 6 секций"
     ],
     "pageErrors": [],
     "songwriterPrompt": {
       "language": "en",
-      "atmosphere": null
+      "atmosphere": "cinematic (cinematic)"
     },
     "translated": "эпичная киномузыка для финальной битвы",
     "brackets": {
       "count": 6,
       "sample": [
-        "[Intro: solo piano over a string pad]",
+        "[Intro: distant choir, hall ambience only]",
         "[Pre-Chorus: crescendo build, brass entering]",
         "[Verse 2: ensemble drops to solo cello]",
         "[Bridge: sudden stop, one heartbeat pulse]"
@@ -628,22 +628,22 @@
   },
   {
     "id": "17-adv-ru-fast",
-    "name": "RU-лирика на 170 BPM → десинк-гарда",
+    "name": "RU-лирика на 170 BPM → десинк-гарда (Н2: брейкбиты вместо generic)",
     "path": "advanced",
     "ok": true,
     "problems": [],
     "notes": [],
     "post": {
-      "prompt": "jungle, 170 BPM, fast chopped breakbeats, deep sub bass, male vocals, clean tone, dry upfront vocal, Russian lyrics, fast steady drum groove (kick + snare), analog warmth, close vocal, distant room, atmospheric",
+      "prompt": "jungle, 170 BPM, fast chopped breakbeats, deep sub bass, soulful female vocals, bright timbre, confident delivery, melodic pop phrasing, dry upfront vocal, no male growl, staying in her register, Russian lyrics, drum and bass, fast chopped breakbeats (chopped breakbeats, deep sub-bass), clean modern production, punchy low end, dub delay stabs answered by the break, chopped breakbeats rolling over a sub-bass line, dry drums, wide pad behind, euphoric",
       "params": {
         "model": "ace-step-flash",
         "title": "Город спит и фонари гаснут",
         "artist": "tester",
         "language": "ru",
-        "lyrics": "[Verse 1]\nГород спит и фонари гаснут\n[Chorus]\nА я не сплю\n[Verse 2: strings enter, bass only]\nГород спит и фонари гаснут\n[Chorus: key change up, wider harmonies]\nА я не сплю"
+        "lyrics": "[Verse 1]\nГород спит и фонари гаснут\n[Chorus]\nА я не сплю\n[Verse 2: drums drop out, bass only groove]\nГород спит и фонари гаснут\n[Chorus: key change up, wider synth stack]\nА я не сплю"
       }
     },
-    "promptLen": 210,
+    "promptLen": 453,
     "notices": [
       {
         "title": "Мелодичность лирики",
@@ -652,8 +652,8 @@
     ],
     "draftWarnings": [],
     "badges": [
-      "Промт собран мозгом: 5 слоёв.",
-      "Голос: нейтральный профиль",
+      "Промт собран мозгом: 6 слоёв.",
+      "Голос из стиля: drum and bass",
       "Аранжировка размечена: 2 секции"
     ],
     "pageErrors": [],
@@ -662,14 +662,14 @@
     "brackets": {
       "count": 2,
       "sample": [
-        "[Verse 2: strings enter, bass only]",
-        "[Chorus: key change up, wider harmonies]"
+        "[Verse 2: drums drop out, bass only groove]",
+        "[Chorus: key change up, wider synth stack]"
       ]
     }
   },
   {
     "id": "18-adv-ru-ballad",
-    "name": "та же RU-лирика на 80 BPM → гарда молчит",
+    "name": "та же RU-лирика на 80 BPM → гарда молчит (Н1: ballad из перевода)",
     "path": "advanced",
     "ok": true,
     "problems": [],
@@ -887,7 +887,7 @@
   },
   {
     "id": "24-adv-artist-lyrics",
-    "name": "«в стиле Кино» + слово «кино» в лирике → проверка утечки имени",
+    "name": "«в стиле Кино» + слово «кино» в лирике (Н3: title без дыры посередине)",
     "path": "advanced",
     "ok": true,
     "problems": [],
@@ -896,7 +896,7 @@
       "prompt": "post-punk rock, 120 BPM, cold guitars, male baritone, gritty baritone, thick midrange timbre, raspy aggressive delivery, sung verses shouted into a full-throated chorus, punchy upfront vocal, staying in the basement throughout, no falsetto and no high-pitched screaming ever, Russian lyrics, live drum groove (kick + snare + ride), live room sound, punchy midrange, close dry drums, cranked room mics, live band in one room, vocal upfront",
       "params": {
         "model": "ace-step-flash",
-        "title": "Мы смотрели до утра",
+        "title": "Ночные окна",
         "artist": "tester",
         "language": "ru",
         "lyrics": "[Verse 1]\nМы смотрели кино до утра\n[Chorus]\nНочные окна\n[Verse 2: stripped to piano and vocal]\nМы смотрели кино до утра\n[Chorus: full-band lift, gang vocals]\nНочные окна"
@@ -906,11 +906,11 @@
     "notices": [
       {
         "title": "Имя исполнителя в тексте песни",
-        "text": "Имя (Кино) звучит в лирике — модель может принять его за отсылку к исполнителю. Проверьте текст: имена не должны попадать в лирику."
+        "text": "В лирике есть слово, совпавшее с именем исполнителя (Кино) — возможно, это обычное слово, а не отсылка. Если всё же это отсылка («в стиле», «как у»), её лучше убрать: имена не должны попадать в лирику."
       },
       {
         "title": "Название очищено от имени исполнителя",
-        "text": "Имя (Кино) не должно попадать в название трека — вычищено автоматически."
+        "text": "Имя (Кино) не должно попадать в название трека — название пересобрано без него."
       }
     ],
     "draftWarnings": [],
@@ -932,26 +932,26 @@
   },
   {
     "id": "25-adv-metal-ru",
-    "name": "«брутальный металл» (металл вне 23 семейств) + рык",
+    "name": "«брутальный металл» + рык (Н2: heavy metal из RU-стема)",
     "path": "advanced",
     "ok": true,
     "problems": [],
     "notes": [],
     "post": {
-      "prompt": "brutal heavy metal, growl vocals, 145 BPM, down-tuned guitars, male baritone, clean tone, gritty aggressive delivery, dry upfront vocal, chest voice, register never rises, Russian lyrics, steady drum groove (kick + snare), analog warmth, dry foreground, wide room behind, atmospheric",
+      "prompt": "brutal heavy metal, growl vocals, 145 BPM, down-tuned guitars, male baritone, gritty baritone, thick midrange timbre, gritty aggressive delivery, menacing, punchy upfront vocal, chest voice, register never rises, staying in the basement throughout, no falsetto and no high-pitched screaming ever, Russian lyrics, heavy driving metal groove (kick + snare, double-kick runs), live room sound, punchy midrange, doubled rhythm guitars panned hard left and right, close dry drums with cranked room mics, guitars wide, vocal upfront in the middle",
       "params": {
         "model": "ace-step-flash",
         "title": "Сталь и пепел на моём пути",
         "artist": "tester",
         "language": "ru",
-        "lyrics": "[Verse 1]\nСталь и пепел на моём пути\n[Chorus]\nЯрость рвётся наружу\n[Verse 2: breakdown to a whisper]\nСталь и пепел на моём пути\n[Chorus: full-band lift, gang vocals]\nЯрость рвётся наружу"
+        "lyrics": "[Verse 1]\nСталь и пепел на моём пути\n[Chorus]\nЯрость рвётся наружу\n[Verse 2: stripped to piano and vocal]\nСталь и пепел на моём пути\n[Chorus: full-band lift, gang vocals]\nЯрость рвётся наружу"
       }
     },
-    "promptLen": 283,
+    "promptLen": 540,
     "notices": [],
     "draftWarnings": [],
     "badges": [
-      "Промт собран мозгом: 5 слоёв.",
+      "Промт собран мозгом: 6 слоёв.",
       "Голос задан характеристиками: 3 признака (свой выбор)",
       "Аранжировка размечена: 2 секции"
     ],
@@ -961,7 +961,7 @@
     "brackets": {
       "count": 2,
       "sample": [
-        "[Verse 2: breakdown to a whisper]",
+        "[Verse 2: stripped to piano and vocal]",
         "[Chorus: full-band lift, gang vocals]"
       ]
     }
@@ -1103,16 +1103,16 @@
     "problems": [],
     "notes": [],
     "post": {
-      "prompt": "energetic eurodance, 150 BPM, 90s synth stabs, catchy chorus, male vocals, clean tone, dry upfront vocal, chest voice, register never rises, English lyrics, steady drum groove (kick + snare), analog warmth, close drums, distant reverb wash, atmospheric",
+      "prompt": "energetic eurodance, 150 BPM, 90s synth stabs, catchy chorus, male vocals, bright boyish tenor, 90s euro-pop timbre, playful cheerful delivery, melodic pop phrasing, dry upfront vocal, chest voice, register never rises, chest register throughout, no falsetto, English lyrics, driving four-on-the-floor kick groove (punchy kick + claps, offbeat rave bass), clean 90s dance production, wide stereo mix, hoover rave lead in the drop, gated drum machine, dry kick close, pad wash far behind, euphoric",
       "params": {
         "model": "ace-step-flash",
         "title": "Style Party",
         "artist": "tester",
         "language": "en",
-        "lyrics": "[Intro: bass groove alone, no melody yet]\n[Verse 1]\nDiscoball is spinning round the room\nSummer night is calling us to move\n[Pre-Chorus: filtered drums slowly rising]\nTurn it up, the beat is hot\n[Chorus]\nParty night, hands up high\nParty night, touch the sky\n[Verse 2: breakdown to a whisper]\nDiscoball is spinning round the room\nSummer night is calling us to move\n[Chorus]\nParty night, hands up high\nParty night, touch the sky\n[Bridge: tape saturation, warm hiss]\nOne more time, the night is young\n[Final Chorus: key change up, wider harmonies]\nParty night, hands up high\nParty night, touch the sky\n[Outro: instruments peel away, slow fade]"
+        "lyrics": "[Intro: filter slowly opening over kick]\n[Verse 1]\nDiscoball is spinning round the room\nSummer night is calling us to move\n[Pre-Chorus: hi-hats doubling, tension rising]\nTurn it up, the beat is hot\n[Chorus]\nParty night, hands up high\nParty night, touch the sky\n[Verse 2: kick mutes, percussion answers]\nDiscoball is spinning round the room\nSummer night is calling us to move\n[Chorus]\nParty night, hands up high\nParty night, touch the sky\n[Bridge: big room reverb on claps]\nOne more time, the night is young\n[Final Chorus: key change up, wider synth stack]\nParty night, hands up high\nParty night, touch the sky\n[Outro: beat runs out, reverb tail only]"
       }
     },
-    "promptLen": 252,
+    "promptLen": 496,
     "notices": [
       {
         "title": "Черновик принят",
@@ -1134,10 +1134,10 @@
     "brackets": {
       "count": 6,
       "sample": [
-        "[Intro: bass groove alone, no melody yet]",
-        "[Pre-Chorus: filtered drums slowly rising]",
-        "[Verse 2: breakdown to a whisper]",
-        "[Bridge: tape saturation, warm hiss]"
+        "[Intro: filter slowly opening over kick]",
+        "[Pre-Chorus: hi-hats doubling, tension rising]",
+        "[Verse 2: kick mutes, percussion answers]",
+        "[Bridge: big room reverb on claps]"
       ]
     }
   },
