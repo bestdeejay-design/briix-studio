@@ -39,3 +39,12 @@
 ## ЗАПУЩЕНО/ЖДЁТ НА СТЕНДЕ
 - MiniMax IQ4 «Тысячи Окон FINAL v2» (короткое интро-аутро) — генерация шла, файл /tmp/mm-okna-final.wav готов, НЕ ДОСТАВЛЕН (наблюдатель упал) — ДОСТАВИТЬ В ФАЗЕ B
 - YuE2 owner-batch — запустить (A4)
+
+## ФАЗА F — остальные модели из каталога (после A/B/C)
+- [ ] F1 DiffRhythm 2 (Apache 2.0, быстрые черновики): установка, smoke, 1 песня
+- [ ] F2 Muse (MIT, новая 01.2026): веса github yuhui1038/Muse + HF bolshyC — установка, smoke, RU?
+- [ ] F3 JAM-0.5 (44.1kHz, word-timing): проверка лицензии («other») до установки
+- [ ] F4 Magenta RealTime 2 (Google, realtime): только если full-song подтвердится
+- [ ] F5 SoulX-Singer (SVC, Apache): модуль «спеть голосом» — после базового стека
+- [ ] F6 LeVo2 запуск (рантайм ckadirt/LeVo2.cpp или официальный) — референс
+- Статусы после YuE2-batch и HeartMuLa-теста
