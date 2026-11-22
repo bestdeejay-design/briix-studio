@@ -1,5 +1,5 @@
 {
-  "build": "7d5e644c8d",
+  "build": "664da5862d",
   "assets": {
     "studio.css": "eda01a7234",
     "studio.js": "d91389965a",
@@ -10,8 +10,8 @@
     "session-store.js": "4b8f7ba466",
     "waveform.js": "0ee97fc2a9",
     "player.js": "778d4b4c76",
-    "producer-brain.js": "036664d2cb",
-    "music-brain.js": "262c58ef03",
+    "producer-brain.js": "7d3eb22303",
+    "music-brain.js": "8e59401689",
     "lyrics-brain.js": "f0afa0c132",
     "wait-phrases.js": "d6abab3594"
   }

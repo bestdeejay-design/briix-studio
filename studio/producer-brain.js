@@ -15,6 +15,13 @@
     'jazz', 'ballad', 'edm', 'synthwave', 'trip-hop', 'r&b', 'folk',
     'heavy metal', 'eurodance', 'drum and bass'
   ];
+  // ==== BEGIN STYLE PACK (#45) ====
+  /* Сгенерировано tools/gen-style-pack.cjs (см. music-brain.js): полный
+   * список семейств стиля — базовые 26 + 116 из ресёрча #45. Паритет с
+   * STYLE_ATMOSPHERE мозга проверяет check-music-brain (секция 14). */
+  STYLE_FAMILIES.push(...['trance', 'industrial', 'deep house', 'progressive house', 'afro house', 'acid house', 'dub techno', 'hardstyle', 'gabber', 'happy hardcore', 'dubstep', 'uk garage', 'big beat', 'future bass', 'breakbeat', 'electro swing', 'idm', 'glitch', 'vaporwave', 'chiptune', 'dark ambient', 'drone', 'chillwave', 'witch house', 'footwork', 'moombahton', 'psytrance', 'drill', 'grime', 'boom bap', 'dancehall', 'reggae', 'dub', 'reggaeton', 'afrobeat', 'amapiano', 'samba', 'bossa nova', 'salsa', 'cumbia', 'latin', 'bhangra', 'mariachi', 'flamenco', 'tango', 'celtic', 'klezmer', 'fado', 'gypsy jazz', 'ska', 'rocksteady', 'bluegrass', 'country', 'americana', 'neo soul', 'gospel', 'blues', 'jazz fusion', 'swing', 'big band', 'ragtime', 'doo wop', 'motown', 'smooth jazz', 'blues rock', 'folk rock', 'indie folk', 'punk', 'post-punk', 'hardcore punk', 'pop punk', 'grunge', 'britpop', 'garage rock', 'surf rock', 'progressive rock', 'hard rock', 'stoner rock', 'gothic rock', 'new wave', 'post-rock', 'shoegaze', 'power metal', 'death metal', 'black metal', 'symphonic metal', 'folk metal', 'metalcore', 'nu metal', 'funk rock', 'rap metal', 'disco', 'nu-disco', 'italo disco', 'french house', 'city pop', 'k-pop', 'hyperpop', 'j-pop', 'new jack swing', 'miami bass', 'freestyle', 'europop', 'russian pop', 'classical', 'baroque', 'opera', 'gregorian', 'waltz', 'march', 'musical theatre', 'cabaret', 'lounge', 'easy listening', 'lullaby', 'children music']);
+  // ==== END STYLE PACK (#45) ====
+
   function normalizeStyle(value) {
     const key = String(value == null ? '' : value).toLowerCase().trim().replace(/\s+/g, ' ');
     return STYLE_FAMILIES.includes(key) ? key : '';
