@@ -48,3 +48,18 @@
 - [ ] F5 SoulX-Singer (SVC, Apache): модуль «спеть голосом» — после базового стека
 - [ ] F6 LeVo2 запуск (рантайм ckadirt/LeVo2.cpp или официальный) — референс
 - Статусы после YuE2-batch и HeartMuLa-теста
+
+## ФАЗА A4-РЕД — РАСШИРЕННЫЙ ТЕСТ-НАБОР: 5 ПЕСЕН (решение владельца 23.11)
+1. Тысячи Окон RU (джангл) — легендарная лирика 98a21b11 «Всегда одна»
+2. A Thousand Lights (двуязычный тест: EN-промт + RU-лирика Legendary)
+3. You are here (EN R&B)
+4. BREATH IS VOW (EN psychedelic soul, plays 347 — любимец публики)
+5. Contradiction (EN trip-hop/EDM, FUZZ-1.0 оригинал)
+6. Resolve (EN dark trap) — бонус
+Промты+лирики: audits/mm-test/cap-*/lyr-* (из dj1-архива дословно)
+Эталоны: dajet ( BREATH IS VOW.m4a, Contradiction.m4a, You are here.m4a в альбомах)
+
+## ПОРЯДОК ПРОГОНА (по одной, YuE2 short сначала на ace-промтах владельца):
+YuE2: youare → cosmos → lights (retry n4096 идёт) → breath → contradiction → resolve
+Затем MiniMax v096 (если соберётся) — те же песни
+Затем ace — уже частично готово
